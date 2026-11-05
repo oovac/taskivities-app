@@ -4,8 +4,9 @@
 import { Hono, type MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { USER_COLORS } from '../shared/types';
+import { GMAIL_SEND, saveConnection } from './gmail';
 import {
-  type AppEnv, type Ctx, type UserRow, b64url, bumpDirectory, defaultTz, nowIso, randomToken, sha256, sha256hex, toViewer, uid, validTz,
+  type AppEnv, type Ctx, type UserRow, auditStmt, b64url, bumpDirectory, defaultTz, nowIso, randomToken, sha256, sha256hex, toViewer, uid, validTz,
 } from './lib';
 
 const SESSION_COOKIE = 'tv_session';
@@ -44,14 +45,80 @@ authRoutes.get('/login', async (c) => {
   return c.redirect(u.toString());
 });
 
+// ---------- Gmail for invite emails (admins, optional; see worker/gmail.ts) ----------
+/** Adds ?gmail=<result> to the page we go back to, so the app can say what happened. */
+const withGmail = (path: string, result: string) => `${path}${path.includes('?') ? '&' : '?'}gmail=${result}`;
+
+authRoutes.get('/gmail', async (c) => {
+  const back = safeNext(c.req.query('next') || '/settings');
+  const user = await currentUser(c);
+  if (!user) return c.redirect(`/login?next=${encodeURIComponent(back)}`);
+  if (user.role !== 'admin') return c.redirect(withGmail(back, 'forbidden'));
+  if (!c.env.GOOGLE_CLIENT_ID || !c.env.GOOGLE_CLIENT_SECRET) return c.redirect(withGmail(back, 'unavailable'));
+  const state = randomToken(16);
+  const verifier = randomToken(32);
+  setCookie(c, 'tv_oauth', `${state}.${verifier}.gmail`, { ...cookieBase(c), path: '/auth', maxAge: 600 });
+  setCookie(c, NEXT_COOKIE, back, { ...cookieBase(c), path: '/auth', maxAge: 600 });
+  const u = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  u.search = new URLSearchParams({
+    client_id: c.env.GOOGLE_CLIENT_ID,
+    redirect_uri: redirectUri(c), // the same callback as sign-in, so no extra redirect URI to register
+    response_type: 'code',
+    // Send only. Never gmail.readonly: the app doesn't read mail.
+    scope: `openid email ${GMAIL_SEND}`,
+    access_type: 'offline', // a refresh token, so invites can be sent later
+    prompt: 'consent', // Google only returns a refresh token on a fresh consent
+    include_granted_scopes: 'true',
+    login_hint: user.email,
+    state,
+    code_challenge: b64url(await sha256(verifier)),
+    code_challenge_method: 'S256',
+  }).toString();
+  return c.redirect(u.toString());
+});
+
+async function gmailCallback(c: Ctx, code: string | undefined, error: string | undefined, verifier: string, back: string) {
+  const user = await currentUser(c);
+  if (!user) return c.redirect('/login');
+  if (user.role !== 'admin') return c.redirect(withGmail(back, 'forbidden'));
+  if (error || !code) return c.redirect(withGmail(back, 'cancelled'));
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code, client_id: c.env.GOOGLE_CLIENT_ID!, client_secret: c.env.GOOGLE_CLIENT_SECRET!,
+      redirect_uri: redirectUri(c), grant_type: 'authorization_code', code_verifier: verifier,
+    }),
+  }).catch(() => null);
+  if (!res?.ok) return c.redirect(withGmail(back, 'failed'));
+  const t = await res.json<{ access_token: string; refresh_token?: string; scope?: string }>();
+  const revoke = () => fetch('https://oauth2.googleapis.com/revoke', {
+    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ token: t.refresh_token || t.access_token }),
+  }).catch(() => undefined);
+  // Google lets people untick individual permissions: without "send email" there's nothing to store.
+  if (!(t.scope ?? '').split(' ').includes(GMAIL_SEND)) { await revoke(); return c.redirect(withGmail(back, 'no_permission')); }
+  const info = await fetch('https://openidconnect.googleapis.com/v1/userinfo', { headers: { authorization: `Bearer ${t.access_token}` } })
+    .then((r) => (r.ok ? r.json<{ email?: string }>() : null)).catch(() => null);
+  // Invites go out from the address they sign in with, so it must be the same Google account.
+  if (!info?.email || info.email.toLowerCase() !== user.email.toLowerCase()) { await revoke(); return c.redirect(withGmail(back, 'wrong_account')); }
+  if (!t.refresh_token) return c.redirect(withGmail(back, 'failed'));
+  await saveConnection(c.env, user.id, user.email, t.refresh_token, t.scope ?? GMAIL_SEND);
+  await auditStmt(c.env.DB, user.id, 'gmail_connected', user.id, null).run();
+  return c.redirect(withGmail(back, 'connected'));
+}
+
 authRoutes.get('/callback', async (c) => {
   const { code, state, error } = c.req.query();
   const saved = getCookie(c, 'tv_oauth');
   const next = safeNext(getCookie(c, NEXT_COOKIE));
   deleteCookie(c, 'tv_oauth', { path: '/auth' });
   deleteCookie(c, NEXT_COOKIE, { path: '/auth' });
+  const [savedState, verifier, mode] = (saved ?? '').split('.');
+  if (mode === 'gmail') {
+    if (savedState !== state) return c.redirect(withGmail(next, 'expired'));
+    return gmailCallback(c, code, error, verifier, next);
+  }
   if (error || !code || !saved) return c.redirect('/login?error=cancelled');
-  const [savedState, verifier] = saved.split('.');
   if (savedState !== state) return c.redirect('/login?error=expired');
 
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {

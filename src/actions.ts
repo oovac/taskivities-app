@@ -2,7 +2,7 @@
 import { addDays, rel, weekStart } from '../shared/dates';
 import { type Repeat, describe } from '../shared/repeat';
 import { onProject } from '../shared/rules';
-import type { AppSettings, Bootstrap, Priority, Project, Role, SyncResponse, Task, TaskEvent, User } from '../shared/types';
+import type { AppSettings, Bootstrap, InviteEmailResult, Priority, Project, Role, SyncResponse, Task, TaskEvent, User } from '../shared/types';
 import { PRIORITIES } from '../shared/types';
 import { api, ApiError } from './api';
 import { applyFavicon } from './brand';
@@ -19,11 +19,12 @@ const lowerFirst = (x: string) => x.charAt(0).toLowerCase() + x.slice(1);
 // ---------- toasts + flash ----------
 let toastSeq = 0;
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
-export function toast(text: string, undo?: () => void, error = false) {
+export function toast(text: string, undo?: () => void, error = false, action?: { label: string; run: () => void }) {
   const id = ++toastSeq;
-  set({ toast: { id, text, undo, error } });
+  set({ toast: { id, text, undo, error, action } });
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => S().toast?.id === id && set({ toast: null }), error ? 6000 : 4500);
+  // Toasts with something to click stay a little longer.
+  toastTimer = setTimeout(() => S().toast?.id === id && set({ toast: null }), error || action ? 8000 : 4500);
 }
 export const toastError = (e: unknown) => toast(e instanceof Error ? e.message : 'Something went wrong.', undefined, true);
 export function flash(ids: string[]) {
@@ -49,7 +50,7 @@ function applyDirectory(b: Bootstrap): Partial<State> {
   }
   applyFavicon(b.settings.logoVersion);
   return {
-    me: b.me, users, projects, today: b.today, tz: b.tz, dirVersion: b.directoryVersion, settings: b.settings, viewUser, page,
+    me: b.me, users, projects, today: b.today, tz: b.tz, dirVersion: b.directoryVersion, settings: b.settings, gmail: b.gmail, viewUser, page,
     projSel: s.projSel === 'all' || projects[s.projSel] ? s.projSel : 'all',
     projDay: s.projDay || b.today,
   };
@@ -62,6 +63,7 @@ export async function boot() {
     set({ ...applyDirectory(b), tasks: byId(t.tasks), version: t.version, range: { from: t.from, to: t.to }, ready: true, lastSync: Date.now() });
     const last = localStorage.getItem('tv:lastProject');
     set((s) => ({ draft: { ...s.draft, projectId: last && myProjects(s).some((p) => p.id === last) ? last : myProjects(s)[0]?.id ?? null } }));
+    gmailReturn();
   } catch (e) {
     if (!(e instanceof ApiError && e.status === 401)) set({ bootError: e instanceof Error ? e.message : 'Could not load.' });
   }
@@ -356,11 +358,89 @@ export async function signOut() {
 
 // ---------- admin ----------
 export async function addPeople(emails: string[], role: Role, projects: string[]) {
-  const r = await api.post<{ added: string[]; skipped: string[] }>('/api/admin/users', { emails, role, projects });
+  const r = await api.post<{ added: string[]; skipped: string[]; email?: InviteEmailResult }>('/api/admin/users', { emails, role, projects });
   await reloadDirectory();
-  toast(r.added.length
-    ? `Added ${r.added.length} ${r.added.length > 1 ? 'people' : 'person'}${r.skipped.length ? ` · ${r.skipped.length} already on the team` : ''}`
-    : 'Everyone there is already on the team');
+  if (!r.added.length) { toast('Everyone there is already on the team'); return; }
+  const added = `Added ${r.added.length} ${r.added.length > 1 ? 'people' : 'person'}${r.skipped.length ? ` · ${r.skipped.length} already on the team` : ''}`;
+  inviteToast(added, r.added.length, r.email);
+}
+
+/** The sign-in page people are invited to. */
+export const inviteLink = () => `${location.origin}/login`;
+const copyLinkAction = { label: 'Copy link', run: () => void copyInviteLink() };
+export async function copyInviteLink() {
+  try {
+    await navigator.clipboard.writeText(inviteLink());
+    toast('Sign-in link copied. They sign in with Google using the address you added.');
+  } catch {
+    toast(`Copy this link: ${inviteLink()}`, undefined, true);
+  }
+}
+
+/** Says whether the invite emails went out; otherwise offers the link to share by hand. */
+function inviteToast(prefix: string, count: number, e: InviteEmailResult | undefined) {
+  if (e?.status === 'sent') { toast(`${prefix} · invite${count > 1 ? 's' : ''} emailed`); return; }
+  if (e?.status === 'failed' && e.sent.length) {
+    toast(`${prefix} · emailed ${e.sent.length}, couldn't email ${e.failed.join(', ')}`, undefined, true, copyLinkAction);
+    return;
+  }
+  if (e?.reason) {
+    // Was connected, but it no longer works (expired, revoked, Gmail error): say so, and offer the link.
+    void refreshGmail();
+    toast(`${prefix}, but the invite wasn't emailed. ${e.reason}`, undefined, true, copyLinkAction);
+    return;
+  }
+  toast(`${prefix}. Send them the sign-in link so they can join.`, undefined, false, copyLinkAction);
+}
+
+/** Emails the invite again to someone who hasn't signed in yet. */
+export async function resendInvite(userId: string) {
+  const u = S().users[userId];
+  try {
+    const r = await api.post<{ email: InviteEmailResult }>(`/api/admin/users/${userId}/invite`);
+    inviteToast(r.email.status === 'sent' ? `Invite sent to ${u?.email}` : `Invite to ${u?.email}`, 1, r.email);
+  } catch (e) {
+    toastError(e);
+  }
+}
+
+// ---------- Gmail for invite emails ----------
+async function refreshGmail() {
+  const b = await api.get<Bootstrap>('/api/bootstrap').catch(() => null);
+  if (b) set({ gmail: b.gmail });
+}
+/** Leaves the app for Google's consent screen; comes back to `back` with ?gmail=<result>. */
+export function connectGmail(back = location.pathname) {
+  location.href = `/auth/gmail?next=${encodeURIComponent(back)}`;
+}
+export async function disconnectGmail() {
+  try {
+    await api.del('/api/admin/gmail');
+    set({ gmail: null });
+    toast("Gmail disconnected. Invites won't be emailed until you connect it again.");
+  } catch (e) {
+    toastError(e);
+  }
+}
+const GMAIL_RESULTS: Record<string, [string, boolean]> = {
+  connected: ['Gmail connected. Invites will be emailed from your address.', false],
+  cancelled: ["Gmail wasn't connected.", false],
+  no_permission: ["Gmail wasn't connected: the \"send email on your behalf\" permission wasn't allowed.", true],
+  wrong_account: ['Choose the Google account you sign in to Taskivities with.', true],
+  unavailable: ["Google sign-in isn't set up on this instance, so Gmail can't be connected.", true],
+  expired: ['That took too long. Try connecting Gmail again.', true],
+  failed: ["Google didn't finish connecting Gmail. Try again.", true],
+  forbidden: ['Only admins can connect Gmail.', true],
+};
+/** After coming back from Google: say what happened, and tidy the address bar. */
+function gmailReturn() {
+  const q = new URLSearchParams(location.search);
+  const r = q.get('gmail');
+  if (!r) return;
+  q.delete('gmail');
+  history.replaceState(null, '', `${location.pathname}${q.size ? `?${q}` : ''}`);
+  const [text, error] = GMAIL_RESULTS[r] ?? GMAIL_RESULTS.failed;
+  toast(text, undefined, error);
 }
 export async function updateUser(id: string, body: { role?: Role; projects?: string[] }, message?: string) {
   try {

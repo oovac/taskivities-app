@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
 import { isAdmin } from '../../shared/rules';
-import { resetLogo, uploadLogo } from '../actions';
+import { connectGmail, disconnectGmail, resetLogo, uploadLogo } from '../actions';
 import { logoUrl } from '../brand';
-import { LogoMark } from '../components/ui';
+import { I, LogoMark } from '../components/ui';
 import { useStore } from '../store';
 
 const MAX_KB = 256;
@@ -76,6 +76,26 @@ export function SettingsPage() {
             {err && <div className="set-err" role="alert">{err}</div>}
             <input ref={file} type="file" accept=".svg,image/svg+xml" hidden aria-hidden="true" tabIndex={-1}
               onChange={(e) => void pick(e.target.files?.[0])} />
+          </div>
+        </div>
+      </section>
+      <section className="sec">
+        <div className="sec-h"><h2>Invite emails</h2><span className="cnt">{s.gmail ? 'On' : 'Off'} · just for you</span></div>
+        <div className="card set-card">
+          <div className="set-body">
+            {s.gmail ? (
+              <p>When you add people, Taskivities emails them an invite from <b>{s.gmail.email}</b> through your Gmail. A copy is in your Sent folder, and replies come to you.</p>
+            ) : (
+              <p>Connect your Gmail and Taskivities emails people an invite from your address when you add them. Until then, you send them the sign-in link yourself.
+                Google will ask you to allow <b>sending email</b> on your behalf: Taskivities can't read your mail.</p>
+            )}
+            <div className="set-actions">
+              {s.gmail ? (
+                <button className="btn-ghost" data-act="gmail-disconnect" onClick={() => void disconnectGmail()}>Disconnect Gmail</button>
+              ) : (
+                <button className="btn-primary" data-act="gmail-connect" onClick={() => connectGmail('/settings')}>{I.mail(14)} Connect Gmail</button>
+              )}
+            </div>
           </div>
         </div>
       </section>

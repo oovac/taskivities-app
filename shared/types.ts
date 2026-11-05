@@ -99,6 +99,16 @@ export interface Bootstrap {
   version: number;
   directoryVersion: number;
   settings: AppSettings;
+  /** Admins: the Gmail address invites are emailed from, or null when not connected (then they share the link). */
+  gmail: { email: string } | null;
+}
+
+/** What happened to the invite emails when people were added (worker/gmail.ts). */
+export interface InviteEmailResult {
+  status: 'sent' | 'not_connected' | 'failed';
+  sent: string[];
+  failed: string[];
+  reason?: string;
 }
 
 export interface SyncResponse {

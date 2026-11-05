@@ -189,7 +189,7 @@ button.peek:hover{border-style:solid;border-color:#C7CBFF;background:#fff;color:
 .btn-danger{width:100%;padding:8px 12px;border-radius:9px;background:#FEF3F2;color:#B42318;font-weight:600;font-size:13px;border:1px solid #FECDCA}
 .btn-danger:hover{background:#FEE4E2}
 .team-h{font-size:24px;font-weight:700;letter-spacing:-.02em}
-.team .trow{display:grid;grid-template-columns:minmax(200px,1.5fr) 110px minmax(180px,2fr) 120px 40px;align-items:center;gap:12px;padding:10px 12px 10px 14px;border-top:1px solid var(--line2);font-size:13px}
+.team .trow{display:grid;grid-template-columns:minmax(200px,1.5fr) 110px minmax(180px,2fr) 120px 72px;align-items:center;gap:12px;padding:10px 12px 10px 14px;border-top:1px solid var(--line2);font-size:13px}
 .team .trow:first-child{border-top:0}
 .team .trow.th{font-size:11px;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;padding-top:9px;padding-bottom:9px;background:#FCFCFD}
 .team .trow.flash{animation:flash 2.6s ease-out}
@@ -206,7 +206,9 @@ button.peek:hover{border-style:solid;border-color:#C7CBFF;background:#fff;color:
 .st{font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px}
 .st.ok{color:#067647;background:#ECFDF3}
 .st.inv{color:#B54708;background:#FFFAEB}
-.tact .icon-btn:hover{color:#B42318;background:#FEF3F2}
+.tact{display:flex;justify-content:flex-end;gap:2px}
+.tact .icon-btn[data-act="uremove"]:hover{color:#B42318;background:#FEF3F2}
+.tact .icon-btn:hover{color:var(--accent)}
 .fine{font-size:12.5px;color:var(--faint);margin:10px 2px 0}
 .prow{display:flex;align-items:center;gap:10px;padding:11px 14px;border-top:1px solid var(--line2);font-size:13px}
 .prow:first-child{border-top:0}
@@ -546,3 +548,6 @@ kbd{display:inline-grid;place-items:center;min-width:21px;height:21px;padding:0 
 .set-actions{display:flex;gap:8px;flex-wrap:wrap}
 .set-err{margin-top:12px;padding:8px 10px;border-radius:8px;background:#FEF3F2;color:#B42318;font-size:12.5px}
 .btn-primary:disabled{opacity:.55;cursor:default}
+.inv-mail{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+.linkish{color:var(--accent);font-weight:600;font-size:inherit;padding:0}
+.linkish:hover{text-decoration:underline}

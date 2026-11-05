@@ -21,7 +21,7 @@ export interface Pop {
   q?: string;
 }
 
-export interface Toast { id: number; text: string; undo?: () => void; error?: boolean }
+export interface Toast { id: number; text: string; undo?: () => void; error?: boolean; action?: { label: string; run: () => void } }
 export interface Draft { title: string; notes: string; open: boolean; projectId: string | null; dueDate: string | null; assigneeId: string | null; priority: Priority; repeat: Repeat | null }
 export interface InviteDraft { emails: string; role: Role; projects: string[]; err: string | null; busy?: boolean }
 export interface ProjEdit { id: string | null; name: string; color: string; description: string; members: string[]; err: string | null; returnSel: string | null; busy?: boolean }
@@ -39,6 +39,8 @@ export interface State {
   version: number;
   dirVersion: number;
   settings: AppSettings;
+  /** Admins: Gmail address invites are emailed from (null = not connected). */
+  gmail: { email: string } | null;
   range: { from: string; to: string } | null;
   lastSync: number;
   offline: boolean;
@@ -89,6 +91,7 @@ export const useStore = create<State>()(() => ({
   version: 0,
   dirVersion: 0,
   settings: { customLogo: false, logoVersion: '0' },
+  gmail: null,
   range: null,
   lastSync: Date.now(),
   offline: false,

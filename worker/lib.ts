@@ -11,6 +11,8 @@ export interface Env {
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   ADMIN_EMAILS?: string;
+  /** Optional: key for encrypting stored Gmail tokens. Defaults to one derived from GOOGLE_CLIENT_SECRET. */
+  TOKEN_KEY?: string;
   DEV_LOGIN?: string;
   /** Durable Object namespace for MCP sessions (worker/mcp.ts). */
   MCP_OBJECT: DurableObjectNamespace;

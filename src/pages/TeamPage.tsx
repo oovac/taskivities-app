@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { fmt } from '../../shared/dates';
 import { EMAIL_RE, isAdmin } from '../../shared/rules';
 import { DESCRIPTION_MAX, PROJECT_COLORS, type Role } from '../../shared/types';
-import { addPeople, openPop, saveProject } from '../actions';
+import { addPeople, connectGmail, copyInviteLink, openPop, resendInvite, saveProject } from '../actions';
 import { activeSelector, focusLater } from '../focus';
 import { S, set, useStore, type ProjEdit, type State } from '../store';
 import { displayName, people } from '../util';
@@ -86,6 +86,13 @@ export function TeamPage() {
                   {u.status === 'invited' ? <span className="st inv">Invited · {fmt(u.addedAt.slice(0, 10)).split(', ')[1]}</span> : <span className="st ok">Active</span>}
                 </div>
                 <div className="tact">
+                  {u.status === 'invited' && (s.gmail ? (
+                    <button className="icon-btn" data-act="resend" title="Email the invite again" aria-label={`Email the invite to ${u.email} again`}
+                      onClick={() => void resendInvite(u.id)}>{I.mail()}</button>
+                  ) : (
+                    <button className="icon-btn" data-act="copy-invite" title="Copy the sign-in link to send them" aria-label={`Copy the sign-in link for ${u.email}`}
+                      onClick={() => void copyInviteLink()}>{I.link()}</button>
+                  ))}
                   {!me && (
                     <button className="icon-btn" data-act="uremove" data-u={u.id} title="Remove from team" aria-label={`Remove ${displayName(u)}`}
                       onClick={(e) => openPop({ type: 'uremove', userId: u.id }, e.currentTarget)}>{I.trash()}</button>
@@ -179,7 +186,11 @@ function InviteForm({ s }: { s: State }) {
         </div>
       </div>
       <div className="inv-foot">
-        <span className="muted-s">They sign in with Google using exactly this address. No one else can get in.</span>
+        <span className="muted-s inv-mail">
+          {s.gmail
+            ? <>{I.mail(13)} We'll email them an invite from {s.gmail.email}.</>
+            : <>They sign in with Google using exactly this address. <button className="linkish" data-act="gmail-connect" onClick={() => connectGmail('/team')}>Connect Gmail</button> to email invites automatically.</>}
+        </span>
         <button className="btn-ghost" onClick={close}>Cancel</button>
         <button className="btn-primary" disabled={inv.busy} onClick={() => void submit()}>{inv.busy ? 'Adding…' : 'Add'}</button>
       </div>

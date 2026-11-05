@@ -86,6 +86,7 @@ export function App() {
         <div className={`toast ${s.toast.error ? 'err' : ''}`} role="status" key={s.toast.id}>
           <span>{s.toast.text}</span>
           {s.toast.undo && <button onClick={s.toast.undo}>Undo</button>}
+          {s.toast.action && <button onClick={s.toast.action.run}>{s.toast.action.label}</button>}
         </div>
       )}
       {s.offline && <div className="offline">Offline. Changes will fail until the connection is back.</div>}

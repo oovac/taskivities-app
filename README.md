@@ -17,10 +17,10 @@ The design reference is [`docs/wireframes.html`](docs/wireframes.html). Open it 
 
 ```
 worker/   index.ts (routes + OAuth provider) · auth.ts (Google + sessions) · api.ts (REST: tasks, sync) · tasks.ts (task rules shared by REST and MCP)
-          mcp.ts (MCP tools) · oauth.ts (/authorize consent page for assistants) · admin.ts (people, projects, settings) · settings.ts (logo) · lib.ts
+          mcp.ts (MCP tools) · oauth.ts (/authorize consent page for assistants) · admin.ts (people, projects, settings) · settings.ts (logo) · gmail.ts + invite-mail.ts (invite emails) · lib.ts
 shared/   types, date helpers and rules used by both the Worker and the app
 src/      React app: pages/ (Tasks, Projects, Team, Settings, Login), components/, actions.ts (all writes), keyboard.ts, focus.ts
-migrations/ (0001 schema, 0002 time zones, 0003 repeating tasks, 0004 settings)   seed/dev.sql (local sample data)
+migrations/ (0001 schema, 0002 time zones, 0003 repeating tasks, 0004 settings, 0005 Gmail tokens)   seed/dev.sql (local sample data)
 scripts/tenant.mjs (per-instance deploys)   tenants/ (each instance's Cloudflare IDs; only example.env is committed)
 ```
 
@@ -45,6 +45,11 @@ scripts/tenant.mjs (per-instance deploys)   tenants/ (each instance's Cloudflare
 - **Settings** (admins only, the **Settings** page, stored in the `settings` table):
   - **Logo:** SVG only, up to 256 KB. Used in the top bar, on the sign-in page and as the browser tab icon; "Use the built-in logo" goes back to the default. Every change is in the audit log, and everyone's app picks it up on its next poll.
   - Uploads are checked in the browser and again on the server: no scripts, event handlers, embedded HTML, DOCTYPEs or links to outside files. `/logo.svg` is also served with a locked-down `Content-Security-Policy` (`sandbox`, no scripts), so even opening it directly can't run anything.
+- **Invite emails** (optional, per admin; `worker/gmail.ts`):
+  - An admin connects their Gmail on the **Settings** page. Google is asked for **`gmail.send` only**: the app can send mail as them, never read it. After that, adding people (and the resend button on the Team page) emails each one an invite from the admin's own address, with a sign-in button.
+  - The refresh token is stored encrypted (AES-GCM) in `google_tokens`, with a key derived from `GOOGLE_CLIENT_SECRET` (or the optional `TOKEN_KEY` secret). Disconnecting deletes it and revokes it at Google; removing the person deletes it too.
+  - **It never blocks adding people.** Not connected, the permission unticked, a revoked or expired token, the Gmail API off, or a Gmail error: the person is still added, and the admin is offered the sign-in link to share. A connection Google no longer accepts is dropped so the app shows "not connected" again.
+  - It reuses the sign-in callback (`/auth/callback`), so there's no extra redirect URI to register, and it only connects the Google account the admin signs in with.
 - **Sign-in:** only email addresses added by an admin can sign in. On a brand-new install, the **first person to sign in becomes the admin** (the check is one atomic insert, so only one person can win). The optional `ADMIN_EMAILS` secret names addresses that are always let in as admins, which is useful for getting back in if you lock yourself out.
 - **Writes come only from the app's own pages:** they need the same origin plus a custom header, and the session cookie is `SameSite=Lax`. The one exception is `/mcp`, which takes an OAuth bearer token instead (see below).
 - **One set of task rules.** The REST API and the MCP tools both call `worker/tasks.ts` (`createTask`, `applyPatch`), so visibility, "assignee must be on the project" and "no past due dates" can't diverge.
@@ -113,6 +118,7 @@ What makes an instance is a small file, `tenants/<instance>.env`, which is **not
    - Authorized redirect URIs: `https://<WORKER_NAME>.<your-subdomain>.workers.dev/auth/callback` (and `https://<custom domain>/auth/callback` for each custom domain), plus `http://localhost:5173/auth/callback` if you also use it locally.
    - Consent screen: *Internal* if everyone is in your Google Workspace. Otherwise use *External* and publish it, since external people such as clients are added by email. Scopes: `openid`, `email`, `profile`.
    - One client can serve several instances: add each instance's redirect URI to it.
+   - **Optional, for invite emails:** in the same project, enable the **Gmail API** (*APIs & Services → Library → Gmail API → Enable*) and add the scope `https://www.googleapis.com/auth/gmail.send` on the consent screen (*Data access → Add or remove scopes*). Only that one: the app never asks for `gmail.readonly`. With an *Internal* consent screen there's nothing else to do. With *External*, `gmail.send` is a "sensitive" scope: until Google verifies the app, admins see an "unverified app" warning when connecting, and while the app is in *Testing* Google expires the connection after 7 days (the app then falls back to the link until they reconnect). Skip this and everything else works; invites are shared as a link.
 4. **Add the secrets** (you paste each value when asked):
    ```bash
    npm run tenant -- secret acme GOOGLE_CLIENT_ID
@@ -148,7 +154,6 @@ Deploying to every instance after a code change is one command per instance; the
 ## Not built yet
 
 - **A list of connected assistants** in the app, with a way to disconnect them. For now a connection ends after a year, when the person is removed, or when an admin deletes its grant from the `OAUTH_KV` namespace.
-- **Invite emails.** Admins currently share the link themselves.
 - **Archiving projects** from the UI. The column exists, but there's no button yet.
 - **Automated tests.** So far everything has been checked by hand in the browser and with the API.
 

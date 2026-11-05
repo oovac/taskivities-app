@@ -2,9 +2,10 @@
 import { Hono } from 'hono';
 import { EMAIL_RE } from '../shared/rules';
 import { DESCRIPTION_MAX, PROJECT_COLORS, USER_COLORS, type Role } from '../shared/types';
+import { disconnect, sendInvites, type SendResult } from './gmail';
 import { checkSvg, saveLogo } from './settings';
 import {
-  type AppEnv, type ProjectRow, type UserRow, CURRENT_VERSION, auditStmt, bad, bumpDirectory, bumpVersion, conflict, eventStmt,
+  type AppEnv, type Ctx, type ProjectRow, type UserRow, CURRENT_VERSION, auditStmt, bad, bumpDirectory, bumpVersion, conflict, eventStmt,
   forbidden, getUser, memberProjects, notFound, nowIso, uid,
 } from './lib';
 
@@ -62,7 +63,33 @@ admin.post('/users', async (c) => {
     added.push(email);
   }
   if (stmts.length) await db.batch([...stmts, bumpDirectory(db)]);
-  return c.json({ added, skipped });
+  // Email them from the admin's Gmail if it's connected. Never fails the add: the app falls back to the link.
+  const names = await projectNames(db, projects);
+  const email = await emailInvites(c, added.map((to) => ({ to, role, projects: names })));
+  return c.json({ added, skipped, email });
+});
+
+const projectNames = async (db: D1Database, ids: string[]) => {
+  if (!ids.length) return [];
+  const { results } = await db.prepare(`SELECT name FROM projects WHERE id IN (${ids.map(() => '?').join(',')}) ORDER BY name`).bind(...ids).all<{ name: string }>();
+  return results.map((r) => r.name);
+};
+
+async function emailInvites(c: Ctx, people: { to: string; role: Role; projects: string[] }[]): Promise<SendResult> {
+  const v = c.get('viewer');
+  const link = `${new URL(c.req.url).origin}/login`;
+  const r = await sendInvites(c.env, { id: v.id, name: v.name }, people.map((p) => ({ ...p, link })));
+  if (r.sent.length) await auditStmt(c.env.DB, v.id, 'invite_emailed', null, { to: r.sent }).run();
+  return r;
+}
+
+/** Sends the invite email again to someone who hasn't signed in yet. */
+admin.post('/users/:id/invite', async (c) => {
+  const db = c.env.DB;
+  const u = await getUser(db, c.req.param('id'));
+  if (!u || u.status !== 'invited') throw bad('Only people who haven\'t signed in yet can be sent an invite.');
+  const names = u.role === 'admin' ? [] : await projectNames(db, await memberProjects(db, u.id));
+  return c.json({ email: await emailInvites(c, [{ to: u.email, role: u.role, projects: names }]) });
 });
 
 admin.patch('/users/:id', async (c) => {
@@ -139,6 +166,7 @@ admin.delete('/users/:id', async (c) => {
   stmts.push(db.prepare("UPDATE users SET status = 'removed' WHERE id = ?").bind(id));
   stmts.push(db.prepare('DELETE FROM project_members WHERE user_id = ?').bind(id));
   stmts.push(db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(id));
+  stmts.push(db.prepare('DELETE FROM google_tokens WHERE user_id = ?').bind(id)); // and their Gmail connection
   stmts.push(auditStmt(db, v.id, 'user_removed', id, { transferred: open.length, to: to ?? null }));
   stmts.push(bumpDirectory(db));
   await db.batch(stmts);
@@ -211,3 +239,11 @@ admin.put('/settings/logo', async (c) => {
 });
 
 admin.delete('/settings/logo', async (c) => c.json({ settings: await saveLogo(c.env.DB, c.get('viewer').id, null) }));
+
+// ---------- Gmail for invite emails (connecting is a redirect: GET /auth/gmail) ----------
+admin.delete('/gmail', async (c) => {
+  const v = c.get('viewer');
+  await disconnect(c.env, v.id);
+  await auditStmt(c.env.DB, v.id, 'gmail_disconnected', v.id, null).run();
+  return c.json({ ok: true });
+});

@@ -5,6 +5,7 @@ import {
   type AppEnv, type EventRow, type ProjectRow, type TaskRow, type UserRow,
   TASK_COLS, bad, canSeeProject, mapEvent, mapProject, mapTask, mapUser, today,
 } from './lib';
+import { gmailStatus } from './gmail';
 import { loadSettings } from './settings';
 import { type Patch, applyPatch, commit, createTask, loadVisibleTask, updateTaskWithNext, visible } from './tasks';
 
@@ -20,12 +21,13 @@ async function getMeta(db: D1Database) {
 api.get('/bootstrap', async (c) => {
   const v = c.get('viewer');
   const db = c.env.DB;
-  const [users, members, projects, meta, settings] = await Promise.all([
+  const [users, members, projects, meta, settings, gmail] = await Promise.all([
     db.prepare('SELECT * FROM users ORDER BY name').all<UserRow>(),
     db.prepare('SELECT user_id, project_id FROM project_members').all<{ user_id: string; project_id: string }>(),
     db.prepare('SELECT * FROM projects WHERE archived = 0 ORDER BY name').all<ProjectRow>(),
     getMeta(db),
     loadSettings(db),
+    v.role === 'admin' ? gmailStatus(c.env, v.id) : null,
   ]);
   const visibleProjects = projects.results.filter((p) => canSeeProject(v, p.id));
   const visibleIds = new Set(visibleProjects.map((p) => p.id));
@@ -39,7 +41,7 @@ api.get('/bootstrap', async (c) => {
   const me = all.find((u) => u.id === v.id)!;
   // Removed people stay in the list (history still names them) but without their email.
   const list = all.map((u) => (u.status === 'removed' ? { ...u, email: '' } : u));
-  const body: Bootstrap = { me, users: list, projects: visibleProjects.map(mapProject), today: today(v), tz: v.tz, ...meta, settings };
+  const body: Bootstrap = { me, users: list, projects: visibleProjects.map(mapProject), today: today(v), tz: v.tz, ...meta, settings, gmail };
   return c.json(body);
 });
 
