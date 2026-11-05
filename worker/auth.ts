@@ -3,7 +3,8 @@
 // to sign in becomes the admin. ADMIN_EMAILS (optional) names extra addresses that are always let in as admins.
 import { Hono, type MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import { USER_COLORS } from '../shared/types';
+import { USER_COLORS, appName } from '../shared/types';
+import { loadSettings } from './settings';
 import { GMAIL_SEND, saveConnection } from './gmail';
 import {
   type AppEnv, type Ctx, type UserRow, auditStmt, b64url, bumpDirectory, defaultTz, nowIso, randomToken, sha256, sha256hex, toViewer, uid, validTz,
@@ -151,8 +152,11 @@ const workosOn = (c: Ctx) => !!(c.env.WORKOS_CLIENT_ID && c.env.WORKOS_API_KEY);
 const googleOn = (c: Ctx) => !!(c.env.GOOGLE_CLIENT_ID && c.env.GOOGLE_CLIENT_SECRET);
 const workosRedirect = (c: Ctx) => `${new URL(c.req.url).origin}/auth/workos/callback`;
 
-/** Which sign-in buttons the sign-in page shows. */
-authRoutes.get('/methods', (c) => c.json({ google: googleOn(c), workos: workosOn(c) }));
+/** What the sign-in page needs: which buttons to show, and the team's name and wordmark. */
+authRoutes.get('/methods', async (c) => {
+  const st = await loadSettings(c.env.DB);
+  return c.json({ google: googleOn(c), workos: workosOn(c), name: appName(st), wordmark: st.customWordmark ? st.wordmarkVersion : null });
+});
 
 authRoutes.get('/workos', (c) => {
   if (!workosOn(c)) return c.text('Email sign-in is not configured: set WORKOS_CLIENT_ID and WORKOS_API_KEY.', 500);

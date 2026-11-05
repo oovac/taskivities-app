@@ -1,6 +1,7 @@
-// App settings edited by admins on the Settings page. For now: the logo (SVG only).
+// App settings edited by admins on the Settings page: the logo (SVG), the name and wordmark that replace
+// "TASKIVITIES", and the home-screen icon.
 import type { Context } from 'hono';
-import { type AppSettings, ICON_SIZES } from '../shared/types';
+import { type AppSettings, ICON_SIZES, NAME_MAX, appName } from '../shared/types';
 import { type AppEnv, auditStmt, bad, bumpDirectory, nowIso } from './lib';
 
 export const LOGO_MAX_BYTES = 256 * 1024;
@@ -12,32 +13,67 @@ const getSetting = (db: D1Database, key: string) =>
 
 /** What every signed-in client gets in /api/bootstrap. */
 export async function loadSettings(db: D1Database): Promise<AppSettings> {
-  const [logo, icon] = await Promise.all([getSetting(db, 'logo'), getSetting(db, 'icon_512')]);
+  const [logo, icon, name, wordmark] = await Promise.all([getSetting(db, 'logo'), getSetting(db, 'icon_512'), getSetting(db, 'name'), getSetting(db, 'wordmark')]);
   return {
     customLogo: !!logo?.value,
     // Changes whenever the logo does, so /logo.svg?v=… can be cached for good.
     logoVersion: logo ? String(Date.parse(logo.updated_at)) : '0',
     customIcon: !!icon?.value,
     iconVersion: icon ? String(Date.parse(icon.updated_at)) : '0',
+    name: name?.value ?? '',
+    customWordmark: !!wordmark?.value,
+    wordmarkVersion: wordmark ? String(Date.parse(wordmark.updated_at)) : '0',
   };
+}
+
+const putSetting = (db: D1Database, key: string, value: string, actorId: string, now = nowIso()) =>
+  db.prepare(
+    'INSERT INTO settings (key, value, updated_by, updated_at) VALUES (?, ?, ?, ?) ' +
+      'ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at',
+  ).bind(key, value, actorId, now);
+
+/** The team's name: one line of plain text, at most NAME_MAX characters. Empty goes back to "Taskivities". */
+export function checkName(raw: unknown): string {
+  if (typeof raw !== 'string') throw bad('Type a name.');
+  const name = raw.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (name.length > NAME_MAX) throw bad(`Names can be at most ${NAME_MAX} characters.`);
+  return name;
+}
+
+export async function saveName(db: D1Database, actorId: string, name: string) {
+  await db.batch([
+    putSetting(db, 'name', name, actorId),
+    auditStmt(db, actorId, name ? 'name_changed' : 'name_reset', null, name ? { name } : null),
+    bumpDirectory(db),
+  ]);
+  return loadSettings(db);
+}
+
+export async function saveWordmark(db: D1Database, actorId: string, svg: string | null) {
+  await db.batch([
+    putSetting(db, 'wordmark', svg ?? '', actorId),
+    auditStmt(db, actorId, svg ? 'wordmark_changed' : 'wordmark_reset', null, svg ? { bytes: svg.length } : null),
+    bumpDirectory(db),
+  ]);
+  return loadSettings(db);
 }
 
 /**
  * Checks an uploaded logo. Only SVG is accepted, and nothing that could run code or load other content.
  * (The logo is also served with a locked-down Content-Security-Policy, so this is a second line of defence.)
  */
-export function checkSvg(raw: unknown): string {
+export function checkSvg(raw: unknown, what = 'logo'): string {
   if (typeof raw !== 'string' || !raw.trim()) throw bad('Choose an SVG file.');
   const svg = raw.trim();
-  if (new TextEncoder().encode(svg).length > LOGO_MAX_BYTES) throw bad(`The logo must be under ${LOGO_MAX_BYTES / 1024} KB.`);
+  if (new TextEncoder().encode(svg).length > LOGO_MAX_BYTES) throw bad(`The ${what} must be under ${LOGO_MAX_BYTES / 1024} KB.`);
   // Allow an XML declaration and comments before the root element; the root must be <svg>.
   const body = svg.replace(/^<\?xml[^>]*\?>/i, '').replace(/^(\s|<!--[\s\S]*?-->)*/, '');
   if (/<!DOCTYPE|<!ENTITY/i.test(svg)) throw bad("SVG files with a DOCTYPE aren't supported. Re-export it without one.");
-  if (!/^<svg[\s/>]/i.test(body) || !/(<\/svg>|\/>)\s*$/i.test(svg)) throw bad("That isn't an SVG file. Only SVG logos are supported.");
+  if (!/^<svg[\s/>]/i.test(body) || !/(<\/svg>|\/>)\s*$/i.test(svg)) throw bad(`That isn't an SVG file. Only SVG ${what}s are supported.`);
   if (/<\s*(script|foreignObject|iframe|embed|object|audio|video|link|meta|base)\b/i.test(svg))
-    throw bad('The SVG contains scripts or embedded content, which isn\'t allowed in a logo.');
+    throw bad(`The SVG contains scripts or embedded content, which isn't allowed in a ${what}.`);
   if (/\son[a-z]+\s*=/i.test(svg) || /(java|vb)script\s*:/i.test(svg) || /@import/i.test(svg))
-    throw bad("The SVG contains scripts or event handlers, which aren't allowed in a logo.");
+    throw bad(`The SVG contains scripts or event handlers, which aren't allowed in a ${what}.`);
   if (/(href|src)\s*=\s*["']\s*(https?:)?\/\//i.test(svg) || /url\(\s*["']?\s*(https?:)?\/\//i.test(svg))
     throw bad('The SVG links to files elsewhere. Use a self-contained SVG (embedded images are fine).');
   return svg;
@@ -78,6 +114,16 @@ export async function serveLogo(c: Context<AppEnv>) {
   if (row?.value) return new Response(row.value, { headers });
   const res = await c.env.ASSETS.fetch(new Request(new URL('/favicon.svg', c.req.url)));
   return new Response(res.body, { status: res.status, headers });
+}
+
+/** GET /wordmark.svg (public: the sign-in page shows it). 404 when none is uploaded: the app then shows the name. */
+export async function serveWordmark(c: Context<AppEnv>) {
+  const row = await getSetting(c.env.DB, 'wordmark');
+  if (!row?.value) return c.notFound();
+  const etag = `"${Date.parse(row.updated_at)}"`;
+  const headers = { ...SVG_HEADERS, etag, 'cache-control': c.req.query('v') ? 'public, max-age=31536000, immutable' : 'no-cache' };
+  if (c.req.header('if-none-match') === etag) return new Response(null, { status: 304, headers });
+  return new Response(row.value, { headers });
 }
 
 // ---------- home-screen icon (PNG) and the web app manifest ----------
@@ -140,12 +186,14 @@ export async function serveIcon(c: Context<AppEnv>) {
 
 /** GET /manifest.webmanifest: what phones need to install the app to the home screen. */
 export async function serveManifest(c: Context<AppEnv>) {
-  const { iconVersion } = await loadSettings(c.env.DB);
+  const settings = await loadSettings(c.env.DB);
+  const { iconVersion } = settings;
+  const name = appName(settings);
   const icon = (size: number, purpose: string) => ({ src: `/icons/${size}.png?v=${iconVersion}`, sizes: `${size}x${size}`, type: 'image/png', purpose });
   return c.json(
     {
-      name: 'Taskivities',
-      short_name: 'Taskivities',
+      name,
+      short_name: name,
       description: "Your team's week, at a glance.",
       id: '/',
       start_url: '/',

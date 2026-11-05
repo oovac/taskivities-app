@@ -6,7 +6,7 @@ import { authRoutes, requireSession, sameOrigin } from './auth';
 import { type AppEnv, type Env, HttpError } from './lib';
 import { TaskivitiesMCP } from './mcp';
 import { oauthRoutes } from './oauth';
-import { serveIcon, serveLogo, serveManifest } from './settings';
+import { serveIcon, serveLogo, serveManifest, serveWordmark } from './settings';
 import { hookRoutes } from './webhooks';
 import { attachmentRoutes, uploadRoutes } from './attachments';
 import { morningSummaries, pushRoutes } from './push';
@@ -24,6 +24,8 @@ app.onError((err, c) => {
 
 // The logo (header, sign-in page, browser tab icon). Public, so the sign-in page can show it.
 app.get('/logo.svg', serveLogo);
+// The team's wordmark, when one is uploaded (public too: the sign-in page shows it).
+app.get('/wordmark.svg', serveWordmark);
 // Installing to a phone's home screen: the manifest and the icons (public; phones fetch them without a session).
 app.get('/manifest.webmanifest', serveManifest);
 app.get('/icons/:file', serveIcon);

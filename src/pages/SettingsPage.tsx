@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { isAdmin } from '../../shared/rules';
-import { connectGmail, createHook, disconnectGmail, loadHooks, openHook, resetIcon, resetLogo, uploadIcon, uploadLogo } from '../actions';
-import { ICON_SIZES } from '../../shared/types';
+import { connectGmail, createHook, disconnectGmail, loadHooks, openHook, resetIcon, resetLogo, resetWordmark, saveAppName, uploadIcon, uploadLogo, uploadWordmark } from '../actions';
+import { ICON_SIZES, NAME_MAX, appName } from '../../shared/types';
 import { hookStatus } from '../components/WebhookSheet';
 import { logoUrl } from '../brand';
 import { I, LogoMark, Wordmark } from '../components/ui';
@@ -10,9 +10,9 @@ import { useStore } from '../store';
 const MAX_KB = 256;
 
 /** Checks the file in the browser first (the server checks again): SVG only, and it must actually draw. */
-async function readSvg(file: File): Promise<string> {
+async function readSvg(file: File, what = 'logo'): Promise<string> {
   if (!/\.svg$/i.test(file.name) && file.type !== 'image/svg+xml') throw new Error('Only SVG files are supported.');
-  if (file.size > MAX_KB * 1024) throw new Error(`The logo must be under ${MAX_KB} KB.`);
+  if (file.size > MAX_KB * 1024) throw new Error(`The ${what} must be under ${MAX_KB} KB.`);
   const text = await file.text();
   const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
   if (doc.querySelector('parsererror') || doc.documentElement.nodeName.toLowerCase() !== 'svg') throw new Error("That file isn't a valid SVG.");
@@ -28,6 +28,38 @@ async function readSvg(file: File): Promise<string> {
     URL.revokeObjectURL(url);
   }
   return text;
+}
+
+/**
+ * Trims a wordmark to what it actually draws: many SVGs have empty space around the lettering, which would push it
+ * off-centre on the sign-in page and make it look small in the top bar. The browser measures the drawing (with a copy
+ * stripped of scripts and event handlers, so measuring can't run anything) and tightens the viewBox around it.
+ */
+function trimSvg(text: string): string {
+  const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+  const root = doc.documentElement;
+  const probe = document.importNode(root, true) as unknown as SVGSVGElement;
+  probe.querySelectorAll('script, foreignObject').forEach((n) => n.remove());
+  for (const el of [probe, ...probe.querySelectorAll('*')]) {
+    for (const a of [...el.attributes]) if (/^on/i.test(a.name)) el.removeAttribute(a.name);
+  }
+  const host = document.createElement('div');
+  host.style.cssText = 'position:absolute;left:-10000px;top:0;width:2000px;height:2000px;visibility:hidden;pointer-events:none';
+  host.appendChild(probe);
+  document.body.appendChild(host);
+  try {
+    const b = probe.getBBox();
+    if (!(b.width > 0 && b.height > 0)) return text;
+    const pad = b.height * 0.04; // room for strokes and anti-aliasing
+    root.setAttribute('viewBox', [b.x - pad, b.y - pad, b.width + 2 * pad, b.height + 2 * pad].map((n) => +n.toFixed(2)).join(' '));
+    root.removeAttribute('width');
+    root.removeAttribute('height');
+    return new XMLSerializer().serializeToString(doc);
+  } catch {
+    return text;
+  } finally {
+    host.remove();
+  }
 }
 
 export function SettingsPage() {
@@ -65,7 +97,7 @@ export function SettingsPage() {
         <div className="card set-card">
           <div className="set-prev" aria-label="Preview">
             <div className="sp-head"><LogoMark version={logoVersion} /><Wordmark /></div>
-            <div className="sp-tab"><img src={logoUrl(logoVersion)} alt="" />Taskivities<span className="x">×</span></div>
+            <div className="sp-tab"><img src={logoUrl(logoVersion)} alt="" />{appName(s.settings)}<span className="x">×</span></div>
           </div>
           <div className="set-body">
             <p>Shown in the header, on the sign-in page and as the browser tab icon. <b>SVG only</b>, up to {MAX_KB} KB. A square logo works best.</p>
@@ -81,6 +113,7 @@ export function SettingsPage() {
           </div>
         </div>
       </section>
+      <AppName />
       <AppIcon />
       <Webhooks />
       <section className="sec">
@@ -104,6 +137,66 @@ export function SettingsPage() {
         </div>
       </section>
     </>
+  );
+}
+
+/** The team's name in place of "Taskivities", and optionally a wordmark image for the top bar. */
+function AppName() {
+  const s = useStore();
+  const { name, customWordmark, wordmarkVersion, logoVersion } = s.settings;
+  const [text, setText] = useState(name);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const file = useRef<HTMLInputElement>(null);
+  useEffect(() => setText(name), [name]);
+  const draft = text.replace(/\s+/g, ' ').trim();
+  const changed = draft !== name;
+  const save = async (value: string) => {
+    setBusy(true); setErr(null);
+    setErr(await saveAppName(value));
+    setBusy(false);
+  };
+  const pick = async (f: File | undefined) => {
+    if (!f) return;
+    setErr(null); setBusy(true);
+    try {
+      setErr(await uploadWordmark(trimSvg(await readSvg(f, 'wordmark'))));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Upload failed.');
+    } finally {
+      setBusy(false);
+      if (file.current) file.current.value = '';
+    }
+  };
+  return (
+    <section className="sec">
+      <div className="sec-h"><h2>Name</h2><span className="cnt">{customWordmark ? 'Wordmark' : name ? 'Custom' : 'Built-in'}</span></div>
+      <div className="card set-card">
+        <div className="set-prev" aria-label="Preview">
+          <div className="sp-head"><LogoMark version={logoVersion} /><Wordmark settings={{ name: draft, customWordmark, wordmarkVersion }} /></div>
+          <div className="sp-tab"><img src={logoUrl(logoVersion)} alt="" />{draft || 'Taskivities'}<span className="x">×</span></div>
+        </div>
+        <div className="set-body">
+          <p>Your team's name for the app. It replaces <b>TASKIVITIES</b> in the top bar, and is the name on the sign-in page, in the browser tab, under the home-screen icon and in invite emails.</p>
+          <div className="set-actions name-row">
+            <input className="inv-in" data-act="name-input" aria-label="App name" placeholder="Taskivities" maxLength={NAME_MAX} value={text}
+              onChange={(e) => { setText(e.target.value); setErr(null); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' && changed) { e.preventDefault(); void save(draft); } }} />
+            <button className="btn-primary" data-act="name-save" disabled={busy || !changed} onClick={() => void save(draft)}>Save</button>
+            {name && <button className="btn-ghost" data-act="name-reset" disabled={busy} onClick={() => { setText(''); void save(''); }}>Use Taskivities</button>}
+          </div>
+          <p className="set-sub">Or upload a <b>wordmark</b>: your name as a wide SVG image, shown in the top bar and on the sign-in page instead of the text. The name above is still used everywhere else.</p>
+          <div className="set-actions">
+            <button className="btn-ghost" data-act="wordmark-upload" disabled={busy} onClick={() => file.current?.click()}>
+              {customWordmark ? 'Replace wordmark…' : 'Upload SVG wordmark…'}
+            </button>
+            {customWordmark && <button className="btn-ghost" data-act="wordmark-reset" disabled={busy} onClick={() => { setErr(null); void resetWordmark(); }}>Remove wordmark</button>}
+          </div>
+          {err && <div className="set-err" role="alert">{err}</div>}
+          <input ref={file} type="file" accept=".svg,image/svg+xml" hidden aria-hidden="true" tabIndex={-1} onChange={(e) => void pick(e.target.files?.[0])} />
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -202,11 +295,11 @@ function AppIcon() {
         <div className="set-prev icon-prev" aria-label="Preview">
           <div className="ip-phone">
             <img src={`/icons/180.png?v=${iconVersion}`} alt="" />
-            <span>Taskivities</span>
+            <span>{appName(s.settings)}</span>
           </div>
         </div>
         <div className="set-body">
-          <p>Shown when someone adds Taskivities to their phone's home screen, and in app switchers. <b>A square PNG, 512×512 or larger</b>, works best.
+          <p>Shown when someone adds {appName(s.settings)} to their phone's home screen, and in app switchers. <b>A square PNG, 512×512 or larger</b>, works best.
             Phones round the corners themselves; transparent areas become white.</p>
           <div className="set-actions">
             <button className="btn-primary" data-act="icon-upload" disabled={busy} onClick={() => file.current?.click()}>

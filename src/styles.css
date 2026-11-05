@@ -55,6 +55,10 @@ b{font-weight:600}
 .logo:hover{background:var(--fill)}
 .wordmark-wrap{display:flex;flex:none;color:var(--text)}
 .wordmark{display:block;height:15px;width:auto;margin-top:-2px} /* the check rises above the letters; lift so the letters sit centred */
+/* The team's own name (text) or wordmark (SVG) in place of TASKIVITIES */
+.wordmark-text{font-size:16px;font-weight:750;letter-spacing:-.01em;line-height:1;white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+.wordmark-img{display:block;height:22px;width:auto;max-width:220px;object-fit:contain}
+.si-wordmark img{display:block;height:30px;width:auto;max-width:260px;margin:0 auto;object-fit:contain}
 .logo-img{width:26px;height:26px;display:block;flex:none;object-fit:contain}
 .logo-img.big{width:52px;height:52px;margin:0 auto 16px}
 .spacer{flex:1}
@@ -788,3 +792,7 @@ a.att-n:hover{color:var(--accent);text-decoration:underline}
 .notify-err{margin-top:6px;color:var(--danger-ink)}
 .notify-btn{width:100%}
 .notify-acts{display:flex;gap:6px;padding:2px 4px 6px}
+/* Settings → Name */
+.name-row{align-items:center}
+.name-row .inv-in{flex:1;min-width:160px;max-width:280px;margin:0;padding:7px 11px;font-size:13.5px;border-radius:9px}
+.set-sub{margin-top:14px}

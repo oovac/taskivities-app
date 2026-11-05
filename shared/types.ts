@@ -139,7 +139,17 @@ export interface AppSettings {
   customIcon: boolean;
   /** Cache-buster for /icons/<size>.png. */
   iconVersion: string;
+  /** The team's name for the app ('' = "Taskivities"): top bar, sign-in page, browser tab, home-screen label, invite emails. */
+  name: string;
+  /** An uploaded wordmark (SVG) replaces the name in the top bar and on the sign-in page. */
+  customWordmark: boolean;
+  /** Cache-buster for /wordmark.svg. */
+  wordmarkVersion: string;
 }
+
+/** The longest team name: it has to fit the top bar. */
+export const NAME_MAX = 40;
+export const appName = (s: Pick<AppSettings, 'name'> | null | undefined) => s?.name || 'Taskivities';
 
 /** Home-screen icon sizes: iPhone (180) and Android / install prompts (192, 512). */
 export const ICON_SIZES = [180, 192, 512] as const;

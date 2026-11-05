@@ -23,8 +23,8 @@ const MESSAGES: Record<string, string> = {
   unverified: "That account's email address isn't verified.",
 };
 
-/** Which sign-in methods this instance has set up (WorkOS is optional). */
-type Methods = { google: boolean; workos: boolean };
+/** Which sign-in methods this instance has set up (WorkOS is optional), and the team's name and wordmark. */
+type Methods = { google: boolean; workos: boolean; name?: string; wordmark?: string | null };
 
 export function Login() {
   const params = new URLSearchParams(location.search);
@@ -42,7 +42,10 @@ export function Login() {
   const [methods, setMethods] = useState<Methods | null>(null);
   useEffect(() => {
     const fallback: Methods = { google: true, workos: false };
-    fetch('/auth/methods').then((r) => (r.ok ? r.json() : fallback)).then((m: Methods) => setMethods(m)).catch(() => setMethods(fallback));
+    fetch('/auth/methods').then((r) => (r.ok ? r.json() : fallback)).then((m: Methods) => {
+      setMethods(m);
+      if (m.name) document.title = m.name;
+    }).catch(() => setMethods(fallback));
   }, []);
   const q = nextQs ? `?${nextQs}` : '';
   return (
@@ -50,11 +53,13 @@ export function Login() {
       <div className="signin">
         <div className="si-card">
           <LogoMark big />
-          <h1>Taskivities</h1>
+          {methods?.wordmark
+            ? <h1 className="si-wordmark"><img src={`/wordmark.svg?v=${encodeURIComponent(methods.wordmark)}`} alt={methods.name || 'Taskivities'} /></h1>
+            : <h1>{methods ? methods.name || 'Taskivities' : '\u00a0'}</h1>}
           <p>Your team's week, at a glance.</p>
           {error === 'no_access' && (
             <div className="si-msg" role="alert">
-              {denied ? <><b>{denied}</b> doesn't</> : "That account doesn't"} have access to Taskivities. Ask an admin to add this address (or enable it again, if it was disabled), or sign in with the one they added.
+              {denied ? <><b>{denied}</b> doesn't</> : "That account doesn't"} have access to {methods?.name || 'Taskivities'}. Ask an admin to add this address (or enable it again, if it was disabled), or sign in with the one they added.
             </div>
           )}
           {error && MESSAGES[error] && <div className="si-msg" role="alert">{MESSAGES[error]}</div>}

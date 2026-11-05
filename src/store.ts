@@ -125,7 +125,7 @@ export const useStore = create<State>()(() => ({
   tz: 'UTC',
   version: 0,
   dirVersion: 0,
-  settings: { customLogo: false, logoVersion: '0', customIcon: false, iconVersion: '0' },
+  settings: { customLogo: false, logoVersion: '0', customIcon: false, iconVersion: '0', name: '', customWordmark: false, wordmarkVersion: '0' },
   gmail: null,
   hooks: null,
   theme: themePref(),

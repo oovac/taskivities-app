@@ -6,7 +6,7 @@ import { ATTACH_MAX_BYTES } from '../shared/types';
 import type { AppSettings, ArchivedProject, Bootstrap, InviteEmailResult, WebhookInfo, WebhookRequestInfo, Priority, Project, Role, SyncResponse, Task, TaskEvent, User } from '../shared/types';
 import { PRIORITIES } from '../shared/types';
 import { api, ApiError } from './api';
-import { applyFavicon } from './brand';
+import { applyBrand } from './brand';
 import { activeSelector, focusLater, selFor } from './focus';
 import { type Page, type Pop, type PopType, type State, S, emptyDraft, set } from './store';
 import { syncPush } from './push';
@@ -50,7 +50,7 @@ function applyDirectory(b: Bootstrap): Partial<State> {
     page = 'tasks';
     history.replaceState(null, '', '/');
   }
-  applyFavicon(b.settings.logoVersion);
+  applyBrand(b.settings);
   return {
     me: b.me, users, projects, today: b.today, tz: b.tz, dirVersion: b.directoryVersion, settings: b.settings, gmail: b.gmail, attachmentsOn: b.attachments, viewUser, page,
     pushKey: b.push?.publicKey ?? null, notify: b.notify,
@@ -530,7 +530,7 @@ export const projectList = (s: State): Project[] => myProjects(s);
 // ---------- app settings (admins) ----------
 function putSettings(settings: AppSettings) {
   set({ settings });
-  applyFavicon(settings.logoVersion);
+  applyBrand(settings);
 }
 
 /** Uploads an SVG logo. Returns an error message to show next to the button, or null. */
@@ -542,6 +542,39 @@ export async function uploadLogo(svg: string): Promise<string | null> {
     return null;
   } catch (e) {
     return e instanceof ApiError ? e.message : 'Upload failed.';
+  }
+}
+
+/** Saves the team's name ('' goes back to "Taskivities"). Returns an error message to show, or null. */
+export async function saveAppName(name: string): Promise<string | null> {
+  try {
+    const r = await api.put<{ settings: AppSettings }>('/api/admin/settings/name', { name });
+    putSettings(r.settings);
+    toast(name ? `The app is now called ${name}` : 'Back to Taskivities');
+    return null;
+  } catch (e) {
+    return e instanceof ApiError ? e.message : 'Could not save.';
+  }
+}
+
+export async function uploadWordmark(svg: string): Promise<string | null> {
+  try {
+    const r = await api.put<{ settings: AppSettings }>('/api/admin/settings/wordmark', { svg });
+    putSettings(r.settings);
+    toast('Wordmark updated');
+    return null;
+  } catch (e) {
+    return e instanceof ApiError ? e.message : 'Upload failed.';
+  }
+}
+
+export async function resetWordmark() {
+  try {
+    const r = await api.del<{ settings: AppSettings }>('/api/admin/settings/wordmark');
+    putSettings(r.settings);
+    toast(r.settings.name ? `Showing ${r.settings.name} as text` : 'Back to the built-in name');
+  } catch (e) {
+    toastError(e);
   }
 }
 

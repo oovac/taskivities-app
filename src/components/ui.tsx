@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
-import { PRIORITIES, type Priority, type Project, type User } from '../../shared/types';
-import { logoUrl } from '../brand';
+import { type AppSettings, PRIORITIES, type Priority, type Project, type User, appName } from '../../shared/types';
+import { logoUrl, wordmarkUrl } from '../brand';
+import { useStore } from '../store';
 import { WORDMARK_SVG } from '../wordmark';
 import { displayName } from '../util';
 
@@ -50,8 +51,15 @@ export function LogoMark({ big = false, version }: { big?: boolean; version?: st
   return <img className={`logo-img${big ? ' big' : ''}`} src={logoUrl(version)} alt="" />;
 }
 
-/** The TASKIVITIES wordmark (letters follow the text colour; the K is a green check). */
-export function Wordmark() {
+/**
+ * The name in the top bar: the team's uploaded wordmark, else their name as text, else the built-in TASKIVITIES
+ * lettering (letters follow the text colour; the K is a green check). `settings`: to preview unsaved choices.
+ */
+export function Wordmark({ settings }: { settings?: Pick<AppSettings, 'name' | 'customWordmark' | 'wordmarkVersion'> }) {
+  const stored = useStore((st) => st.settings);
+  const s = settings ?? stored;
+  if (s.customWordmark) return <span className="wordmark-wrap"><img className="wordmark-img" src={wordmarkUrl(s.wordmarkVersion)} alt={appName(s)} /></span>;
+  if (s.name) return <span className="wordmark-wrap"><span className="wordmark-text">{s.name}</span></span>;
   return <span className="wordmark-wrap" dangerouslySetInnerHTML={{ __html: WORDMARK_SVG }} />;
 }
 

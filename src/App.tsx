@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
 import { boot, closePop, openConnect, openHelp, openPop, openTask, setPage, sync } from './actions';
 import { updateBadge } from './push';
+import { appName } from '../shared/types';
 import { Drawer } from './components/Drawer';
 import { ConnectSheet } from './components/ConnectSheet';
 import { HelpSheet } from './components/HelpSheet';
@@ -74,7 +75,7 @@ export function App() {
       <div className="topbar">
         <button className="skip" onClick={() => focusNav(navEls().find((n) => n.tabIndex === 0) || navEls()[0])}>Skip to tasks</button>
         {/* The logo goes home (Tasks); the other pages are in the ⋯ menu next to it. */}
-        <button className="logo" data-act="home" aria-label="Taskivities: go to Tasks" title="Tasks  (G T)" onClick={() => setPage('tasks')}>
+        <button className="logo" data-act="home" aria-label={`${appName(s.settings)}: go to Tasks`} title="Tasks  (G T)" onClick={() => setPage('tasks')}>
           <LogoMark version={s.settings.logoVersion} /><Wordmark />
         </button>
         <button className={`icon-btn pages-btn${s.pop?.type === 'pages' ? ' on' : ''}`} data-act="pages" aria-label="Pages" aria-haspopup="menu" title="Projects, Team, Settings"

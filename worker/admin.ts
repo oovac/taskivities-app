@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { EMAIL_RE } from '../shared/rules';
 import { DESCRIPTION_MAX, PROJECT_COLORS, USER_COLORS, type Role } from '../shared/types';
 import { disconnect, sendInvites, type SendResult } from './gmail';
-import { checkIcons, checkSvg, saveIcons, saveLogo } from './settings';
+import { checkIcons, checkName, checkSvg, loadSettings, saveIcons, saveLogo, saveName, saveWordmark } from './settings';
 import { webhookAdmin } from './webhooks';
 import { notify } from './push';
 import {
@@ -84,7 +84,8 @@ const projectNames = async (db: D1Database, ids: string[]) => {
 async function emailInvites(c: Ctx, people: { to: string; role: Role; projects: string[] }[]): Promise<SendResult> {
   const v = c.get('viewer');
   const link = `${new URL(c.req.url).origin}/login`;
-  const r = await sendInvites(c.env, { id: v.id, name: v.name }, people.map((p) => ({ ...p, link })));
+  const app = (await loadSettings(c.env.DB)).name;
+  const r = await sendInvites(c.env, { id: v.id, name: v.name }, people.map((p) => ({ ...p, link, app })));
   if (r.sent.length) await auditStmt(c.env.DB, v.id, 'invite_emailed', null, { to: r.sent }).run();
   return r;
 }
@@ -334,6 +335,19 @@ admin.put('/settings/icon', async (c) => {
 admin.delete('/settings/icon', async (c) => c.json({ settings: await saveIcons(c.env.DB, c.get('viewer').id, null) }));
 
 admin.delete('/settings/logo', async (c) => c.json({ settings: await saveLogo(c.env.DB, c.get('viewer').id, null) }));
+
+/** The team's name in place of "Taskivities" (an empty name goes back to it). */
+admin.put('/settings/name', async (c) => {
+  const b = await c.req.json<{ name?: unknown }>();
+  return c.json({ settings: await saveName(c.env.DB, c.get('viewer').id, checkName(b.name ?? '')) });
+});
+
+/** A wordmark (SVG) shown in the top bar and on the sign-in page instead of the name. */
+admin.put('/settings/wordmark', async (c) => {
+  const b = await c.req.json<{ svg?: unknown }>();
+  return c.json({ settings: await saveWordmark(c.env.DB, c.get('viewer').id, checkSvg(b.svg, 'wordmark')) });
+});
+admin.delete('/settings/wordmark', async (c) => c.json({ settings: await saveWordmark(c.env.DB, c.get('viewer').id, null) }));
 
 // ---------- Gmail for invite emails (connecting is a redirect: GET /auth/gmail) ----------
 admin.delete('/gmail', async (c) => {

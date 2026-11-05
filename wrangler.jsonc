@@ -23,6 +23,7 @@
 		"run_worker_first": [
 			"/api/*",
 			"/logo.svg",
+			"/wordmark.svg",
 			"/manifest.webmanifest",
 			"/icons/*",
 			"/hooks/*",
