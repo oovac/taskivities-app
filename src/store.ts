@@ -30,6 +30,8 @@ export interface ProjEdit {
   id: string | null; name: string; color: string; description: string; members: string[]; err: string | null; returnSel: string | null; busy?: boolean;
   /** Showing the "Archive this project?" confirmation. */
   archiving?: boolean;
+  /** Opened from the quick-add's project menu: a new project becomes the draft's project. */
+  forDraft?: boolean;
 }
 
 export interface State {

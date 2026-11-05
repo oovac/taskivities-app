@@ -11,7 +11,7 @@ import { onKeyDown } from './keyboard';
 import { ProjectsPage } from './pages/ProjectsPage';
 import { TasksPage } from './pages/TasksPage';
 import { SettingsPage } from './pages/SettingsPage';
-import { TeamPage } from './pages/TeamPage';
+import { ProjectEditor, TeamPage } from './pages/TeamPage';
 import { S, useStore } from './store';
 
 const POLL_MS = 10_000;
@@ -82,6 +82,7 @@ export function App() {
       {s.help && <HelpSheet />}
       {s.connect && <ConnectSheet />}
       {s.hookEdit && <WebhookSheet key={s.hookEdit} />}
+      {s.projEdit && <ProjectEditor pe={s.projEdit} s={s} />}
       {s.toast && (
         <div className={`toast ${s.toast.error ? 'err' : ''}`} role="status" key={s.toast.id}>
           <span>{s.toast.text}</span>

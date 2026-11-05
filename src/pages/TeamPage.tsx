@@ -11,12 +11,13 @@ import { Avatar, I } from '../components/ui';
 const openIn = (s: State, u: string, p?: string) =>
   Object.values(s.tasks).filter((t) => t.assigneeId === u && t.status === 'open' && (!p || t.projectId === p)).length;
 
-export function openProjEdit(id: string | null) {
+/** Opens the project editor (a sheet that works on any page). `forDraft`: from the quick-add's project menu. */
+export function openProjEdit(id: string | null, opts: { forDraft?: boolean } = {}) {
   const s = S();
   const p = id ? s.projects[id] : null;
   set({
     projEdit: {
-      id, name: p?.name ?? '', color: p?.color ?? PROJECT_COLORS[Object.keys(s.projects).length % PROJECT_COLORS.length],
+      id, forDraft: opts.forDraft, name: p?.name ?? '', color: p?.color ?? PROJECT_COLORS[Object.keys(s.projects).length % PROJECT_COLORS.length],
       description: p?.description ?? '',
       members: id ? people(s).filter((u) => !isAdmin(u) && u.projects.includes(id)).map((u) => u.id) : [],
       err: null, returnSel: activeSelector(),
@@ -131,7 +132,6 @@ export function TeamPage() {
         </div>
         <ArchivedProjects s={s} />
       </section>
-      {s.projEdit && <ProjectEditor pe={s.projEdit} s={s} />}
     </>
   );
 }
@@ -271,10 +271,16 @@ export function ProjectEditor({ pe, s }: { pe: ProjEdit; s: State }) {
   const save = async () => {
     if (!pe.name.trim()) { upd({ err: 'Give the project a name.' }); focusLater('#pe-name'); return; }
     upd({ busy: true, err: null });
-    const err = await saveProject({ id: pe.id, name: pe.name.trim(), color: pe.color, description: pe.description.trim(), members: pe.members });
-    if (err) { upd({ busy: false, err }); focusLater('#pe-name'); return; }
-    set({ projEdit: null });
-    focusLater(pe.id ? `[data-act="pe-open"][data-p="${pe.id}"]` : '[data-act="pe-new"]');
+    const r = await saveProject({ id: pe.id, name: pe.name.trim(), color: pe.color, description: pe.description.trim(), members: pe.members });
+    if ('error' in r) { upd({ busy: false, err: r.error }); focusLater('#pe-name'); return; }
+    // A new project shows up where it was asked for: picked on the Projects page, or in the quick-add.
+    const fresh = !pe.id;
+    set((st) => ({
+      projEdit: null,
+      ...(fresh && st.page === 'projects' ? { projSel: r.id, projOpen: false } : {}),
+      ...(fresh && pe.forDraft ? { draft: { ...st.draft, projectId: r.id } } : {}),
+    }));
+    focusLater(pe.returnSel);
   };
   const members = people(s).filter((u) => !isAdmin(u));
   const openHere = pe.id ? Object.values(s.tasks).filter((t) => t.projectId === pe.id && t.status === 'open').length : 0;
@@ -282,7 +288,7 @@ export function ProjectEditor({ pe, s }: { pe: ProjEdit; s: State }) {
     upd({ busy: true, err: null });
     const err = await archiveProject(pe.id!);
     if (err) { upd({ busy: false, archiving: false, err }); return; }
-    focusLater('[data-act="pe-new"]');
+    focusLater(S().page === 'projects' ? '[data-act="proj-pick"]' : '[data-act="pe-new"]');
   };
   return (
     <>
@@ -332,7 +338,7 @@ export function ProjectEditor({ pe, s }: { pe: ProjEdit; s: State }) {
         {pe.archiving ? (
           <div className="inv-foot sheet-f pe-arch" role="alert">
             <span className="muted-s">
-              Archive {pe.name || 'this project'}? It's hidden from everyone{openHere ? `, with its ${openHere} open task${openHere > 1 ? 's' : ''}` : ''}, until you restore it from this page. Nothing is deleted.
+              Archive {pe.name || 'this project'}? It's hidden from everyone{openHere ? `, with its ${openHere} open task${openHere > 1 ? 's' : ''}` : ''}, until you restore it {s.page === 'team' ? 'from this page' : 'on the Team page'}. Nothing is deleted.
             </span>
             <button className="btn-ghost" onClick={() => { upd({ archiving: false }); focusLater('[data-act="pe-archive"]'); }}>Cancel</button>
             <button className="btn-danger" data-act="pe-archive-yes" disabled={pe.busy} onClick={() => void archive()}>{pe.busy ? 'Archiving…' : 'Archive'}</button>

@@ -13,6 +13,7 @@ import { installApp, isInstalled, isIOS } from '../install';
 import { S, set, useStore, type Pop, type State } from '../store';
 import { displayName, draftEffective, firstName, isLate, myProjects, shownOn } from '../util';
 import { projectDayData } from '../pages/ProjectsPage';
+import { openProjEdit } from '../pages/TeamPage';
 import { Avatar, Dot, I, PrioIcon, ProjBadge } from './ui';
 
 const setDraft = (p: Partial<State['draft']>) => set((s) => ({ draft: { ...s.draft, ...p } }));
@@ -217,7 +218,7 @@ function ProjPop({ p, s }: { p: Pop; s: State }) {
       })}
       {isAdmin(s.me!)
         ? <><div className="pop-sep" /><button className="opt" style={{ color: 'var(--accent)' }}
-            onClick={() => { closePop(false); setPage('team'); set({ projEdit: { id: null, name: '', color: '#2E90FA', description: '', members: [], err: null, returnSel: null } }); focusLater('#pe-name'); }}>
+            onClick={() => { closePop(false); openProjEdit(null, { forDraft: qa }); }}>
             {I.plus(14)} New project…</button></>
         : <div className="pop-foot">Only your projects are listed.</div>}
     </>
@@ -250,6 +251,7 @@ function PersonPop({ s }: { s: State }) {
 function ProjPickPop({ s }: { s: State }) {
   const pick = (id: string) => { closePop(false); focusLater('[data-act="proj-pick"]'); set({ projSel: id, projOpen: false }); };
   const count = (id: string) => projectDayData(s, id, s.projDay).done.length;
+  const sel = s.projSel !== 'all' ? s.projects[s.projSel] : null;
   return (
     <>
       <div className="pop-h">Show work finished in</div>
@@ -262,6 +264,19 @@ function ProjPickPop({ s }: { s: State }) {
           <Dot color={pr.color} />{pr.name}<span className="r">{count(pr.id)} done</span>
         </button>
       ))}
+      {isAdmin(s.me!) && (
+        <>
+          <div className="pop-sep" />
+          {sel && (
+            <button className="opt" data-act="proj-edit" onClick={() => { closePop(false); focusLater('[data-act="proj-pick"]'); openProjEdit(sel.id); }}>
+              {I.edit(14)} Edit {sel.name}…<span className="r">or archive it</span>
+            </button>
+          )}
+          <button className="opt" data-act="proj-new" style={{ color: 'var(--accent)' }} onClick={() => { closePop(false); focusLater('[data-act="proj-pick"]'); openProjEdit(null); }}>
+            {I.plus(14)} New project…
+          </button>
+        </>
+      )}
     </>
   );
 }

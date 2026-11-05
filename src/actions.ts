@@ -480,7 +480,8 @@ export async function enableUser(id: string, projects?: string[]) {
     toastError(e);
   }
 }
-export async function saveProject(p: { id: string | null; name: string; color: string; description: string; members: string[] }): Promise<string | null> {
+/** Creates or saves a project. Returns an error message to show in the editor, or the project's id. */
+export async function saveProject(p: { id: string | null; name: string; color: string; description: string; members: string[] }): Promise<{ error: string } | { id: string }> {
   const body = { name: p.name, color: p.color, description: p.description, members: p.members };
   try {
     let id = p.id;
@@ -488,9 +489,10 @@ export async function saveProject(p: { id: string | null; name: string; color: s
     else id = (await api.post<{ id: string }>('/api/admin/projects', body)).id;
     await reloadDirectory();
     toast(p.id ? `Saved ${p.name}` : `Created ${p.name}`);
-    return null;
+    flash(['p:' + id]);
+    return { id };
   } catch (e) {
-    return e instanceof Error ? e.message : 'Could not save.';
+    return { error: e instanceof Error ? e.message : 'Could not save.' };
   }
 }
 
