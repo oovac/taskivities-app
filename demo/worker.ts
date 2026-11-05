@@ -107,6 +107,12 @@ export default {
     const path = url.pathname;
     const method = req.method;
 
+    // Always HTTPS (browsers mark plain http:// "Not secure"). Not for local development.
+    if (url.protocol === 'http:' && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
+      url.protocol = 'https:';
+      return Response.redirect(url.toString(), 301);
+    }
+
     if (path === '/login' && method === 'GET') return loginPage(req);
     if (path === '/auth/demo-login' && method === 'GET') return demoLogin(req, env);
     // No Google sign-in in the demo.
