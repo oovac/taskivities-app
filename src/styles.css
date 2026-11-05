@@ -776,4 +776,5 @@ a.att-n:hover{color:var(--accent);text-decoration:underline}
 .arch-main b{display:block;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .arch-main b.dn{color:var(--muted)}
 .arch-main span{display:block;font-size:12px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dr-archive:hover{color:var(--danger-ink);background:var(--danger-soft)}
+.pop .opt.danger{color:var(--danger-ink)}
+.pop .opt.danger:hover,.pop .opt.danger:focus-visible{background:var(--danger-soft)}

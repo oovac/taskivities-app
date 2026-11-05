@@ -5,7 +5,7 @@ import { isAdmin, onProject } from '../../shared/rules';
 import { PRIORITIES, type Priority } from '../../shared/types';
 import {
   assignable, closePop, defaultDraftDate, moveTasks, openConnect, removeUser, setPage, setPriority, setProject, setRepeat, signOut, switchablePeople, transfer,
-  updateUser, viewPerson,
+  updateUser, viewPerson, editNotes, editChecklist, pickAttachments, archiveTask,
 } from '../actions';
 import { focusLater } from '../focus';
 import { type ThemePref, setThemePref } from '../theme';
@@ -65,6 +65,7 @@ function Content({ p, s }: { p: Pop; s: State }) {
     case 'uproj': return <UserProjectsPop p={p} s={s} />;
     case 'uremove': return <RemovePop p={p} s={s} />;
     case 'account': return <AccountPop s={s} />;
+    case 'taskmenu': return <TaskMenu p={p} s={s} />;
     case 'repeat': return <RepeatPop p={p} s={s} />;
   }
 }
@@ -493,5 +494,23 @@ function CustomRepeat({ init, base, onBack, onSave }: { init: Repeat; base: stri
         <button className="go sm" disabled={!!err} onClick={save}>Save</button>
       </div>
     </div>
+  );
+}
+
+/** The ⋯ menu on an open task: actions that shouldn't be one click away. */
+function TaskMenu({ p, s }: { p: Pop; s: State }) {
+  const t = s.tasks[p.id!];
+  if (!t) return null;
+  return (
+    <>
+      <button className="opt" data-act="menu-notes" onClick={() => { closePop(false); editNotes(t.id); }}>{I.list(15)}Notes<span className="r">⇧N</span></button>
+      <button className="opt" data-act="menu-checklist" onClick={() => { closePop(false); editChecklist(t.id); }}>{I.check(14)}Checklist<span className="r">⇧C</span></button>
+      {s.attachmentsOn && <button className="opt" data-act="menu-attach" onClick={() => { closePop(false); pickAttachments(t.id); }}>{I.clip(15)}Attach files<span className="r">⇧A</span></button>}
+      <div className="pop-sep" />
+      <button className="opt danger" data-act="archive" onClick={() => { closePop(false); void archiveTask(t.id); }}>
+        {I.trash(15)}Archive task
+      </button>
+      <div className="pop-foot">Archived tasks are hidden everywhere and can be restored from the project's page.</div>
+    </>
   );
 }

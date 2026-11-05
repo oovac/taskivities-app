@@ -16,6 +16,7 @@ export const I = {
   chev: (s = 14) => <Svg s={s}><path d="M4.5 6.3L8 9.8l3.5-3.5" /></Svg>,
   left: (s = 16) => <Svg s={s}><path d="M9.8 3.5L5.3 8l4.5 4.5" /></Svg>,
   right: (s = 16) => <Svg s={s}><path d="M6.2 3.5L10.7 8l-4.5 4.5" /></Svg>,
+  dots: (s = 16) => <svg viewBox="0 0 16 16" width={s} height={s} aria-hidden="true" fill="currentColor"><circle cx="3.5" cy="8" r="1.35" /><circle cx="8" cy="8" r="1.35" /><circle cx="12.5" cy="8" r="1.35" /></svg>,
   x: (s = 16) => <Svg s={s}><path d="M4 4l8 8M12 4l-8 8" /></Svg>,
   plus: (s = 18) => <Svg s={s} sw={2}><path d="M8 3v10M3 8h10" /></Svg>,
   eye: (s = 16) => <Svg s={s}><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" /><circle cx="8" cy="8" r="2" /></Svg>,

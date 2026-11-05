@@ -3,7 +3,7 @@ import { addDays, fmt } from '../../shared/dates';
 import { isLate, shownOn } from '../../shared/rules';
 import { describe } from '../../shared/repeat';
 import { CHECK_TEXT_MAX, COMMENT_MAX, PRIORITIES, type AttachmentInfo, type ChecklistItem, type Priority, type TaskEvent } from '../../shared/types';
-import { addChecklistItems, addComment, archiveTask, attachmentUrl, closeDrawer, pickAttachments, removeAttachment, uploadFiles, editChecklist, editNotes, removeChecklistItem, renameChecklistItem, toggleChecklistItem, loadEvents, openPop, patchTask, skipTask, toggleDone } from '../actions';
+import { addChecklistItems, addComment, attachmentUrl, closeDrawer, pickAttachments, removeAttachment, uploadFiles, editChecklist, editNotes, removeChecklistItem, renameChecklistItem, toggleChecklistItem, loadEvents, openPop, patchTask, skipTask, toggleDone } from '../actions';
 import { set, useStore, type State } from '../store';
 import { displayName, firstName, stamp } from '../util';
 import { openMove, LateBadge } from './rows';
@@ -50,7 +50,8 @@ export function Drawer() {
         <div className="dr-top">
           <ProjPill p={p} />
           <span className="spacer" />
-          <button className="icon-btn dr-archive" data-act="archive" title="Archive task  (⌫)" aria-label="Archive task" onClick={() => void archiveTask(t.id)}>{I.trash()}</button>
+          <button className="icon-btn" data-act="task-menu" title="More" aria-label="More actions" aria-haspopup="menu"
+            onClick={(e) => openPop({ type: 'taskmenu', mode: 'task', id: t.id }, e.currentTarget)}>{I.dots()}</button>
           <button className="icon-btn" data-act="close-drawer" title="Close  Esc" aria-label="Close" onClick={() => closeDrawer()}>{I.x()}</button>
         </div>
         <div className="dr-body">
