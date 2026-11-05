@@ -151,3 +151,7 @@ Deploying to every instance after a code change is one command per instance; the
 - **Invite emails.** Admins currently share the link themselves.
 - **Archiving projects** from the UI. The column exists, but there's no button yet.
 - **Automated tests.** So far everything has been checked by hand in the browser and with the API.
+
+## License
+
+[MIT](LICENSE) © 2026 Yusuf Bhabhrawala
