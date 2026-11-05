@@ -3,7 +3,7 @@ import { addDays } from '../shared/dates';
 import { isAdmin } from '../shared/rules';
 import type { Priority } from '../shared/types';
 import {
-  closeConnect, closeDrawer, closeHelp, closePop, moveTasks, openDrawer, openHelp, openPop, setPage, setPriority, setView, skipTask, toast, toggleDone, closeHook } from './actions';
+  closeConnect, closeDrawer, closeHelp, closePop, moveTasks, openDrawer, openHelp, openPop, setPage, setPriority, setView, skipTask, toast, toggleDone, closeHook, editChecklist, editNotes, pickAttachments } from './actions';
 import { openMove } from './components/rows';
 import { curNav, focusLater, focusNav, navEls, trapTab } from './focus';
 import { S, set } from './store';
@@ -117,7 +117,9 @@ export function onKeyDown(e: KeyboardEvent) {
     return;
   }
   if (k === 'g') { gPending = Date.now(); return; }
-  if (k === 'n') {
+  // N = new task, ⇧N = notes of the selected task (decided by Shift, so Caps Lock doesn't matter).
+  const isN = k === 'n' || k === 'N';
+  if (isN && !e.shiftKey) {
     e.preventDefault();
     if (s.drawer) closeDrawer(false);
     if (s.page !== 'tasks') {
@@ -172,7 +174,11 @@ export function onKeyDown(e: KeyboardEvent) {
   const isDiv = onNav && t.tagName === 'DIV';
   if ((k === 'Enter' && isDiv && !s.drawer) || (k === 'o' && !s.drawer)) { e.preventDefault(); openDrawer(task.id); return; }
   if (k === 'e') { e.preventDefault(); openDrawer(task.id, true); return; }
-  if (k === 'c') { e.preventDefault(); if (s.drawer !== task.id) openDrawer(task.id); focusLater('#comment-box'); return; }
+  if (isN && e.shiftKey) { e.preventDefault(); editNotes(task.id); return; }
+  if ((k === 'a' || k === 'A') && e.shiftKey) { e.preventDefault(); pickAttachments(task.id); return; }
+  // C = comment, ⇧C = checklist (by Shift, like N / ⇧N).
+  if ((k === 'c' || k === 'C') && e.shiftKey) { e.preventDefault(); editChecklist(task.id); return; }
+  if (k === 'c' || k === 'C') { e.preventDefault(); if (s.drawer !== task.id) openDrawer(task.id); focusLater('#comment-box'); return; }
   if (k === 'x' || (k === ' ' && (isDiv || t.classList.contains('drawer')))) { e.preventDefault(); toggleDone(task.id); return; }
   const anchor = (act: 'move' | 'assign' | 'repeat') =>
     (s.drawer ? document.querySelector<HTMLElement>(`.drawer [data-act="${act}"]`) : curNav()?.querySelector<HTMLElement>(`[data-act="${act}"]`)) || curNav();

@@ -20,7 +20,7 @@ worker/   index.ts (routes + OAuth provider) · auth.ts (Google + sessions) · a
           mcp.ts (MCP tools) · oauth.ts (/authorize consent page for assistants) · admin.ts (people, projects, settings) · settings.ts (logo) · gmail.ts + invite-mail.ts (invite emails) · webhooks.ts · lib.ts
 shared/   types, date helpers and rules used by both the Worker and the app
 src/      React app: pages/ (Tasks, Projects, Team, Settings, Login), components/, actions.ts (all writes), keyboard.ts, focus.ts
-migrations/ (0001 schema, 0002 time zones, 0003 repeating tasks, 0004 settings, 0005 Gmail tokens, 0006 webhooks)   seed/dev.sql (local sample data)
+migrations/ (0001 schema, 0002 time zones, 0003 repeating tasks, 0004 settings, 0005 Gmail tokens, 0006 webhooks, 0007 checklists, 0008 attachments)   seed/dev.sql (local sample data)
 scripts/tenant.mjs (per-instance deploys)   tenants/ (each instance's Cloudflare IDs; only example.env is committed)
 ```
 
@@ -38,6 +38,8 @@ scripts/tenant.mjs (per-instance deploys)   tenants/ (each instance's Cloudflare
   - Edits to the open copy (title, notes, priority, project, assignee) carry forward to future copies, except a transfer marked "just this one". Date moves only affect that copy.
   - The week views show upcoming copies as faint previews, calculated in the browser and never saved.
 - **Light and dark themes:** each person picks Light, Dark or System (follows the OS, live) in the account menu; it's saved in that browser. Every colour in `src/styles.css` comes from variables in `:root`, and `[data-theme="dark"]` swaps them; `index.html` applies the choice before the page draws, so there's no flash. Logos sit on a light tile in the dark theme, since they're usually drawn for light backgrounds. The assistant consent page follows the OS setting.
+- **Attachments** (optional per instance; `worker/attachments.ts`, migration 0008): files live in an R2 bucket (binding `FILES`, `R2_BUCKET` in the tenants file); without one the app hides "Attach". Drop files on a task, paste a screenshot, or press **⇧A**. Up to 25 MB per file and 50 per task. Every download goes through the Worker, which checks the person can see the task; only images, PDFs and plain text open in the browser (under a sandboxing CSP), everything else downloads, so an uploaded HTML or SVG file can't run code. Only the uploader or an admin can remove a file: it's deleted from R2 and the history keeps its name. Rows show a 📎 count.
+- **Checklist:** each task can have one checklist (`checklist_items`, migration 0007). Anyone who can see the task can add items (pasting several lines adds them all), tick, rename or remove them, and every change is logged in the history. Rows show progress ("2/5"). A repeating task's next copy starts with the same items, unticked. Press **⇧C** to jump to it (and **⇧N** for notes); empty notes and checklists fold into small "Add" buttons.
 - **Comments** live in the task's history (`type = 'comment'`), so they're permanent like everything else there: no editing or deleting. Anyone who can see the task can comment, on open or done tasks, up to 4,000 characters. A comment moves the task's version on, so everyone's app picks it up on the next poll, and the assignee and creator get a "New comment" notice. Rows show a comment count. Press **C** on a task to comment.
 - **History is append-only.** Every write updates `tasks` and inserts into `task_events` in the same D1 batch, and database triggers refuse any `UPDATE` or `DELETE` on `task_events`.
 - **Roles:**
@@ -74,6 +76,8 @@ The Worker serves a remote MCP server at `https://<your-app-host>/mcp`. In Claud
 | `update_task(id, title?, notes?, project?, due_date?, priority?, status?, repeat?, stop_repeating?, skip?)` | Only the fields given change; `status: "open"` reopens. On a repeating task, can change, stop or skip the repeat |
 | `complete_task(id)` | Marks it done today; for a repeating task, returns the new copy as `next_copy` |
 | `list_comments(id)` | The task's comments, oldest first |
+| `read_attachment(id, file)` | Reads a text file attached to a task (up to 200 KB). Tasks list their `attachments` in every result |
+| `update_checklist(id, add?, check?, uncheck?, remove?)` | Changes the task's checklist; items are referred to by id or exact text. Tasks show their `checklist` in every result |
 | `add_comment(id, text)` | Posts a comment as the user, marked "via <assistant>" |
 | `transfer_task(id, to, note?, this_only?)` | The new assignee must be on the task's project. `this_only` leaves future copies of a repeating task with the current person |
 | `project_day(project, date)` | What got finished in a project that day (by priority, then due date), plus what's still open |
@@ -110,6 +114,7 @@ What makes an instance is a small file, `tenants/<instance>.env`, which is **not
 | `CUSTOM_DOMAINS` (optional) | e.g. `tasks.acme.com` | A domain (zone) in the same Cloudflare account |
 | `WORKERS_DEV` (optional) | `false` to serve only on the custom domains | |
 | `CLOUDFLARE_ACCOUNT_ID` (optional) | Needed when your login can reach several accounts | `npx wrangler whoami` |
+| `R2_BUCKET` (optional) | Storage for attachments; empty turns attachments off | Printed by `npx wrangler r2 bucket create <name>` (R2 must be turned on for the account first: Dashboard → R2) |
 | `CLOUDFLARE_PROFILE` (optional) | A different Cloudflare login for this instance (e.g. a client's own account) | Create one with `npx wrangler auth create <name>`; list them with `npx wrangler auth list` |
 
 [`tenants/example.env`](tenants/example.env) explains each value in more detail. Secrets (the Google client) are never in the file: they're stored encrypted in Cloudflare, per Worker.
@@ -121,7 +126,7 @@ What makes an instance is a small file, `tenants/<instance>.env`, which is **not
    ```bash
    npm run tenant -- create acme --tz Europe/London
    ```
-   This creates the D1 database `taskivities-acme` and the KV namespace `taskivities-acme-oauth`, and writes `tenants/acme.env` with their IDs. Options: `--name <worker-name>` (default `taskivities-<instance>`), `--domain tasks.acme.com`, `--account <account id>`, `--profile <login profile>` (to create them in an account under another Cloudflare login).
+   This creates the D1 database `taskivities-acme`, the KV namespace `taskivities-acme-oauth` and, if R2 is turned on for the account, the bucket `taskivities-acme-files`, and writes `tenants/acme.env` with their IDs. Options: `--name <worker-name>` (default `taskivities-<instance>`), `--domain tasks.acme.com`, `--account <account id>`, `--profile <login profile>` (to create them in an account under another Cloudflare login).
    (Or create them yourself as the table above says, copy `tenants/example.env` to `tenants/acme.env` and fill it in.)
 3. **Create a Google OAuth client** at [console.cloud.google.com](https://console.cloud.google.com): *APIs & Services → Credentials → Create credentials → OAuth client ID*.
    - Type: **Web application**.

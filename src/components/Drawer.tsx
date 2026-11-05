@@ -2,11 +2,12 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { addDays, fmt } from '../../shared/dates';
 import { isLate, shownOn } from '../../shared/rules';
 import { describe } from '../../shared/repeat';
-import { COMMENT_MAX, PRIORITIES, type Priority, type TaskEvent } from '../../shared/types';
-import { addComment, closeDrawer, loadEvents, openPop, patchTask, skipTask, toggleDone } from '../actions';
-import { useStore, type State } from '../store';
+import { CHECK_TEXT_MAX, COMMENT_MAX, PRIORITIES, type AttachmentInfo, type ChecklistItem, type Priority, type TaskEvent } from '../../shared/types';
+import { addChecklistItems, addComment, attachmentUrl, closeDrawer, pickAttachments, removeAttachment, uploadFiles, editChecklist, editNotes, removeChecklistItem, renameChecklistItem, toggleChecklistItem, loadEvents, openPop, patchTask, skipTask, toggleDone } from '../actions';
+import { set, useStore, type State } from '../store';
 import { displayName, firstName, stamp } from '../util';
 import { openMove, LateBadge } from './rows';
+import { type HistoryEntry, type HistoryLine, andList, groupHistory } from '../history';
 import { Avatar, Dot, I, PrioIcon, ProjPill } from './ui';
 
 export function Drawer() {
@@ -14,6 +15,7 @@ export function Drawer() {
   const t = s.drawer ? s.tasks[s.drawer] : undefined;
   const events = t ? s.events[t.id] : undefined;
   const [notes, setNotes] = useState(t?.notes ?? '');
+  const [dropping, setDropping] = useState(false);
 
   useEffect(() => { setNotes(t?.notes ?? ''); }, [t?.id, t?.notes]);
   useEffect(() => { if (t && !events) void loadEvents(t.id); }, [t?.id, t?.version, events]);
@@ -25,11 +27,26 @@ export function Drawer() {
   const creator = s.users[t.createdBy];
   const p = s.projects[t.projectId];
   const B = ({ children }: { children: ReactNode }) => <b>{children}</b>;
+  const showNotes = !!(t.notes || notes || s.notesOpen);
+  const showList = t.checklist.length > 0 || s.checklistOpen;
+  const uploading = s.uploads.filter((u) => u.taskId === t.id);
+  const showFiles = s.attachmentsOn && (t.attachments.length > 0 || uploading.length > 0);
 
   return (
     <>
       <div className="backdrop" data-act="close-drawer" onClick={() => closeDrawer()} />
-      <aside className="drawer" data-id={t.id} role="dialog" aria-modal="true" aria-label={`Task: ${t.title}`} tabIndex={-1}>
+      <aside className="drawer" data-id={t.id} role="dialog" aria-modal="true" aria-label={`Task: ${t.title}`} tabIndex={-1}
+        onDragOver={(e) => { if (s.attachmentsOn && e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDropping(true); } }}
+        onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropping(false); }}
+        onDrop={(e) => { if (!s.attachmentsOn) return; e.preventDefault(); setDropping(false); const f = [...e.dataTransfer.files]; if (f.length) void uploadFiles(t.id, f); }}
+        onPaste={(e) => {
+          // Pasting a screenshot (or files) anywhere in the task attaches it. Text pastes behave as usual.
+          const f = [...e.clipboardData.files];
+          if (!s.attachmentsOn || !f.length || e.clipboardData.getData('text')) return;
+          e.preventDefault();
+          void uploadFiles(t.id, f.map((x, i) => (x.name && x.name !== 'image.png' ? x : new File([x], `Pasted image ${new Date().toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}${i ? ` (${i + 1})` : ''}.${(x.type.split('/')[1] || 'png').replace('jpeg', 'jpg')}`, { type: x.type }))));
+        }}>
+        {dropping && <div className="dr-drop" aria-hidden="true">{I.clip(18)} Drop to attach</div>}
         <div className="dr-top">
           <ProjPill p={p} />
           <span className="spacer" />
@@ -80,42 +97,52 @@ export function Drawer() {
             <dd className="plain"><Avatar user={creator} /> {displayName(creator)}<span style={{ color: 'var(--faint)' }}>· {stamp(t.createdAt, s.today).split(' · ')[0]}</span></dd>
           </dl>
           {t.series?.active && t.status === 'open' && <div className="dr-hint">Changes to this copy carry over to future ones.</div>}
-          <div className="lbl">Notes</div>
-          <textarea data-field="notes" placeholder="Add details or links…" value={notes} onChange={(e) => setNotes(e.target.value)}
-            onBlur={() => notes.trim() !== t.notes && void patchTask(t.id, { notes })} />
+          {showNotes && (
+            <>
+              <div className="lbl">Notes</div>
+              <textarea data-field="notes" placeholder="Add details or links…" value={notes} onChange={(e) => setNotes(e.target.value)}
+                onBlur={() => {
+                  if (notes.trim() !== t.notes) void patchTask(t.id, { notes });
+                  if (!notes.trim()) set({ notesOpen: false }); // still empty: fold it away again
+                }} />
+            </>
+          )}
+          {showList && <Checklist key={`checklist:${t.id}`} taskId={t.id} items={t.checklist} />}
+          {showFiles && <Attachments taskId={t.id} files={t.attachments} uploading={uploading} s={s} />}
+          {s.attachmentsOn && (
+            <input id="attach-input" type="file" multiple hidden tabIndex={-1} aria-hidden="true"
+              onChange={(e) => { const f = [...(e.target.files ?? [])]; e.target.value = ''; if (f.length) void uploadFiles(t.id, f); }} />
+          )}
+          {(!showNotes || !showList || (s.attachmentsOn && !showFiles)) && (
+            // Empty notes / no checklist: just small buttons, so the history sits higher up.
+            <div className="dr-adds">
+              {!showNotes && <button className="notes-add" data-act="notes" title="Add notes  (⇧N)" onClick={() => editNotes(t.id)}>{I.plus(13)} Add notes</button>}
+              {!showList && <button className="notes-add" data-act="checklist" title="Add a checklist  (⇧C)" onClick={() => editChecklist(t.id)}>{I.check(12)} Add checklist</button>}
+              {s.attachmentsOn && !showFiles && <button className="notes-add" data-act="attach" title="Attach files  (⇧A) · or drop / paste them here" onClick={() => pickAttachments(t.id)}>{I.clip(13)} Attach files</button>}
+            </div>
+          )}
           <div className="lbl">Comments &amp; history <span className="muted">· permanently recorded</span></div>
-          <CommentBox key={t.id} taskId={t.id} />
+          <CommentBox key={`comment:${t.id}`} taskId={t.id} />
           {!events ? <div className="trail-loading">Loading history…</div> : (
             <ol className="trail">
               {late && (
                 <li className="sys"><span className="av" style={{ '--s': '22px' } as React.CSSProperties}>{I.refresh()}</span>
                   <div><div className="tx">Rolling over each day since <B>{fmt(addDays(t.dueDate, 1))}</B> (shown, not logged)</div></div></li>
               )}
-              {[...events].reverse().map((e) => e.type === 'comment' ? (
-                <li key={e.id} className="cmt">
-                  <Avatar user={s.users[e.actorId]} />
+              {groupHistory(events).map((g) => g.kind === 'comment' ? (
+                <li key={g.key} className="cmt">
+                  <Avatar user={s.users[g.event.actorId]} />
                   <div>
                     <div className="tx">
-                      <b>{firstName(s.users[e.actorId])}</b>
-                      {e.via && <> <span className="via" title={`Written by an AI assistant acting as ${displayName(s.users[e.actorId])}`}>via {e.via}</span></>}
-                      <span className="tm"> · {stamp(e.at, s.today)}</span>
+                      <b>{firstName(s.users[g.event.actorId])}</b>
+                      {g.event.via && <> <span className="via" title={`Written by an AI assistant acting as ${displayName(s.users[g.event.actorId])}`}>via {g.event.via}</span></>}
+                      <span className="tm"> · {stamp(g.event.at, s.today)}</span>
                     </div>
-                    <div className="bubble">{linkify(e.note ?? '')}</div>
+                    <div className="bubble">{linkify(g.event.note ?? '')}</div>
                   </div>
                 </li>
               ) : (
-                <li key={e.id}>
-                  <Avatar user={s.users[e.actorId]} />
-                  <div>
-                    <div className="tx">
-                      <b>{firstName(s.users[e.actorId])}</b>
-                      {e.via && <> <span className="via" title={e.via.endsWith(' webhook') ? `Created automatically by a webhook set up by ${displayName(s.users[e.actorId])}` : `Made by an AI assistant acting as ${displayName(s.users[e.actorId])}`}>via {e.via}</span></>}{' '}
-                      <EventText e={e} s={s} />
-                      {e.note && <span className="note">“{e.note}”</span>}
-                    </div>
-                    <div className="tm">{stamp(e.at, s.today)}</div>
-                  </div>
-                </li>
+                <ChangesEntry key={g.key} g={g} s={s} />
               ))}
             </ol>
           )}
@@ -146,6 +173,13 @@ function EventText({ e, s }: { e: TaskEvent; s: State }) {
     case 'repeat_set': return <>set it to repeat: <b>{e.toValue}</b></>;
     case 'repeat_changed': return <>changed the repeat to <b>{e.toValue}</b></>;
     case 'repeat_stopped': return <>stopped repeating</>;
+    case 'check_added': return <>added <b>{e.toValue}</b> to the checklist</>;
+    case 'check_done': return <>checked <b>{e.toValue}</b></>;
+    case 'check_undone': return <>unchecked <b>{e.toValue}</b></>;
+    case 'check_renamed': return <>renamed checklist item “{e.fromValue}” to <b>{e.toValue}</b></>;
+    case 'check_removed': return <>removed <b>{e.toValue}</b> from the checklist</>;
+    case 'attached': return <>attached <b>{e.toValue}</b></>;
+    case 'detached': return <>removed the file <b>{e.toValue}</b></>;
     case 'skipped': return <>skipped <b>{e.fromValue ? fmt(e.fromValue) : '?'}</b> · next one <b>{e.toValue ? fmt(e.toValue) : '?'}</b></>;
     default: return <>{e.type}</>;
   }
@@ -180,6 +214,165 @@ function CommentBox({ taskId }: { taskId: string }) {
           <button className="btn-primary sm" disabled={busy} onClick={() => void send()}>{busy ? 'Posting…' : 'Comment'}</button>
         </div>
       )}
+    </div>
+  );
+}
+
+/** The task's checklist: tick items, click one to rename it, × to remove it, and "Add an item" (Enter keeps going; pasting several lines adds them all). */
+function Checklist({ taskId, items }: { taskId: string; items: ChecklistItem[] }) {
+  const [text, setText] = useState('');
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState('');
+  const addRef = useRef<HTMLInputElement>(null);
+  const done = items.filter((c) => c.done).length;
+  const add = async (value: string) => {
+    if (!value.trim()) return;
+    setText('');
+    if (!(await addChecklistItems(taskId, value))) setText(value);
+    addRef.current?.focus();
+  };
+  const saveEdit = (c: ChecklistItem) => {
+    setEditing(null);
+    const v = draft.replace(/\s+/g, ' ').trim();
+    if (v && v !== c.text) void renameChecklistItem(taskId, c.id, v);
+  };
+  return (
+    <div className="ck" aria-label="Checklist">
+      <div className="lbl">Checklist {items.length > 0 && <span className="muted">· {done}/{items.length}</span>}</div>
+      {items.length > 0 && <div className="ck-bar" aria-hidden="true"><i style={{ width: `${(done / items.length) * 100}%` }} /></div>}
+      <ul className="ck-list">
+        {items.map((c) => (
+          <li key={c.id} className={c.done ? 'on' : ''}>
+            <input type="checkbox" checked={c.done} aria-label={c.text} onChange={(e) => void toggleChecklistItem(taskId, c.id, e.target.checked)} />
+            {editing === c.id ? (
+              <input className="ck-edit" autoFocus onFocus={(e) => e.currentTarget.select()} value={draft} maxLength={CHECK_TEXT_MAX} aria-label="Edit item"
+                onChange={(e) => setDraft(e.target.value)} onBlur={() => saveEdit(c)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
+                  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setEditing(null); }
+                }} />
+            ) : (
+              <button className="ck-t" title="Click to rename" onClick={() => { setEditing(c.id); setDraft(c.text); }}>{c.text}</button>
+            )}
+            <button className="ck-x" title="Remove" aria-label={`Remove ${c.text}`} onClick={() => void removeChecklistItem(taskId, c.id)}>{I.x(12)}</button>
+          </li>
+        ))}
+      </ul>
+      <div className="ck-add">
+        {I.plus(13)}
+        <input id="ck-add" ref={addRef} placeholder={items.length ? 'Add an item…' : 'Add the first item… (paste a list to add several)'} value={text} maxLength={CHECK_TEXT_MAX * 20}
+          aria-label="Add a checklist item" onChange={(e) => setText(e.target.value)}
+          onPaste={(e) => {
+            const pasted = e.clipboardData.getData('text');
+            if (pasted.includes('\n')) { e.preventDefault(); void add(text + pasted); }
+          }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void add(text); } }}
+          onBlur={() => { if (!items.length && !text.trim()) set({ checklistOpen: false }); }} />
+      </div>
+    </div>
+  );
+}
+
+/** Lines shown before "Show N more" in a grouped entry. */
+const GROUP_SHOWN = 3;
+
+/** One person's burst of changes: a single line reads as before; several become a short list. */
+function ChangesEntry({ g, s }: { g: Extract<HistoryEntry, { kind: 'changes' }>; s: State }) {
+  const [open, setOpen] = useState(false);
+  const who = s.users[g.actorId];
+  const via = g.via && (
+    <> <span className="via" title={g.via.endsWith(' webhook') ? `Created automatically by a webhook set up by ${displayName(who)}` : `Made by an AI assistant acting as ${displayName(who)}`}>via {g.via}</span></>
+  );
+  const single = g.lines.length === 1;
+  const shown = open || g.lines.length <= GROUP_SHOWN + 1 ? g.lines : g.lines.slice(0, GROUP_SHOWN);
+  const time = stamp(g.last, s.today);
+  return (
+    <li className={single ? '' : 'grp'}>
+      <Avatar user={who} />
+      <div>
+        {single ? (
+          <div className="tx"><b>{firstName(who)}</b>{via}{' '}<LineText line={g.lines[0]} s={s} /></div>
+        ) : (
+          <>
+            <div className="tx"><b>{firstName(who)}</b>{via} made {g.lines.length} changes</div>
+            <ul className="grp-lines">
+              {shown.map((l) => <li key={l.key}><LineText line={l} s={s} /></li>)}
+            </ul>
+            {shown.length < g.lines.length && (
+              <button className="grp-more" onClick={() => setOpen(true)}>Show {g.lines.length - shown.length} more</button>
+            )}
+          </>
+        )}
+        <div className="tm">{time}</div>
+      </div>
+    </li>
+  );
+}
+
+/** One line: a single change (with its note), or a merged run of checklist changes. */
+function LineText({ line, s }: { line: HistoryLine; s: State }) {
+  const [e] = line.events;
+  if (line.events.length > 1) {
+    const items = andList(line.events.map((x) => <b key={x.id}>{x.toValue}</b>));
+    switch (e.type) {
+      case 'check_added': return <>added {items} to the checklist</>;
+      case 'check_done': return <>checked {items}</>;
+      case 'check_undone': return <>unchecked {items}</>;
+      case 'check_removed': return <>removed {items} from the checklist</>;
+      case 'attached': return <>attached {items}</>;
+      case 'detached': return <>removed the files {items}</>;
+    }
+  }
+  return <><EventText e={e} s={s} />{e.note && <span className="note">“{e.note}”</span>}</>;
+}
+
+const fileSize = (n: number) => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : `${(n / 1024 / 1024).toFixed(n < 10 * 1024 * 1024 ? 1 : 0)} MB`);
+const isImage = (type: string) => /^image\/(png|jpeg|gif|webp|avif)$/.test(type);
+const OPENS = /^(image\/(png|jpeg|gif|webp|avif)|application\/pdf|text\/plain)$/;
+
+/** The task's files: images as thumbnails, other files as a list. Opening goes through the app, which checks access. */
+function Attachments({ taskId, files, uploading, s }: { taskId: string; files: AttachmentInfo[]; uploading: State['uploads']; s: State }) {
+  const images = files.filter((f) => isImage(f.type));
+  const others = files.filter((f) => !isImage(f.type));
+  const canRemove = (f: AttachmentInfo) => f.by === s.me!.id || s.me!.role === 'admin';
+  const meta = (f: AttachmentInfo) => `${fileSize(f.size)} · ${firstName(s.users[f.by])} · ${stamp(f.at, s.today)}`;
+  return (
+    <div className="att">
+      <div className="lbl">Attachments {files.length > 0 && <span className="muted">· {files.length}</span>}
+        <button className="att-add" title="Attach files  (⇧A) · or drop / paste them here" onClick={() => pickAttachments(taskId)}>{I.plus(12)} Add</button>
+      </div>
+      {images.length > 0 && (
+        <div className="att-grid">
+          {images.map((f) => (
+            <div key={f.id} className="att-img">
+              <a href={attachmentUrl(taskId, f.id)} target="_blank" rel="noopener" title={`${f.name} · ${meta(f)}`}>
+                <img src={attachmentUrl(taskId, f.id)} alt={f.name} loading="lazy" />
+              </a>
+              {canRemove(f) && <button className="att-x" aria-label={`Remove ${f.name}`} title="Remove" onClick={() => void removeAttachment(taskId, f.id, f.name)}>{I.x(11)}</button>}
+            </div>
+          ))}
+        </div>
+      )}
+      {others.length > 0 && (
+        <ul className="att-list">
+          {others.map((f) => (
+            <li key={f.id}>
+              <span className="att-ic">{I.clip(14)}</span>
+              <a href={attachmentUrl(taskId, f.id, !OPENS.test(f.type))} target={OPENS.test(f.type) ? '_blank' : undefined} rel="noopener" className="att-n">{f.name}</a>
+              <span className="att-m">{meta(f)}</span>
+              <a className="att-dl" href={attachmentUrl(taskId, f.id, true)} title="Download" aria-label={`Download ${f.name}`}>{I.download(13)}</a>
+              {canRemove(f) && <button className="att-x inline" aria-label={`Remove ${f.name}`} title="Remove" onClick={() => void removeAttachment(taskId, f.id, f.name)}>{I.x(11)}</button>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {uploading.map((u) => (
+        <div key={u.id} className="att-up" role="status">
+          <span className="att-n">{u.name}</span>
+          <span className="att-bar"><i style={{ width: `${u.total ? Math.round((u.loaded / u.total) * 100) : 0}%` }} /></span>
+          <span className="att-m">{u.total ? Math.round((u.loaded / u.total) * 100) : 0}%</span>
+        </div>
+      ))}
     </div>
   );
 }

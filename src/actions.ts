@@ -2,6 +2,7 @@
 import { addDays, rel, weekStart } from '../shared/dates';
 import { type Repeat, describe } from '../shared/repeat';
 import { onProject } from '../shared/rules';
+import { ATTACH_MAX_BYTES } from '../shared/types';
 import type { AppSettings, Bootstrap, InviteEmailResult, WebhookInfo, WebhookRequestInfo, Priority, Project, Role, SyncResponse, Task, TaskEvent, User } from '../shared/types';
 import { PRIORITIES } from '../shared/types';
 import { api, ApiError } from './api';
@@ -50,7 +51,7 @@ function applyDirectory(b: Bootstrap): Partial<State> {
   }
   applyFavicon(b.settings.logoVersion);
   return {
-    me: b.me, users, projects, today: b.today, tz: b.tz, dirVersion: b.directoryVersion, settings: b.settings, gmail: b.gmail, viewUser, page,
+    me: b.me, users, projects, today: b.today, tz: b.tz, dirVersion: b.directoryVersion, settings: b.settings, gmail: b.gmail, attachmentsOn: b.attachments, viewUser, page,
     projSel: s.projSel === 'all' || projects[s.projSel] ? s.projSel : 'all',
     projDay: s.projDay || b.today,
   };
@@ -308,7 +309,7 @@ export function closePop(restore: boolean) {
 export const popIs = (t: PopType) => S().pop?.type === t;
 
 export function openDrawer(id: string, editTitle = false) {
-  set({ drawer: id, pop: null });
+  set({ drawer: id, pop: null, ...(S().drawer !== id ? { notesOpen: false, checklistOpen: false } : {}) });
   focusLater(editTitle ? '.dr-title' : '.drawer');
 }
 export function closeDrawer(restore = true) {
@@ -596,4 +597,112 @@ export async function addComment(id: string, text: string): Promise<boolean> {
   } finally {
     pending.delete(id);
   }
+}
+
+/** Opens the task (if needed) and puts the cursor in its notes, expanding them when empty. */
+export function editNotes(id: string) {
+  // Ask for the focus first: the state change below can render right away, and the focus is applied after a render.
+  focusLater('[data-field="notes"]');
+  set({ drawer: id, pop: null, notesOpen: true, ...(S().drawer !== id ? { checklistOpen: false } : {}) });
+}
+
+// ---------- checklist ----------
+/** Opens the task (if needed) and puts the cursor in "Add an item", expanding an empty checklist. */
+export function editChecklist(id: string) {
+  focusLater('#ck-add');
+  set({ drawer: id, pop: null, checklistOpen: true, ...(S().drawer !== id ? { notesOpen: false } : {}) });
+}
+
+async function checklistCall(id: string, call: () => Promise<{ task: Task }>, optimistic?: (t: Task) => Task) {
+  const before = S().tasks[id];
+  pending.add(id);
+  mine.set(id, Date.now());
+  if (before && optimistic) set((s) => ({ tasks: { ...s.tasks, [id]: optimistic(before) } }));
+  try {
+    const { task } = await call();
+    putTask(task);
+    return true;
+  } catch (e) {
+    if (before && optimistic) set((s) => ({ tasks: { ...s.tasks, [id]: before } }));
+    toastError(e);
+    return false;
+  } finally {
+    pending.delete(id);
+  }
+}
+/** Adds one item, or several (one per line, e.g. pasted). */
+export const addChecklistItems = (id: string, text: string) => checklistCall(id, () => api.post(`/api/tasks/${id}/checklist`, { text }));
+export const toggleChecklistItem = (id: string, itemId: string, done: boolean) =>
+  checklistCall(id, () => api.patch(`/api/tasks/${id}/checklist/${itemId}`, { done }),
+    (t) => ({ ...t, checklist: t.checklist.map((c) => (c.id === itemId ? { ...c, done } : c)) }));
+export const renameChecklistItem = (id: string, itemId: string, text: string) =>
+  checklistCall(id, () => api.patch(`/api/tasks/${id}/checklist/${itemId}`, { text }),
+    (t) => ({ ...t, checklist: t.checklist.map((c) => (c.id === itemId ? { ...c, text } : c)) }));
+export const removeChecklistItem = (id: string, itemId: string) =>
+  checklistCall(id, () => api.del(`/api/tasks/${id}/checklist/${itemId}`),
+    (t) => ({ ...t, checklist: t.checklist.filter((c) => c.id !== itemId) }));
+
+// ---------- attachments ----------
+export const attachmentUrl = (taskId: string, id: string, download = false) => `/api/tasks/${taskId}/attachments/${id}${download ? '?download' : ''}`;
+
+/** Uploads files to a task, one after another, with progress. Uses XHR because fetch can't report upload progress. */
+export async function uploadFiles(taskId: string, files: File[]) {
+  const ok = files.filter((f) => f.size > 0 && f.size <= ATTACH_MAX_BYTES);
+  const tooBig = files.filter((f) => f.size > ATTACH_MAX_BYTES);
+  if (tooBig.length) toast(`${tooBig.map((f) => f.name).join(', ')}: files can be at most ${ATTACH_MAX_BYTES / 1024 / 1024} MB.`, undefined, true);
+  for (const f of ok) {
+    const id = crypto.randomUUID();
+    const name = f.name || 'pasted image.png';
+    const patch = (p: Partial<{ loaded: number }>) => set((s) => ({ uploads: s.uploads.map((u) => (u.id === id ? { ...u, ...p } : u)) }));
+    set((s) => ({ uploads: [...s.uploads, { id, taskId, name, loaded: 0, total: f.size }] }));
+    pending.add(taskId);
+    mine.set(taskId, Date.now());
+    try {
+      const task = await new Promise<Task>((resolve, reject) => {
+        const x = new XMLHttpRequest();
+        x.open('POST', `/api/tasks/${taskId}/attachments`);
+        x.setRequestHeader('x-taskivities', '1');
+        x.setRequestHeader('x-file-name', encodeURIComponent(name));
+        x.setRequestHeader('content-type', f.type || 'application/octet-stream');
+        x.upload.onprogress = (e) => patch({ loaded: e.loaded });
+        x.onload = () => {
+          let body: { task?: Task; error?: string } = {};
+          try { body = JSON.parse(x.responseText); } catch { /* not JSON */ }
+          if (x.status >= 200 && x.status < 300 && body.task) resolve(body.task);
+          else reject(new Error(body.error || `Couldn't attach ${name}.`));
+        };
+        x.onerror = () => reject(new Error(`Couldn't attach ${name}. Check your connection.`));
+        x.send(f);
+      });
+      putTask(task);
+    } catch (e) {
+      toastError(e);
+    } finally {
+      pending.delete(taskId);
+      set((s) => ({ uploads: s.uploads.filter((u) => u.id !== id) }));
+    }
+  }
+}
+
+export async function removeAttachment(taskId: string, id: string, name: string) {
+  pending.add(taskId);
+  mine.set(taskId, Date.now());
+  try {
+    const { task } = await api.del<{ task: Task }>(`/api/tasks/${taskId}/attachments/${id}`);
+    putTask(task);
+    toast(`Removed ${name}`);
+  } catch (e) {
+    toastError(e);
+  } finally {
+    pending.delete(taskId);
+  }
+}
+
+/** ⇧A: opens the task (if needed) and its file picker. */
+export function pickAttachments(id: string) {
+  if (!S().attachmentsOn) { toast("Attachments aren't set up on this instance."); return; }
+  const wasOpen = S().drawer === id;
+  if (!wasOpen) openDrawer(id);
+  // The picker input is in the drawer; give it a moment to render when the drawer was just opened.
+  setTimeout(() => document.querySelector<HTMLInputElement>('#attach-input')?.click(), wasOpen ? 0 : 60);
 }

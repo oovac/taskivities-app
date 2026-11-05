@@ -12,7 +12,8 @@ import {
   HttpError, TASK_COLS, bad, canSeeProject, loadViewer, mapProject, mapTask, mapUser, today,
 } from './lib';
 import type { McpProps } from './oauth';
-import { addComment, createTask, loadVisibleTask, updateTask, updateTaskWithNext, visible } from './tasks';
+import { readAttachment } from './attachments';
+import { addComment, changeChecklist, createTask, loadVisibleTask, updateTask, updateTaskWithNext, visible } from './tasks';
 
 const PRIORITY_NAMES = ['urgent', 'high', 'normal', 'low'] as const;
 type PriorityName = (typeof PRIORITY_NAMES)[number];
@@ -99,6 +100,8 @@ function describeTask(t: Task, dir: Directory, t0: string) {
     ...(t.notes ? { notes: t.notes } : {}),
     ...(t.series?.active ? { repeats: describeRepeat(t.series.rule, t.series.anchor) } : {}),
     ...(t.comments ? { comments: t.comments } : {}),
+    ...(t.attachments.length ? { attachments: t.attachments.map((a) => ({ id: a.id, name: a.name, type: a.type, size: a.size })) } : {}),
+    ...(t.checklist.length ? { checklist: t.checklist.map((c) => ({ id: c.id, item: c.text, done: c.done })) } : {}),
   };
 }
 
@@ -353,6 +356,62 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
       },
       (args) =>
         this.run(async (v, dir, t0) => ({ commented_on: describeTask(await addComment(this.env, v, args.id, args.text, this.via), dir, t0) })),
+    );
+
+    this.server.registerTool(
+      'update_checklist',
+      {
+        title: 'Update a checklist',
+        description:
+          "Change a task's checklist (each task has at most one). Add items, check or uncheck them, or remove them. " +
+          'Refer to existing items by their id or their exact text (from the task\'s "checklist"). Every change is recorded in the task history.',
+        inputSchema: {
+          id: z.string().describe('Task id from list_tasks.'),
+          add: z.array(z.string().min(1).max(300)).max(50).optional().describe('New items, added at the end in this order.'),
+          check: z.array(z.string()).optional().describe('Items to mark done (id or exact text).'),
+          uncheck: z.array(z.string()).optional().describe('Items to mark not done (id or exact text).'),
+          remove: z.array(z.string()).optional().describe('Items to delete (id or exact text).'),
+        },
+      },
+      (args) =>
+        this.run(async (v, dir, t0) => {
+          let task: Task | null = null;
+          const find = (list: { id: string; text: string }[], ref: string) => {
+            const hit = list.find((c) => c.id === ref) ?? list.find((c) => c.text.toLowerCase() === ref.trim().toLowerCase());
+            if (!hit) throw bad(`No checklist item "${ref}" on this task.`);
+            return hit.id;
+          };
+          const current = async () => mapTask(await loadVisibleTask(this.env.DB, v, args.id)).checklist;
+          for (const ref of args.check ?? []) task = await changeChecklist(this.env, v, args.id, { op: 'set', itemId: find(await current(), ref), done: true }, this.via);
+          for (const ref of args.uncheck ?? []) task = await changeChecklist(this.env, v, args.id, { op: 'set', itemId: find(await current(), ref), done: false }, this.via);
+          for (const ref of args.remove ?? []) task = await changeChecklist(this.env, v, args.id, { op: 'remove', itemId: find(await current(), ref) }, this.via);
+          if (args.add?.length) task = await changeChecklist(this.env, v, args.id, { op: 'add', text: args.add.join('\n') }, this.via);
+          if (!task) throw bad('Nothing to change: pass add, check, uncheck or remove.');
+          return { updated: describeTask(task, dir, t0) };
+        }),
+    );
+
+    this.server.registerTool(
+      'read_attachment',
+      {
+        title: 'Read an attached file',
+        description:
+          'Read a text file attached to a task (plain text, Markdown, CSV, JSON and similar, up to 200 KB). ' +
+          'Tasks list their files under "attachments"; refer to one by id or exact name. Other files (images, PDFs…) can only be listed.',
+        inputSchema: { id: z.string().describe('Task id from list_tasks.'), file: z.string().describe('Attachment id or exact file name.') },
+        annotations: { readOnlyHint: true },
+      },
+      (args) =>
+        this.run(async (v) => {
+          const t = mapTask(await loadVisibleTask(this.env.DB, v, args.id));
+          const a = t.attachments.find((x) => x.id === args.file) ?? t.attachments.find((x) => x.name.toLowerCase() === args.file.trim().toLowerCase());
+          if (!a) throw bad(`No file "${args.file}" on this task.`);
+          const texty = /^text\//.test(a.type) || /(json|csv|xml|markdown|yaml|x-sh|javascript|typescript)/.test(a.type) || /\.(md|txt|csv|json|ya?ml|log|tsv)$/i.test(a.name);
+          if (!texty) return { name: a.name, type: a.type, size: a.size, note: "This isn't a text file, so its contents can't be read here." };
+          if (a.size > 200 * 1024) return { name: a.name, size: a.size, note: 'Too large to read here (over 200 KB).' };
+          const { obj } = await readAttachment(this.env, v, t.id, a.id);
+          return { name: a.name, type: a.type, text: await obj.text() };
+        }),
     );
 
     this.server.registerTool(

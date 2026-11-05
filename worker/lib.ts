@@ -13,6 +13,8 @@ export interface Env {
   ADMIN_EMAILS?: string;
   /** Optional: key for encrypting stored Gmail tokens. Defaults to one derived from GOOGLE_CLIENT_SECRET. */
   TOKEN_KEY?: string;
+  /** Attachments (R2). Missing on instances without a bucket: attachments are then off. */
+  FILES?: R2Bucket;
   DEV_LOGIN?: string;
   /** Durable Object namespace for MCP sessions (worker/mcp.ts). */
   MCP_OBJECT: DurableObjectNamespace;
@@ -94,12 +96,16 @@ export const TASK_COLS =
   'id, title, notes, project_id, assignee_id, created_by, assigned_by, due_date, priority, status, done_at, done_on, done_by, created_at, updated_at, version, series_id, ' +
   "(SELECT json_object('id', s.id, 'rule', json(s.rule), 'anchor', s.starts_on, 'active', s.active, 'made', s.made, 'assigneeId', s.assignee_id, 'title', s.title) " +
   'FROM series s WHERE s.id = tasks.series_id) AS series_json, ' +
-  "(SELECT COUNT(*) FROM task_events e WHERE e.task_id = tasks.id AND e.type = 'comment') AS comment_count";
+  "(SELECT COUNT(*) FROM task_events e WHERE e.task_id = tasks.id AND e.type = 'comment') AS comment_count, " +
+  "(SELECT json_group_array(json_object('id', c.id, 'text', c.text, 'done', c.done)) " +
+  'FROM (SELECT id, text, done FROM checklist_items WHERE task_id = tasks.id ORDER BY position, created_at) c) AS checklist_json, ' +
+  "(SELECT json_group_array(json_object('id', a.id, 'name', a.name, 'size', a.size, 'type', a.type, 'by', a.uploaded_by, 'at', a.uploaded_at)) " +
+  'FROM (SELECT * FROM attachments WHERE task_id = tasks.id AND removed_at IS NULL ORDER BY uploaded_at) a) AS attachments_json';
 
 export interface TaskRow {
   id: string; title: string; notes: string; project_id: string; assignee_id: string; created_by: string; assigned_by: string;
   due_date: string; priority: number; status: 'open' | 'done'; done_at: string | null; done_on: string | null; done_by: string | null;
-  created_at: string; updated_at: string; version: number; series_id: string | null; series_json: string | null; comment_count: number;
+  created_at: string; updated_at: string; version: number; series_id: string | null; series_json: string | null; comment_count: number; checklist_json: string | null; attachments_json: string | null;
 }
 const parseSeries = (j: string | null): SeriesInfo | null => {
   if (!j) return null;
@@ -112,6 +118,8 @@ export const mapTask = (r: TaskRow): Task => ({
   doneOn: r.done_on, doneBy: r.done_by, createdAt: r.created_at, updatedAt: r.updated_at, version: r.version,
   series: parseSeries(r.series_json),
   comments: r.comment_count ?? 0,
+  attachments: JSON.parse(r.attachments_json || '[]'),
+  checklist: (JSON.parse(r.checklist_json || '[]') as { id: string; text: string; done: number }[]).map((c) => ({ id: c.id, text: c.text, done: !!c.done })),
 });
 
 export interface UserRow {

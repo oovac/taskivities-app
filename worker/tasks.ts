@@ -2,7 +2,7 @@
 // Every check about who may see or change a task lives here, so the two can't drift apart.
 import { addDays, isDate } from '../shared/dates';
 import { type Repeat, cleanRepeat, describe, firstDate, nextDate, sameRule } from '../shared/repeat';
-import { COMMENT_MAX, NOTES_MAX, TITLE_MAX, type Priority, type Task } from '../shared/types';
+import { CHECK_ITEMS_MAX, CHECK_TEXT_MAX, COMMENT_MAX, NOTES_MAX, TITLE_MAX, type Priority, type Task } from '../shared/types';
 import {
   type Env, type EventRow, type TaskRow, type Viewer,
   CURRENT_VERSION, TASK_COLS, bad, bumpVersion, canSeeProject, eventStmt, forbidden, mapTask, notFound, nowIso, today, uid,
@@ -279,6 +279,12 @@ export async function applyPatch(env: Env, v: Viewer, id: string, b: Patch, via:
            SELECT ?, ?, ?, ?, 'created', ?, ?, NULL, ? WHERE EXISTS (SELECT 1 FROM tasks WHERE id = ?)`,
         ).bind(uid(), nextId, v.id, via, id, JSON.stringify({ assignee: who, due: next, priority: live.priority, project: live.project_id, repeat: true }), now, nextId),
         db.prepare('UPDATE series SET made = made + 1, updated_at = ? WHERE id = ? AND EXISTS (SELECT 1 FROM tasks WHERE id = ?)').bind(now, live.id, nextId),
+        // The next copy gets the same checklist, unchecked (only if the copy was actually created).
+        db.prepare(
+          `INSERT INTO checklist_items (id, task_id, text, done, position, created_by, created_at, updated_at)
+           SELECT lower(hex(randomblob(16))), ?, text, 0, position, ?, ?, ? FROM checklist_items
+           WHERE task_id = ? AND EXISTS (SELECT 1 FROM tasks WHERE id = ?)`,
+        ).bind(nextId, v.id, now, now, id, nextId),
       );
     } else {
       after.push(db.prepare('UPDATE series SET active = 0, updated_at = ? WHERE id = ?').bind(now, live.id));
@@ -332,5 +338,73 @@ export async function addComment(env: Env, v: Viewer, id: string, text: unknown,
     db.prepare(`UPDATE tasks SET updated_at = ?, version = ${CURRENT_VERSION} WHERE id = ?`).bind(now, t.id),
     eventStmt(db, { taskId: t.id, actorId: v.id, via, type: 'comment', note: body, at: now }),
   ]);
+  return mapTask((await loadTask(db, t.id))!);
+}
+
+// ---------- checklist (one per task) ----------
+export type ChecklistChange =
+  | { op: 'add'; text: string }
+  | { op: 'set'; itemId: string; done?: boolean; text?: string }
+  | { op: 'remove'; itemId: string };
+
+const cleanItem = (raw: unknown) => {
+  const text = typeof raw === 'string' ? raw.replace(/\s+/g, ' ').trim() : '';
+  if (!text) throw bad('Checklist items need some text.');
+  if (text.length > CHECK_TEXT_MAX) throw bad(`Checklist items can be at most ${CHECK_TEXT_MAX} characters.`);
+  return text;
+};
+
+/**
+ * Changes a task's checklist: add items (several at once: one per line), tick/untick, rename or remove one.
+ * Anyone who can see the task can do this. Each change is logged in the task's history and moves the task's
+ * version on, so everyone's app picks it up.
+ */
+export async function changeChecklist(env: Env, v: Viewer, id: string, ch: ChecklistChange, via: string | null = null): Promise<Task> {
+  const db = env.DB;
+  const t = await loadVisibleTask(db, v, id);
+  const now = nowIso();
+  const stmts: D1PreparedStatement[] = [];
+  const ev = (type: 'check_added' | 'check_done' | 'check_undone' | 'check_renamed' | 'check_removed', to: string, from?: string) =>
+    stmts.push(eventStmt(db, { taskId: t.id, actorId: v.id, via, type, from: from ?? null, to, at: now }));
+
+  if (ch.op === 'add') {
+    const lines = String(ch.text ?? '').split(/\r?\n/).map((l) => l.replace(/^\s*(?:[-*•]\s*)?(?:\[[ xX]?\]\s*)?/, '')).filter((l) => l.trim());
+    if (!lines.length) throw bad('Checklist items need some text.');
+    const texts = lines.map(cleanItem);
+    const { n, last } = (await db.prepare('SELECT COUNT(*) AS n, MAX(position) AS last FROM checklist_items WHERE task_id = ?').bind(t.id).first<{ n: number; last: number | null }>())!;
+    if (n + texts.length > CHECK_ITEMS_MAX) throw bad(`A checklist can have at most ${CHECK_ITEMS_MAX} items.`);
+    texts.forEach((text, i) => {
+      stmts.push(db.prepare('INSERT INTO checklist_items (id, task_id, text, done, position, created_by, created_at, updated_at) VALUES (?, ?, ?, 0, ?, ?, ?, ?)')
+        .bind(uid(), t.id, text, (last ?? 0) + i + 1, v.id, now, now));
+      ev('check_added', text);
+    });
+  } else {
+    const item = await db.prepare('SELECT id, text, done FROM checklist_items WHERE id = ? AND task_id = ?').bind(ch.itemId, t.id).first<{ id: string; text: string; done: number }>();
+    if (!item) throw notFound('That checklist item is gone.');
+    if (ch.op === 'remove') {
+      stmts.push(db.prepare('DELETE FROM checklist_items WHERE id = ?').bind(item.id));
+      ev('check_removed', item.text);
+    } else {
+      if (ch.text !== undefined) {
+        const text = cleanItem(ch.text);
+        if (text !== item.text) {
+          stmts.push(db.prepare('UPDATE checklist_items SET text = ?, updated_at = ? WHERE id = ?').bind(text, now, item.id));
+          ev('check_renamed', text, item.text);
+        }
+      }
+      if (ch.done !== undefined && ch.done !== !!item.done) {
+        stmts.push(db.prepare('UPDATE checklist_items SET done = ?, done_by = ?, done_at = ?, updated_at = ? WHERE id = ?')
+          .bind(ch.done ? 1 : 0, ch.done ? v.id : null, ch.done ? now : null, now, item.id));
+        ev(ch.done ? 'check_done' : 'check_undone', ch.text !== undefined ? cleanItem(ch.text) : item.text);
+      }
+    }
+  }
+  if (stmts.length) {
+    await db.batch([
+      bumpVersion(db),
+      db.prepare(`UPDATE tasks SET updated_at = ?, version = ${CURRENT_VERSION} WHERE id = ?`).bind(now, t.id),
+      ...stmts,
+    ]);
+  }
   return mapTask((await loadTask(db, t.id))!);
 }

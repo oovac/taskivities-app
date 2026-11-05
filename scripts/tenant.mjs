@@ -111,6 +111,7 @@ function load(name) {
       die(`${where}: TEAM_TZ "${e.TEAM_TZ}" isn't a time zone. Use a name like America/New_York or Europe/London.`);
     }
   }
+  if (e.R2_BUCKET && !/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(e.R2_BUCKET)) die(`${where}: R2_BUCKET must be a bucket name (lowercase letters, numbers, dashes).`);
   if (e.WORKERS_DEV && !/^(true|false)$/.test(e.WORKERS_DEV)) die(`${where}: WORKERS_DEV must be true or false.`);
   const domains = (e.CUSTOM_DOMAINS || '').split(',').map((d) => d.trim()).filter(Boolean);
   for (const d of domains) if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(d)) die(`${where}: "${d}" in CUSTOM_DOMAINS isn't a host name (no https://, no path).`);
@@ -138,6 +139,10 @@ function generate(name, t) {
     kv_namespaces: base.kv_namespaces.map((k) => (k.binding === 'OAUTH_KV' ? { ...k, id: t.OAUTH_KV_ID } : k)),
     vars: { ...base.vars, ...(t.TEAM_TZ ? { TEAM_TZ: t.TEAM_TZ } : {}) },
   };
+  // Attachments: this instance's bucket, or none (the app then hides "Attach").
+  if (t.R2_BUCKET) cfg.r2_buckets = (base.r2_buckets ?? []).map((b) => (b.binding === 'FILES' ? { ...b, bucket_name: t.R2_BUCKET } : b));
+  else cfg.r2_buckets = (base.r2_buckets ?? []).filter((b) => b.binding !== 'FILES');
+  if (!cfg.r2_buckets.length) delete cfg.r2_buckets;
   if (t.domains.length) cfg.routes = t.domains.map((pattern) => ({ pattern, custom_domain: true }));
   if (t.CLOUDFLARE_ACCOUNT_ID) cfg.account_id = t.CLOUDFLARE_ACCOUNT_ID;
   const out = join(GENERATED, `${name}.json`);
@@ -156,6 +161,14 @@ function run(cmd, args, { env = {}, cwd = ROOT, capture = false } = {}) {
   });
   if (r.status !== 0) die(`${relative(ROOT, cmd) || cmd} ${args.join(' ')} failed.`);
   return r.stdout ?? '';
+}
+/** Like wrangler(), but returns { ok, out } instead of stopping (for optional steps). */
+function tryWrangler(t, args, opts = {}) {
+  const r = spawnSync(WRANGLER, [...args, ...(t?.CLOUDFLARE_PROFILE ? ['--profile', t.CLOUDFLARE_PROFILE] : [])], {
+    cwd: opts.cwd ?? ROOT, env: { ...process.env, ...(t?.CLOUDFLARE_ACCOUNT_ID ? { CLOUDFLARE_ACCOUNT_ID: t.CLOUDFLARE_ACCOUNT_ID } : {}) },
+    stdio: ['inherit', 'pipe', 'pipe'], encoding: 'utf8',
+  });
+  return { ok: r.status === 0, out: `${r.stdout ?? ''}${r.stderr ?? ''}` };
 }
 /**
  * Runs wrangler as the instance's Cloudflare login and account:
@@ -211,6 +224,12 @@ function create(name, opts) {
     const kvId = kv.match(/"?id"?\s*[:=]\s*"([0-9a-f]{32})"/)?.[1];
     if (!kvId) die(`Database created (D1_DATABASE_ID=${dbId}), but couldn't read the KV namespace ID. Run \`npx wrangler kv namespace list\` and fill tenants/example.env by hand.`);
 
+    // Attachments are optional: R2 has to be turned on for the account (it needs a payment method, even on the free tier).
+    console.log(`\n▸ Creating R2 bucket ${worker}-files (for attachments)`);
+    const r2 = tryWrangler(acct, ['r2', 'bucket', 'create', `${worker}-files`], { cwd: scratch });
+    const bucket = r2.ok ? `${worker}-files` : '';
+    if (!r2.ok) console.log(`  Skipped: ${r2.out.split('\n').find((l) => /error|enable|R2/i.test(l))?.trim() || "R2 isn't available on this account"}\n  Attachments stay off. Turn on R2 in the Cloudflare dashboard, then see tenants/example.env (R2_BUCKET).`);
+
     mkdirSync(TENANTS, { recursive: true });
     writeFileSync(
       file,
@@ -223,6 +242,7 @@ function create(name, opts) {
         `TEAM_TZ=${opts.tz || 'America/New_York'}`,
         `CUSTOM_DOMAINS=${opts.domain || ''}`,
         `WORKERS_DEV=true`,
+        `R2_BUCKET=${bucket}`,
         `CLOUDFLARE_ACCOUNT_ID=${opts.account || ''}`,
         `CLOUDFLARE_PROFILE=${opts.profile || ''}`,
         '',

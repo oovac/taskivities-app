@@ -8,6 +8,7 @@ import { TaskivitiesMCP } from './mcp';
 import { oauthRoutes } from './oauth';
 import { serveLogo } from './settings';
 import { hookRoutes } from './webhooks';
+import { attachmentRoutes } from './attachments';
 
 // The MCP session Durable Object (bound as MCP_OBJECT in wrangler.jsonc).
 export { TaskivitiesMCP };
@@ -32,6 +33,7 @@ app.route('/authorize', oauthRoutes);
 
 app.use('/api/*', sameOrigin, requireSession);
 app.route('/api/admin', admin);
+app.route('/api/tasks', attachmentRoutes);
 app.route('/api', api);
 app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404));
 

@@ -63,6 +63,14 @@
 			"id": "00000000000000000000000000000000" // per instance: OAUTH_KV_ID
 		}
 	],
+	// Task attachments (optional per instance: R2_BUCKET in tenants/<instance>.env; without it the app hides "Attach").
+	// Locally this is a simulated bucket under .wrangler/state.
+	"r2_buckets": [
+		{
+			"binding": "FILES",
+			"bucket_name": "taskivities-local-files" // per instance: R2_BUCKET
+		}
+	],
 	// Branding: admins upload the logo (SVG) on the Settings page; it's stored in D1, not here.
 	"vars": {
 		// Fallback only (per instance: TEAM_TZ). Each person's "today" uses their own browser's time zone;

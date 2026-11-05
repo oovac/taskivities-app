@@ -52,6 +52,10 @@ export interface Task {
   series: SeriesInfo | null;
   /** Number of comments in its history. */
   comments: number;
+  /** The task's checklist, in order (empty: no checklist). */
+  checklist: ChecklistItem[];
+  /** Files attached to the task, oldest first. */
+  attachments: AttachmentInfo[];
 }
 
 export type EventType =
@@ -71,7 +75,16 @@ export type EventType =
   /** Skipped this copy: the date moved to the next scheduled one. */
   | 'skipped'
   /** A comment: the text is in `note`. Like everything in the history, it can't be edited or deleted. */
-  | 'comment';
+  | 'comment'
+  /** Checklist: to_value is the item's text (check_renamed: from_value → to_value). */
+  | 'check_added'
+  | 'check_done'
+  | 'check_undone'
+  | 'check_renamed'
+  | 'check_removed'
+  /** Attachments: to_value is the file name. */
+  | 'attached'
+  | 'detached';
 
 export interface TaskEvent {
   id: string;
@@ -103,6 +116,8 @@ export interface Bootstrap {
   version: number;
   directoryVersion: number;
   settings: AppSettings;
+  /** Attachments are available on this instance (it has an R2 bucket). */
+  attachments: boolean;
   /** Admins: the Gmail address invites are emailed from, or null when not connected (then they share the link). */
   gmail: { email: string } | null;
 }
@@ -167,3 +182,11 @@ export const DESCRIPTION_MAX = 600;
 export const TITLE_MAX = 300;
 export const NOTES_MAX = 10000;
 export const COMMENT_MAX = 4000;
+export const CHECK_TEXT_MAX = 300;
+export const CHECK_ITEMS_MAX = 100;
+
+export interface ChecklistItem { id: string; text: string; done: boolean }
+
+export const ATTACH_MAX_BYTES = 25 * 1024 * 1024;
+export const ATTACH_PER_TASK_MAX = 50;
+export interface AttachmentInfo { id: string; name: string; size: number; type: string; by: string; at: string }

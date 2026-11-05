@@ -22,6 +22,7 @@ export interface Pop {
   q?: string;
 }
 
+export interface Upload { id: string; taskId: string; name: string; loaded: number; total: number }
 export interface Toast { id: number; text: string; undo?: () => void; error?: boolean; action?: { label: string; run: () => void } }
 export interface Draft { title: string; notes: string; open: boolean; projectId: string | null; dueDate: string | null; assigneeId: string | null; priority: Priority; repeat: Repeat | null }
 export interface InviteDraft { emails: string; role: Role; projects: string[]; err: string | null; busy?: boolean }
@@ -57,6 +58,14 @@ export interface State {
   weekOffset: number;
   boardSide: 'to' | 'by';
   drawer: string | null;
+  /** Empty notes are collapsed to an "Add notes" button; this opens the box (button or ⇧N). Reset per task. */
+  notesOpen: boolean;
+  /** Same for an empty checklist (button or ⇧C). */
+  checklistOpen: boolean;
+  /** Files on their way up (attachments), with progress. */
+  uploads: Upload[];
+  /** Attachments are on for this instance (it has an R2 bucket). */
+  attachmentsOn: boolean;
   pop: Pop | null;
   toast: Toast | null;
   help: boolean;
@@ -111,6 +120,10 @@ export const useStore = create<State>()(() => ({
   weekOffset: 0,
   boardSide: 'to',
   drawer: null,
+  notesOpen: false,
+  checklistOpen: false,
+  uploads: [],
+  attachmentsOn: false,
   pop: null,
   toast: null,
   help: false,

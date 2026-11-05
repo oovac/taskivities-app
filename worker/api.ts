@@ -7,7 +7,7 @@ import {
 } from './lib';
 import { gmailStatus } from './gmail';
 import { loadSettings } from './settings';
-import { type Patch, addComment, applyPatch, commit, createTask, loadVisibleTask, updateTaskWithNext, visible } from './tasks';
+import { type ChecklistChange, type Patch, addComment, applyPatch, changeChecklist, commit, createTask, loadVisibleTask, updateTaskWithNext, visible } from './tasks';
 
 export const api = new Hono<AppEnv>();
 
@@ -41,7 +41,7 @@ api.get('/bootstrap', async (c) => {
   const me = all.find((u) => u.id === v.id)!;
   // Removed people stay in the list (history still names them) but without their email.
   const list = all.map((u) => (u.status === 'removed' ? { ...u, email: '' } : u));
-  const body: Bootstrap = { me, users: list, projects: visibleProjects.map(mapProject), today: today(v), tz: v.tz, ...meta, settings, gmail };
+  const body: Bootstrap = { me, users: list, projects: visibleProjects.map(mapProject), today: today(v), tz: v.tz, ...meta, settings, gmail, attachments: !!c.env.FILES };
   return c.json(body);
 });
 
@@ -113,6 +113,19 @@ api.post('/tasks/:id/comments', async (c) => {
   const b = await c.req.json<{ text?: string }>();
   return c.json({ task: await addComment(c.env, c.get('viewer'), c.req.param('id'), b.text) });
 });
+
+// ---------- checklist ----------
+api.post('/tasks/:id/checklist', async (c) => {
+  const b = await c.req.json<{ text?: string }>();
+  return c.json({ task: await changeChecklist(c.env, c.get('viewer'), c.req.param('id'), { op: 'add', text: b.text ?? '' }) });
+});
+api.patch('/tasks/:id/checklist/:item', async (c) => {
+  const b = await c.req.json<{ done?: boolean; text?: string }>();
+  const ch: ChecklistChange = { op: 'set', itemId: c.req.param('item'), done: typeof b.done === 'boolean' ? b.done : undefined, text: b.text };
+  return c.json({ task: await changeChecklist(c.env, c.get('viewer'), c.req.param('id'), ch) });
+});
+api.delete('/tasks/:id/checklist/:item', async (c) =>
+  c.json({ task: await changeChecklist(c.env, c.get('viewer'), c.req.param('id'), { op: 'remove', itemId: c.req.param('item') }) }));
 
 api.get('/tasks/:id/events', async (c) => {
   const v = c.get('viewer');
