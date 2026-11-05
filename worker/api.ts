@@ -3,10 +3,11 @@ import { addDays, isDate } from '../shared/dates';
 import type { Bootstrap, SyncResponse } from '../shared/types';
 import {
   type AppEnv, type EventRow, type ProjectRow, type TaskRow, type UserRow,
-  TASK_COLS, bad, canSeeProject, mapEvent, mapProject, mapTask, mapUser, today,
+  TASK_COLS, bad, canSeeProject, notFound, mapEvent, mapProject, mapTask, mapUser, today,
 } from './lib';
 import { gmailStatus } from './gmail';
 import { loadSettings } from './settings';
+import { prefsOf, pushKeys } from './push';
 import { type ChecklistChange, type Patch, addComment, applyPatch, changeChecklist, setArchived, commit, createTask, loadVisibleTask, updateTaskWithNext, visible } from './tasks';
 
 export const api = new Hono<AppEnv>();
@@ -41,7 +42,11 @@ api.get('/bootstrap', async (c) => {
   const me = all.find((u) => u.id === v.id)!;
   // Disabled people stay in the list (history still names them); only admins see their email.
   const list = all.map((u) => (u.status === 'disabled' && v.role !== 'admin' ? { ...u, email: '' } : u));
-  const body: Bootstrap = { me, users: list, projects: visibleProjects.map(mapProject), today: today(v), tz: v.tz, ...meta, settings, gmail, attachments: !!c.env.FILES };
+  const keys = pushKeys(c.env);
+  const body: Bootstrap = {
+    me, users: list, projects: visibleProjects.map(mapProject), today: today(v), tz: v.tz, ...meta, settings, gmail, attachments: !!c.env.FILES,
+    push: keys ? { publicKey: keys.publicKey } : null, notify: prefsOf(users.results.find((u) => u.id === v.id)?.notify),
+  };
   return c.json(body);
 });
 
@@ -144,6 +149,13 @@ api.patch('/tasks/:id/checklist/:item', async (c) => {
 });
 api.delete('/tasks/:id/checklist/:item', async (c) =>
   c.json({ task: await changeChecklist(c.env, c.get('viewer'), c.req.param('id'), { op: 'remove', itemId: c.req.param('item') }) }));
+
+/** One task (a notification opens a task the app may not have loaded, e.g. a finished one from weeks ago). */
+api.get('/tasks/:id', async (c) => {
+  const t = await loadVisibleTask(c.env.DB, c.get('viewer'), c.req.param('id'));
+  if (t.archived_at) throw notFound('That task is archived.');
+  return c.json({ task: mapTask(t) });
+});
 
 api.get('/tasks/:id/events', async (c) => {
   const v = c.get('viewer');

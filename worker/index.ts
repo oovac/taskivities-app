@@ -9,6 +9,7 @@ import { oauthRoutes } from './oauth';
 import { serveIcon, serveLogo, serveManifest } from './settings';
 import { hookRoutes } from './webhooks';
 import { attachmentRoutes, uploadRoutes } from './attachments';
+import { morningSummaries, pushRoutes } from './push';
 
 // The MCP session Durable Object (bound as MCP_OBJECT in wrangler.jsonc).
 export { TaskivitiesMCP };
@@ -39,6 +40,7 @@ app.route('/authorize', oauthRoutes);
 app.use('/api/*', sameOrigin, requireSession);
 app.route('/api/admin', admin);
 app.route('/api/tasks', attachmentRoutes);
+app.route('/api/push', pushRoutes);
 app.route('/api', api);
 app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404));
 
@@ -74,4 +76,6 @@ function providerFor(origin: string) {
 
 export default {
   fetch: (req, env, ctx) => providerFor(new URL(req.url).origin).fetch(req, env, ctx),
+  // The Cron Trigger (wrangler.jsonc): morning summaries, at 8:00 in each person's time zone.
+  scheduled: (_event, env, ctx) => ctx.waitUntil(morningSummaries(env)),
 } satisfies ExportedHandler<Env>;

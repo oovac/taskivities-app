@@ -9,6 +9,7 @@ import { api, ApiError } from './api';
 import { applyFavicon } from './brand';
 import { activeSelector, focusLater, selFor } from './focus';
 import { type Page, type Pop, type PopType, type State, S, emptyDraft, set } from './store';
+import { syncPush } from './push';
 import { displayName, draftEffective, firstName, myProjects, sharesWith } from './util';
 
 const pending = new Set<string>(); // tasks with an edit in flight (ignore sync for them)
@@ -52,6 +53,7 @@ function applyDirectory(b: Bootstrap): Partial<State> {
   applyFavicon(b.settings.logoVersion);
   return {
     me: b.me, users, projects, today: b.today, tz: b.tz, dirVersion: b.directoryVersion, settings: b.settings, gmail: b.gmail, attachmentsOn: b.attachments, viewUser, page,
+    pushKey: b.push?.publicKey ?? null, notify: b.notify,
     projSel: s.projSel === 'all' || projects[s.projSel] ? s.projSel : 'all',
     projDay: s.projDay || b.today,
   };
@@ -65,6 +67,15 @@ export async function boot() {
     const last = localStorage.getItem('tv:lastProject');
     set((s) => ({ draft: { ...s.draft, projectId: last && myProjects(s).some((p) => p.id === last) ? last : myProjects(s)[0]?.id ?? null } }));
     gmailReturn();
+    void syncPush();
+    // Opened from a notification (a new window): /?task=<id>.
+    const q = new URLSearchParams(location.search);
+    const task = q.get('task');
+    if (task) {
+      q.delete('task');
+      history.replaceState(null, '', `${location.pathname}${q.size ? `?${q}` : ''}`);
+      void openTask(task);
+    }
   } catch (e) {
     if (!(e instanceof ApiError && e.status === 401)) set({ bootError: e instanceof Error ? e.message : 'Could not load.' });
   }
@@ -311,6 +322,19 @@ export const popIs = (t: PopType) => S().pop?.type === t;
 export function openDrawer(id: string, editTitle = false) {
   set({ drawer: id, pop: null, ...(S().drawer !== id ? { notesOpen: false, checklistOpen: false } : {}) });
   focusLater(editTitle ? '.dr-title' : '.drawer');
+}
+/** Opens a task by id, loading it first if this window doesn't have it (e.g. from a notification). */
+export async function openTask(id: string) {
+  if (!S().tasks[id]) {
+    try {
+      const { task } = await api.get<{ task: Task }>(`/api/tasks/${id}`);
+      set((s) => ({ tasks: { ...s.tasks, [task.id]: task } }));
+    } catch {
+      toast("That task isn't available anymore.", undefined, true);
+      return;
+    }
+  }
+  openDrawer(id);
 }
 export function closeDrawer(restore = true) {
   const id = S().drawer;

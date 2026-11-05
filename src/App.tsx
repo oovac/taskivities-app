@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
-import { boot, closePop, openConnect, openHelp, openPop, setPage, sync } from './actions';
+import { boot, closePop, openConnect, openHelp, openPop, openTask, setPage, sync } from './actions';
+import { updateBadge } from './push';
 import { Drawer } from './components/Drawer';
 import { ConnectSheet } from './components/ConnectSheet';
 import { HelpSheet } from './components/HelpSheet';
@@ -35,10 +36,19 @@ export function App() {
       if (document.hidden && Date.now() - S().lastSync < HIDDEN_POLL_MS) return;
       void sync();
     }, POLL_MS);
+    // A tapped notification, while the app is already open: the service worker asks this window to open the task.
+    const onMessage = (e: MessageEvent<{ type?: string; url?: string }>) => {
+      if (e.data?.type !== 'open' || !e.data.url) return;
+      const id = new URL(e.data.url, location.origin).searchParams.get('task');
+      if (id) void openTask(id);
+      void sync();
+    };
+    navigator.serviceWorker?.addEventListener('message', onMessage);
     const onVisible = () => !document.hidden && void sync();
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', onVisible);
     return () => {
+      navigator.serviceWorker?.removeEventListener('message', onMessage);
       document.removeEventListener('focusin', onFocusIn);
       window.removeEventListener('keydown', onKeyDown);
       document.removeEventListener('mousedown', outside);
@@ -52,6 +62,10 @@ export function App() {
   useLayoutEffect(() => afterRender());
 
   if (s.bootError) return <div className="loading">Couldn't load Taskivities: {s.bootError} <button className="btn-ghost sm" onClick={() => location.reload()}>Retry</button></div>;
+  // The installed app's icon shows how many of my tasks are open today (carried-over ones included).
+  const myToday = s.me ? Object.values(s.tasks).filter((t) => t.assigneeId === s.me!.id && t.status === 'open' && !t.archivedAt && t.dueDate <= s.today && s.projects[t.projectId]).length : 0;
+  useEffect(() => { if (s.ready) updateBadge(myToday); }, [s.ready, myToday]);
+
   if (!s.ready || !s.me) return <div className="loading">Loading…</div>;
   const admin = s.me.role === 'admin';
 

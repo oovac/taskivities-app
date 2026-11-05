@@ -7,6 +7,8 @@
 	"name": "taskivities-local",
 	"main": "worker/index.ts",
 	"compatibility_date": "2026-10-01",
+	// Every 30 minutes: morning summaries go out at 8:00 in each person's time zone (worker/push.ts).
+	"triggers": { "crons": ["*/30 * * * *"] },
 	// Needed by the `agents` SDK (MCP server).
 	"compatibility_flags": [
 		"nodejs_compat"

@@ -8,6 +8,7 @@ import {
   CURRENT_VERSION, TASK_COLS, bad, bumpVersion, canSeeProject, eventStmt, forbidden, mapTask, notFound, nowIso, today, uid,
   userOnProject,
 } from './lib';
+import { type Notice, notify } from './push';
 
 /** SQL fragment limiting tasks to the projects the viewer can see (never an archived project's). */
 export const visible = (v: Viewer, alias = '') =>
@@ -111,6 +112,7 @@ export async function createTask(env: Env, v: Viewer, b: NewTask, via: string | 
   );
   if (rule) stmts.push(eventStmt(db, { taskId: id, actorId: v.id, via, type: 'repeat_set', to: describe(rule, due), at: now }));
   await db.batch(stmts);
+  notify(env, [{ to: b.assigneeId, kind: 'assigned', actorId: v.id, via, taskId: id, isNew: true }]);
   return mapTask((await loadTask(db, id))!);
 }
 
@@ -143,6 +145,7 @@ export async function applyPatch(env: Env, v: Viewer, id: string, b: Patch, via:
   const binds: unknown[] = [];
   const events: Parameters<typeof eventStmt>[1][] = [];
   let undidSkip = false;
+  const notices: Notice[] = []; // sent after the change is saved (see commit callers)
   const set = (col: string, val: unknown) => { sets.push(`${col} = ?`); binds.push(val); };
   const ev = (e: Omit<Parameters<typeof eventStmt>[1], 'taskId' | 'actorId' | 'via' | 'at'>) =>
     events.push({ ...e, taskId: id, actorId: v.id, via, at: now });
@@ -181,6 +184,7 @@ export async function applyPatch(env: Env, v: Viewer, id: string, b: Patch, via:
     set('assigned_by', v.id);
     const note = (b.note ?? '').trim().slice(0, 500) || null;
     ev({ type: 'transferred', from: t.assignee_id, to: assignee, note });
+    notices.push({ to: assignee, kind: 'assigned', actorId: v.id, via, taskId: id, text: note });
   }
   if (b.dueDate !== undefined && b.dueDate !== t.due_date) {
     if (!isDate(b.dueDate)) throw bad('Invalid date.');
@@ -301,14 +305,14 @@ export async function applyPatch(env: Env, v: Viewer, id: string, b: Patch, via:
     }
   }
 
-  if (!events.length) return { stmts: [] as D1PreparedStatement[], changed: false, nextId: null };
+  if (!events.length) return { stmts: [] as D1PreparedStatement[], changed: false, nextId: null, notices };
   const stmts = [
     // Even with no column changes (e.g. only the repeat changed) the task is touched, so everyone's view syncs.
     db.prepare(`UPDATE tasks SET ${[...sets, 'updated_at = ?', `version = ${CURRENT_VERSION}`].join(', ')} WHERE id = ?`).bind(...binds, now, id),
     ...events.map((e) => eventStmt(db, e)),
     ...after,
   ];
-  return { stmts, changed: true, nextId };
+  return { stmts, changed: true, nextId, notices };
 }
 
 /** Writes the statements from one or more patches in a single batch (one version bump). */
@@ -318,8 +322,9 @@ export async function commit(env: Env, stmts: D1PreparedStatement[]) {
 
 /** Validate, write and return the updated task, plus the next copy if finishing a repeating task created one. */
 export async function updateTaskWithNext(env: Env, v: Viewer, id: string, b: Patch, via: string | null = null): Promise<{ task: Task; next: Task | null }> {
-  const { stmts, nextId } = await applyPatch(env, v, id, b, via);
+  const { stmts, nextId, notices } = await applyPatch(env, v, id, b, via);
   await commit(env, stmts);
+  notify(env, notices);
   const task = mapTask((await loadTask(env.DB, id))!);
   const n = nextId ? await loadTask(env.DB, nextId) : null;
   return { task, next: n ? mapTask(n) : null };
@@ -348,6 +353,8 @@ export async function addComment(env: Env, v: Viewer, id: string, text: unknown,
     db.prepare(`UPDATE tasks SET updated_at = ?, version = ${CURRENT_VERSION} WHERE id = ?`).bind(now, t.id),
     eventStmt(db, { taskId: t.id, actorId: v.id, via, type: 'comment', note: body, at: now }),
   ]);
+  // Whoever has the task, and whoever created it.
+  notify(env, [...new Set([t.assignee_id, t.created_by])].map((to) => ({ to, kind: 'comment' as const, actorId: v.id, via, taskId: t.id, text: body })));
   return mapTask((await loadTask(db, t.id))!);
 }
 

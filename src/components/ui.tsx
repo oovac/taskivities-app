@@ -39,6 +39,7 @@ export const I = {
   gear: (s = 15) => <Svg s={s}><circle cx="8" cy="8" r="2.1" /><path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M3.6 12.4l1.1-1.1M11.3 4.7l1.1-1.1" /></Svg>,
   trash: (s = 15) => <Svg s={s}><path d="M2.8 4.3h10.4M6.3 4.3V2.8h3.4v1.5M4.3 4.3l.6 9h6.2l.6-9" /></Svg>,
   edit: (s = 15) => <Svg s={s}><path d="M10.6 2.9l2.5 2.5-7.4 7.4-3.1.6.6-3.1z" /><path d="M9.2 4.3l2.5 2.5" /></Svg>,
+  bell: (s = 15) => <Svg s={s}><path d="M4 11.2V7.4a4 4 0 0 1 8 0v3.8l1.2 1.3H2.8zM6.6 14a1.5 1.5 0 0 0 2.8 0" /></Svg>,
   ban: (s = 15) => <Svg s={s}><circle cx="8" cy="8" r="5.6" /><path d="M4 4l8 8" /></Svg>,
   archive: (s = 15) => <Svg s={s}><rect x="2" y="2.8" width="12" height="3.2" rx="1" /><path d="M3.2 6v6.2a1 1 0 0 0 1 1h7.6a1 1 0 0 0 1-1V6M6.5 8.6h3" /></Svg>,
 };

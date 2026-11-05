@@ -11,6 +11,7 @@
     "typecheck": "tsc -b",
     "deploy": "node scripts/tenant.mjs deploy",
     "tenant": "node scripts/tenant.mjs",
+    "push-keys": "node scripts/push-keys.mjs",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:seed:local": "wrangler d1 execute DB --local --file=seed/dev.sql",
     "db:reset:local": "rm -rf .wrangler/state && npm run db:migrate:local && npm run db:seed:local",

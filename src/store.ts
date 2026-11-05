@@ -1,12 +1,13 @@
 import { create } from 'zustand';
-import type { AppSettings, ArchivedProject, Priority, Project, Role, Task, TaskEvent, User, WebhookInfo } from '../shared/types';
-import { NORMAL } from '../shared/types';
+import type { AppSettings, ArchivedProject, NotifyPrefs, Priority, Project, Role, Task, TaskEvent, User, WebhookInfo } from '../shared/types';
+import { NORMAL, NOTIFY_DEFAULTS } from '../shared/types';
+import type { PushState } from './push';
 import type { Repeat } from '../shared/repeat';
 import { type ThemePref, themePref } from './theme';
 
 export type Page = 'tasks' | 'projects' | 'team' | 'settings';
 export type View = 'today' | 'list' | 'board';
-export type PopType = 'move' | 'assign' | 'prio' | 'proj' | 'person' | 'projpick' | 'urole' | 'uproj' | 'udisable' | 'uenable' | 'account' | 'repeat' | 'taskmenu' | 'pages';
+export type PopType = 'move' | 'assign' | 'prio' | 'proj' | 'person' | 'projpick' | 'urole' | 'uproj' | 'udisable' | 'uenable' | 'notify' | 'account' | 'repeat' | 'taskmenu' | 'pages';
 
 export interface Pop {
   type: PopType;
@@ -74,6 +75,10 @@ export interface State {
   attachmentsOn: boolean;
   /** The browser offered to install the app (account menu shows "Install app"). */
   canInstall: boolean;
+  /** Notifications: the instance's push key (null = not set up), this device's state, and what I'm notified about. */
+  pushKey: string | null;
+  pushState: PushState;
+  notify: NotifyPrefs;
   pop: Pop | null;
   toast: Toast | null;
   help: boolean;
@@ -140,6 +145,9 @@ export const useStore = create<State>()(() => ({
   uploads: [],
   attachmentsOn: false,
   canInstall: false,
+  pushKey: null,
+  pushState: 'unknown',
+  notify: NOTIFY_DEFAULTS,
   pop: null,
   toast: null,
   help: false,

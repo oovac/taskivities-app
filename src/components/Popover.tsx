@@ -2,14 +2,15 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { DOW, MONL, addDays, fmt, parseDate, toDate, weekStart } from '../../shared/dates';
 import { type Freq, type Repeat, cleanRepeat, describe, presets, sameRule } from '../../shared/repeat';
 import { isAdmin, onProject } from '../../shared/rules';
-import { PRIORITIES, type Priority } from '../../shared/types';
+import { PRIORITIES, type NotifyPrefs, type Priority } from '../../shared/types';
 import {
-  assignable, closePop, defaultDraftDate, moveTasks, openConnect, disableUser, enableUser, setPage, setPriority, setProject, setRepeat, signOut, switchablePeople, transfer,
+  assignable, closePop, defaultDraftDate, moveTasks, openConnect, openPop, disableUser, enableUser, setPage, setPriority, setProject, setRepeat, signOut, switchablePeople, transfer,
   updateUser, viewPerson, editNotes, editChecklist, pickAttachments, archiveTask,
 } from '../actions';
 import { focusLater } from '../focus';
 import { type ThemePref, setThemePref } from '../theme';
 import { installApp, isInstalled, isIOS } from '../install';
+import { setNotifyPrefs, testPush, turnOffPush, turnOnPush } from '../push';
 import { S, set, useStore, type Pop, type State } from '../store';
 import { displayName, draftEffective, firstName, isLate, myProjects, shownOn } from '../util';
 import { projectDayData } from '../pages/ProjectsPage';
@@ -66,6 +67,7 @@ function Content({ p, s }: { p: Pop; s: State }) {
     case 'uproj': return <UserProjectsPop p={p} s={s} />;
     case 'udisable': return <DisablePop p={p} s={s} />;
     case 'uenable': return <EnablePop p={p} s={s} />;
+    case 'notify': return <NotifyPop s={s} />;
     case 'account': return <AccountPop s={s} />;
     case 'taskmenu': return <TaskMenu p={p} s={s} />;
     case 'repeat': return <RepeatPop p={p} s={s} />;
@@ -401,6 +403,12 @@ function AccountPop({ s }: { s: State }) {
         </div>
       </div>
       <div className="pop-sep" />
+      {s.pushKey && (
+        <button className="opt" data-act="notify"
+          onClick={() => { const a = document.querySelector<HTMLElement>('[data-act="account"]'); if (a) openPop({ type: 'notify', returnSel: '[data-act="account"]' }, a); }}>
+          {I.bell(15)}Notifications<span className="r">{s.pushState === 'on' ? 'On' : s.pushState === 'blocked' ? 'Blocked' : 'Off'}</span>
+        </button>
+      )}
       <button className="opt" onClick={() => { closePop(false); openConnect(); }}>{I.bolt(15)}Connect an AI assistant</button>
       {!isInstalled() && (s.canInstall ? (
         <button className="opt" data-act="install" onClick={() => { closePop(false); void installApp(); }}>{I.phone(15)}Install app</button>
@@ -408,6 +416,52 @@ function AccountPop({ s }: { s: State }) {
         <div className="opt-hint">{I.phone(15)}<span>To install: tap <b>Share</b>, then <b>Add to Home Screen</b>.</span></div>
       ) : null)}
       <button className="opt" onClick={() => void signOut()}>Sign out</button>
+    </>
+  );
+}
+
+/** Notifications: on or off for this device, and what to hear about (on all my devices). */
+function NotifyPop({ s }: { s: State }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const st = s.pushState;
+  const run = async (f: () => Promise<string | null | void>) => { setBusy(true); setMsg(null); const r = await f(); setBusy(false); if (r) setMsg(r); };
+  const kinds: [keyof NotifyPrefs, string][] = [
+    ['assigned', 'Someone gives me a task'],
+    ['comments', 'Comments on my tasks'],
+    ['morning', 'Morning summary at 8:00'],
+  ];
+  return (
+    <>
+      <div className="pop-h">Notifications on this device</div>
+      <div className="pop-body notify-body">
+        {st === 'on' && <>On. You'll hear about other people's changes, never your own.</>}
+        {(st === 'off' || st === 'unknown') && <>Get a notification on this {isIOS() || /Android/.test(navigator.userAgent) ? 'phone' : 'device'} when something needs you.</>}
+        {st === 'blocked' && <>Notifications are blocked for Taskivities. Allow them in {isIOS() ? 'Settings → Notifications → Taskivities' : "the browser's site settings"}, then come back here.</>}
+        {st === 'install-first' && <>On iPhone and iPad, notifications only work in the installed app: tap <b>Share</b>, then <b>Add to Home Screen</b>, and open Taskivities from there.</>}
+        {st === 'unsupported' && <>This browser can't show notifications. Try Chrome, Edge, Firefox or Safari, or the installed app.</>}
+        {msg && <div className="notify-err" role="alert">{msg}</div>}
+      </div>
+      {(st === 'off' || st === 'unknown') && (
+        <div style={{ padding: '2px 4px 6px' }}>
+          <button className="btn-primary notify-btn" data-act="push-on" disabled={busy} onClick={() => void run(turnOnPush)}>{busy ? 'Turning on…' : 'Turn on'}</button>
+        </div>
+      )}
+      {st === 'on' && (
+        <div className="notify-acts">
+          <button className="btn-ghost sm" data-act="push-test" disabled={busy}
+            onClick={() => void run(async () => ((await testPush()) ? null : "The test didn't go through. Try turning notifications off and on."))}>Send a test</button>
+          <button className="btn-ghost sm" data-act="push-off" disabled={busy} onClick={() => void run(turnOffPush)}>Turn off</button>
+        </div>
+      )}
+      <div className="pop-sep" />
+      <div className="pop-h">Tell me when <span style={{ fontWeight: 400 }}>· all my devices</span></div>
+      {kinds.map(([k, label]) => (
+        <button key={k} className={`opt check ${s.notify[k] ? 'on' : ''}`} role="menuitemcheckbox" aria-checked={s.notify[k]} data-notify={k}
+          onClick={() => void setNotifyPrefs({ [k]: !s.notify[k] })}>
+          <span className="cb">{s.notify[k] && I.check()}</span>{label}
+        </button>
+      ))}
     </>
   );
 }

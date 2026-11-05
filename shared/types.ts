@@ -33,6 +33,17 @@ export interface Project {
   archived: boolean;
 }
 
+/** What a person is notified about on their devices (Web Push). */
+export interface NotifyPrefs {
+  /** A task given to you by someone else (new, or handed over). */
+  assigned: boolean;
+  /** A comment on a task that's yours or that you created. */
+  comments: boolean;
+  /** At 8:00 in your time zone: how many tasks today, if any. */
+  morning: boolean;
+}
+export const NOTIFY_DEFAULTS: NotifyPrefs = { assigned: true, comments: true, morning: true };
+
 /** An archived project, as the Team page lists it. */
 export interface ArchivedProject extends Project {
   archivedAt: string | null;
@@ -146,6 +157,9 @@ export interface Bootstrap {
   attachments: boolean;
   /** Admins: the Gmail address invites are emailed from, or null when not connected (then they share the link). */
   gmail: { email: string } | null;
+  /** Notifications: the key devices subscribe with (null when the instance has no push keys), and my choices. */
+  push: { publicKey: string } | null;
+  notify: NotifyPrefs;
 }
 
 /** A webhook as admins see it (Settings → Webhooks; worker/webhooks.ts). */

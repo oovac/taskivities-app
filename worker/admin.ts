@@ -5,6 +5,7 @@ import { DESCRIPTION_MAX, PROJECT_COLORS, USER_COLORS, type Role } from '../shar
 import { disconnect, sendInvites, type SendResult } from './gmail';
 import { checkIcons, checkSvg, saveIcons, saveLogo } from './settings';
 import { webhookAdmin } from './webhooks';
+import { notify } from './push';
 import {
   type AppEnv, type Ctx, type ProjectRow, type UserRow, CURRENT_VERSION, auditStmt, bad, bumpDirectory, bumpVersion, conflict, eventStmt,
   forbidden, getUser, mapProject, memberProjects, notFound, nowIso, uid,
@@ -179,9 +180,11 @@ admin.post('/users/:id/disable', async (c) => {
   stmts.push(db.prepare("UPDATE users SET status = 'disabled', disabled_at = ?, disabled_by = ? WHERE id = ?").bind(now, v.id, id));
   stmts.push(db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(id));
   stmts.push(db.prepare('DELETE FROM google_tokens WHERE user_id = ?').bind(id)); // and their Gmail connection
+  stmts.push(db.prepare('DELETE FROM push_subscriptions WHERE user_id = ?').bind(id)); // and their devices' notifications
   stmts.push(auditStmt(db, v.id, 'user_disabled', id, { transferred: open.length, to: to ?? null }));
   stmts.push(bumpDirectory(db));
   await db.batch(stmts);
+  if (open.length && to) notify(c.env, [{ to, kind: 'assigned', actorId: v.id, via: null, count: open.length, fromName: u.name || u.email }]);
   return c.json({ ok: true, transferred: open.length });
 });
 

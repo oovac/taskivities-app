@@ -9,6 +9,11 @@ GOOGLE_CLIENT_SECRET=
 WORKOS_CLIENT_ID=
 WORKOS_API_KEY=
 
+# Optional: notifications (Web Push). Make a pair for local use with:  npm run -s push-keys >> .dev.vars
+# (Deployed instances get their own automatically on the first `npm run deploy`.)
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+
 # Optional, comma-separated: addresses always let in as admins. (On an empty database the first person to sign in
 # becomes the admin anyway.)
 ADMIN_EMAILS=

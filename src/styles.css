@@ -783,3 +783,8 @@ a.att-n:hover{color:var(--accent);text-decoration:underline}
 .arch-row.flash,.prow.flash{animation:flash 2.6s ease-out}
 .pe-arch-btn{display:inline-flex;align-items:center;gap:6px}
 .pe-arch .btn-danger{width:auto}
+/* Notifications (account menu) */
+.notify-body{max-width:280px}
+.notify-err{margin-top:6px;color:var(--danger-ink)}
+.notify-btn{width:100%}
+.notify-acts{display:flex;gap:6px;padding:2px 4px 6px}

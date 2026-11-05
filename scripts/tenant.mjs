@@ -20,6 +20,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { newPushKeys } from './push-keys.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const TENANTS = join(ROOT, 'tenants');
@@ -197,6 +198,24 @@ function deploy(name, dryRun) {
   run('npx', ['vite', 'build'], { env: { TASKIVITIES_WRANGLER_CONFIG: cfg } });
   console.log(`\n▸ Deploying`);
   wrangler(t, ['deploy', ...(dryRun ? ['--dry-run'] : [])]);
+  if (!dryRun) ensurePushKeys(t, cfg);
+}
+
+/** Notifications need a key pair per instance. Made once, the first time an instance is deployed, and kept as secrets. */
+function ensurePushKeys(t, cfg) {
+  const out = wrangler(t, ['secret', 'list', '--format', 'json', '--config', cfg], { capture: true });
+  let names;
+  try { names = JSON.parse(out.slice(out.indexOf('['))).map((x) => x.name); } catch { console.warn('\n! Could not list the secrets, so notification keys were not checked.'); return; }
+  if (names.includes('VAPID_PUBLIC_KEY') && names.includes('VAPID_PRIVATE_KEY')) return;
+  console.log('\n▸ Creating the notification keys (once per instance)');
+  const dir = mkdtempSync(join(tmpdir(), 'taskivities-'));
+  try {
+    const file = join(dir, 'push-keys.json');
+    writeFileSync(file, JSON.stringify(newPushKeys()), { mode: 0o600 });
+    wrangler(t, ['secret', 'bulk', file, '--config', cfg]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 /** Creates the D1 database and KV namespace for a new instance and writes tenants/<name>.env. */

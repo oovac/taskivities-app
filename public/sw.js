@@ -1,6 +1,6 @@
-// Taskivities service worker. It exists so phones can install the app to the home screen.
+// Taskivities service worker. It exists so phones can install the app to the home screen, and to show notifications.
 // It caches nothing: every request goes to the network as usual, so tasks are never stale.
-// The only extra: if a page can't load because the phone is offline, it shows a short message instead of the browser's error.
+// If a page can't load because the phone is offline, it shows a short message instead of the browser's error.
 const OFFLINE = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Offline · Taskivities</title>
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:15px/1.5 system-ui,-apple-system,sans-serif;background:#F7F7F9;color:#16161D;text-align:center;padding:24px}
@@ -14,4 +14,42 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(event.request).catch(() => new Response(OFFLINE, { status: 503, headers: { 'content-type': 'text/html; charset=utf-8' } })),
   );
+});
+
+// ---------- notifications (Web Push; sent by worker/push.ts) ----------
+// Each message is { title, body, url, tag, badge }. A later message with the same tag (one per task) replaces the earlier one.
+self.addEventListener('push', (event) => {
+  let d = {};
+  try { d = event.data ? event.data.json() : {}; } catch { d = { body: event.data ? event.data.text() : '' }; }
+  const nav = self.navigator;
+  const badge = typeof d.badge === 'number' && nav.setAppBadge
+    ? (d.badge ? nav.setAppBadge(d.badge) : nav.clearAppBadge()).catch(() => undefined)
+    : Promise.resolve();
+  event.waitUntil(Promise.all([
+    self.registration.showNotification(d.title || 'Taskivities', {
+      body: d.body || '',
+      tag: d.tag || undefined,
+      renotify: !!d.tag,
+      icon: '/icons/192.png',
+      data: { url: d.url || '/' },
+      timestamp: Date.now(),
+    }),
+    badge,
+  ]));
+});
+
+// Tapping a notification opens its task: in the app if it's already open, otherwise in a new window.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = new URL((event.notification.data && event.notification.data.url) || '/', self.location.origin).href;
+  event.waitUntil((async () => {
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const win = wins.find((w) => new URL(w.url).origin === self.location.origin);
+    if (win) {
+      await win.focus().catch(() => undefined);
+      win.postMessage({ type: 'open', url });
+      return;
+    }
+    await self.clients.openWindow(url);
+  })());
 });
