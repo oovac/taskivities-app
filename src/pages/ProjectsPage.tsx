@@ -1,12 +1,14 @@
 import { useEffect } from 'react';
 import { DOW, addDays, fmt, parseDate } from '../../shared/dates';
-import { isAdmin } from '../../shared/rules';
+import { isAdmin, isLate } from '../../shared/rules';
 import { PRIORITIES, type Task } from '../../shared/types';
 import { ensureRange, loadArchived, openPop, restoreTask, toast } from '../actions';
+import { QuickAdd } from '../components/QuickAdd';
 import { TaskRow } from '../components/rows';
 import { I, ProjBadge } from '../components/ui';
 import { set, useStore, type State } from '../store';
-import { displayName, shownOn, byPrioThenOldest } from '../util';
+import { displayName, shownOn, byPrioThenOldest, inRange, previewsWhere, weekInfo } from '../util';
+import { Day, ViewSeg, WeekBoard, WeekControls } from './TasksPage';
 
 export function projectDayData(s: State, pid: string, day: string) {
   const inP = (t: Task) => (pid === 'all' ? !!s.projects[t.projectId] : t.projectId === pid);
@@ -27,10 +29,15 @@ export function ProjectsPage() {
   const day = s.projDay || s.today;
   const all = pid === 'all';
   const project = all ? null : s.projects[pid];
-  useEffect(() => { void ensureRange(day, day); }, [day]);
+  const mode = s.view; // Today (this page's day report) · Week · Board, shared with people's views
+  const w = weekInfo(s);
+  useEffect(() => { if (mode === 'today') void ensureRange(day, day); else void ensureRange(w.ws, w.we); }, [mode, day, w.ws, w.we]);
+  // New tasks from here go in this project (you can still pick another).
+  useEffect(() => { if (pid !== 'all') set((st) => ({ draft: { ...st.draft, projectId: pid } })); }, [pid]);
 
   const { done, open } = projectDayData(s, pid, day);
   const name = all ? (isAdmin(s.me!) ? 'All projects' : 'All my projects') : project!.name;
+  const inP = (t: Task) => (all ? !!s.projects[t.projectId] : t.projectId === pid);
   const goDay = (n: number) => set({ projDay: n === 0 ? s.today : addDays(day, n) > s.today ? s.today : addDays(day, n) });
 
   const copy = async () => {
@@ -53,10 +60,12 @@ export function ProjectsPage() {
           <ProjBadge project={project ?? 'all'} />
           <span>
             <span className="h1">{name} {I.chev()}</span>
-            <span className="sub">{done.length} done{open.length > 0 && ` · ${open.length} not finished`}</span>
+            <span className="sub">{mode === 'today' ? <>{done.length} done{open.length > 0 && ` · ${open.length} not finished`}</> : <WeekSub s={s} w={w} inP={inP} />}</span>
           </span>
         </button>
         <div className="weeknav">
+          <ViewSeg s={s} />
+          {mode !== 'today' ? <WeekControls s={s} w={w} /> : <>
           <button className="icon-btn" data-act="pday" data-dir="-1" title="Previous day  [" aria-label="Previous day" onClick={() => goDay(-1)}>{I.left()}</button>
           <div className="wk">
             <b>{day === s.today ? 'Today' : day === addDays(s.today, -1) ? 'Yesterday' : DOW[parseDate(day).getDay()]}</b>
@@ -65,8 +74,16 @@ export function ProjectsPage() {
           <button className="icon-btn" data-act="pday" data-dir="1" title="Next day  ]" aria-label="Next day" disabled={day >= s.today} onClick={() => goDay(1)}>{I.right()}</button>
           <button className="btn-ghost" data-act="pday" data-dir="0" disabled={day === s.today} onClick={() => goDay(0)}>Today</button>
           <button className="btn-ghost" data-act="copy-day" disabled={!done.length} title="Copy a plain-text summary for chat or email" onClick={() => void copy()}>Copy summary</button>
+          </>}
         </div>
       </div>
+      {mode !== 'today' && <QuickAdd />}
+      {mode === 'list' && <ProjectWeek s={s} w={w} pid={pid} name={name} inP={inP} all={all} />}
+      {mode === 'board' && (
+        <WeekBoard s={s} w={w} pool={Object.values(s.tasks).filter(inP)} side="by" hideProject={!all}
+          previews={previewsWhere(s, inP, w.ws, w.we)} />
+      )}
+      {mode === 'today' && <>
       <section className="sec">
         <div className="sec-h"><h2>Done</h2><span className="cnt">by priority, then due date</span></div>
         {done.length
@@ -82,8 +99,36 @@ export function ProjectsPage() {
           {s.projOpen && <div className="card" style={{ marginTop: 8 }}>{open.map((t) => <TaskRow key={t.id} t={t} ctx="popen" />)}</div>}
         </section>
       )}
+      </>}
       <ArchivedSection s={s} pid={pid} all={all} />
     </>
+  );
+}
+
+/** "12 open this week · 3 carried over" for a project's week and board. */
+function WeekSub({ s, w, inP }: { s: State; w: ReturnType<typeof weekInfo>; inP: (t: Task) => boolean }) {
+  const tasks = Object.values(s.tasks).filter(inP);
+  const openN = tasks.filter((t) => t.status === 'open' && inRange(shownOn(t, s.today), w.ws, w.we)).length;
+  const late = tasks.filter((t) => isLate(t, s.today)).length;
+  return <>{openN} open {s.weekOffset === 0 ? 'this week' : 'that week'}{s.weekOffset === 0 && late > 0 && <> · <span className="lt">{late} carried over</span></>}</>;
+}
+
+/** A project's week: every day, everyone's tasks in it (each row says whose it is). */
+function ProjectWeek({ s, w, pid, name, inP, all }: {
+  s: State; w: ReturnType<typeof weekInfo>; pid: string; name: string; inP: (t: Task) => boolean; all: boolean;
+}) {
+  const pool = Object.values(s.tasks).filter(inP);
+  const carried = pool.filter((t) => isLate(t, s.today)).sort(byPrioThenOldest);
+  const previews = previewsWhere(s, inP, w.ws, w.we);
+  const openN = pool.filter((t) => t.status === 'open' && inRange(shownOn(t, s.today), w.ws, w.we)).length;
+  return (
+    <section className="sec">
+      <div className="sec-h"><h2>{name}</h2><span className="cnt">{openN} open this week · everyone's tasks</span></div>
+      {w.days.map((d) => (
+        <Day key={d} s={s} d={d} k={`p:${pid}`} pool={pool} carried={carried} TD={false} ctx="proj" showProject={all}
+          previews={previews.filter((x) => x.date === d)} />
+      ))}
+    </section>
   );
 }
 

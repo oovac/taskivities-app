@@ -8,7 +8,8 @@ import { useStore } from '../store';
 import { ariaFor, clockTime, firstName, lateDays } from '../util';
 import { Avatar, I, PrioTag, ProjPill } from './ui';
 
-export type RowCtx = 'to' | 'carried' | 'by' | 'ghost' | 'pdone' | 'pdone-all' | 'popen';
+// to/carried/by: a person's view. proj/proj-carried: a project's week (shows whose it is). pdone/popen: a project's day.
+export type RowCtx = 'to' | 'carried' | 'by' | 'ghost' | 'pdone' | 'pdone-all' | 'popen' | 'proj' | 'proj-carried';
 
 export const LateBadge = ({ t, today }: { t: Task; today: string }) => <span className="late">{lateDays(t, today)}d late</span>;
 
@@ -19,7 +20,7 @@ export function openMove(ids: string[], anchor: HTMLElement, mode: 'task' | 'bul
   openPop({ type: 'move', mode, ids, month: m }, anchor);
 }
 
-export function TaskRow({ t, ctx }: { t: Task; ctx: RowCtx }) {
+export function TaskRow({ t, ctx, showProject = false }: { t: Task; ctx: RowCtx; showProject?: boolean }) {
   const { users, projects, today, flash } = useStore();
   const late = isLate(t, today);
   const done = t.status === 'done';
@@ -39,6 +40,14 @@ export function TaskRow({ t, ctx }: { t: Task; ctx: RowCtx }) {
         {t.doneOn && t.doneOn > t.dueDate && <span className="late">{diffDays(t.doneOn, t.dueDate)}d late</span>}
         {t.doneBy && t.doneBy !== t.assigneeId && <span className="due">ticked by {firstName(users[t.doneBy])}</span>}
         <span className="datep tm">{clockTime(t.doneAt)}</span>
+      </>
+    );
+  else if (ctx === 'proj' || ctx === 'proj-carried')
+    meta = (
+      <>
+        {showProject && <ProjPill p={p} />}
+        <span className="from"><Avatar user={users[t.assigneeId]} size={18} /><span className="ft">{firstName(users[t.assigneeId])}</span></span>
+        {ctx === 'proj-carried' && <><span className="due">due {fmt(t.dueDate)}</span><LateBadge t={t} today={today} /></>}
       </>
     );
   else if (ctx === 'popen')
@@ -85,7 +94,7 @@ export function TaskRow({ t, ctx }: { t: Task; ctx: RowCtx }) {
 // ---------- board cards (draggable) ----------
 export const drag = { id: null as string | null };
 
-export function TaskCard({ t, side }: { t: Task; side: 'to' | 'by' }) {
+export function TaskCard({ t, side, hideProject = false }: { t: Task; side: 'to' | 'by'; hideProject?: boolean }) {
   const { users, projects, today, flash } = useStore();
   const late = isLate(t, today);
   const done = t.status === 'done';
@@ -110,7 +119,7 @@ export function TaskCard({ t, side }: { t: Task; side: 'to' | 'by' }) {
       <div className="tc-body" data-act="open" onClick={() => openDrawer(t.id)}>
         <div className="tc-title">{!done && <PrioTag p={t.priority} />}{t.title}{!done && t.series?.active && <RepeatMark t={t} />}{t.checklist.length > 0 && <CheckMark t={t} />}{t.attachments.length > 0 && <span className="clipmark" title={`${t.attachments.length} attachment${t.attachments.length > 1 ? 's' : ''}`} aria-label={`${t.attachments.length} attachments`}>{I.clip(11)}{t.attachments.length}</span>}{t.comments > 0 && <CommentMark n={t.comments} />}</div>
         <div className="tc-meta">
-          <span className="tc-proj"><i style={{ background: p?.color }} />{p?.name}</span>
+          {!hideProject && <span className="tc-proj"><i style={{ background: p?.color }} />{p?.name}</span>}
           {late && <LateBadge t={t} today={today} />}
           {who && <span title={`${side === 'by' ? 'Assigned to' : 'From'} ${users[who]?.name ?? ''}`}><Avatar user={users[who]} size={18} /></span>}
         </div>

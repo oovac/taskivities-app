@@ -374,6 +374,12 @@ export function viewPerson(userId: string) {
   set({ viewUser: userId, page: 'tasks', drawer: null, pop: null, draft: { ...S().draft, assigneeId: null } });
   history.replaceState(null, '', '/');
 }
+/** A project's view (or 'all'), keeping the same Today / Week / Board choice. */
+export function viewProject(projectId: string) {
+  const s = S();
+  set({ projSel: projectId, projOpen: false, page: 'projects', drawer: null, pop: null, projDay: s.projDay || s.today });
+  history.replaceState(null, '', '/projects');
+}
 export function setView(view: State['view']) {
   set({ view, ...(view === 'today' ? { weekOffset: 0 } : {}) });
   localStorage.setItem('tv:view', view);

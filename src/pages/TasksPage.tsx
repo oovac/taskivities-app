@@ -1,4 +1,4 @@
-import { useEffect, type DragEvent } from 'react';
+import { useEffect, type DragEvent, type ReactNode } from 'react';
 import { DOW, MONS, addDays, fmt, parseDate } from '../../shared/dates';
 import { isLate, shownOn } from '../../shared/rules';
 import type { Task } from '../../shared/types';
@@ -52,36 +52,18 @@ export function TasksPage() {
           </span>
         </button>
         <div className="weeknav">
-          <div className="seg" role="group" aria-label="View">
-            <button className={TD ? 'on' : ''} data-act="view-mode" data-m="today" onClick={() => setView('today')}>{I.sun()}<span className="sl">Today</span></button>
-            <button className={s.view === 'list' ? 'on' : ''} data-act="view-mode" data-m="list" onClick={() => setView('list')}>{I.list()}<span className="sl">Week</span></button>
-            <button className={s.view === 'board' ? 'on' : ''} data-act="view-mode" data-m="board" onClick={() => setView('board')}>{I.board()}<span className="sl">Board</span></button>
-          </div>
-          {TD ? (
-            <div className="wk"><b>Today</b><span>{fmt(s.today)}</span></div>
-          ) : (
-            <>
-              <button className="icon-btn" data-act="week" data-dir="-1" title="Previous week  [" aria-label="Previous week" onClick={() => set({ weekOffset: s.weekOffset - 1 })}>{I.left()}</button>
-              {s.weekOffset === 0 ? (
-                <div className="wk"><b>{w.label}</b><span>{w.range}</span></div>
-              ) : (
-                // Away from this week, the label itself takes you back (no separate button, so the header stays on one row).
-                <button className="wk back" data-act="week" data-dir="0" title="Back to this week" aria-label={`${w.label}, ${w.range}. Back to this week`}
-                  onClick={() => set({ weekOffset: 0 })}><b>{w.label}</b><span>{w.range} · <u>this week</u></span></button>
-              )}
-              <button className="icon-btn" data-act="week" data-dir="1" title="Next week  ]" aria-label="Next week" onClick={() => set({ weekOffset: s.weekOffset + 1 })}>{I.right()}</button>
-            </>
-          )}
+          <ViewSeg s={s} />
+          {TD ? <div className="wk"><b>Today</b><span>{fmt(s.today)}</span></div> : <WeekControls s={s} w={w} />}
         </div>
       </div>
       <QuickAdd />
       {s.view === 'board' ? (
-        <Board s={s} u={u} w={w} />
+        <PersonBoard s={s} u={u} w={w} />
       ) : (
         <>
           <section className="sec">
             <div className="sec-h"><h2>Assigned to {isMe ? 'me' : firstName(person)}</h2><span className="cnt">{openN} open {TD ? 'today' : 'this week'}</span></div>
-            {(TD ? [s.today] : w.days).map((d) => <Day key={d} s={s} d={d} u={u} mine={mine} carried={carried} TD={TD} previews={previews.filter((x) => x.date === d)} />)}
+            {(TD ? [s.today] : w.days).map((d) => <Day key={d} s={s} d={d} k={u} pool={mine} carried={carried} TD={TD} previews={previews.filter((x) => x.date === d)} />)}
             {TD && <Peek s={s} mine={mine} we={w.we} />}
           </section>
           <section className="sec">
@@ -94,13 +76,50 @@ export function TasksPage() {
   );
 }
 
-function Day({ s, d, u, mine, carried, TD, previews }: { s: State; d: string; u: string; mine: Task[]; carried: Task[]; TD: boolean; previews: Preview[] }) {
+/** Today / Week / Board: the same three ways to look at a person or a project (the choice is shared). */
+export function ViewSeg({ s }: { s: State }) {
+  return (
+    <div className="seg" role="group" aria-label="View">
+      <button className={s.view === 'today' ? 'on' : ''} data-act="view-mode" data-m="today" onClick={() => setView('today')}>{I.sun()}<span className="sl">Today</span></button>
+      <button className={s.view === 'list' ? 'on' : ''} data-act="view-mode" data-m="list" onClick={() => setView('list')}>{I.list()}<span className="sl">Week</span></button>
+      <button className={s.view === 'board' ? 'on' : ''} data-act="view-mode" data-m="board" onClick={() => setView('board')}>{I.board()}<span className="sl">Board</span></button>
+    </div>
+  );
+}
+
+/** ← This week → (the label takes you back to this week when you're elsewhere). */
+export function WeekControls({ s, w }: { s: State; w: ReturnType<typeof weekInfo> }) {
+  return (
+    <>
+      <button className="icon-btn" data-act="week" data-dir="-1" title="Previous week  [" aria-label="Previous week" onClick={() => set({ weekOffset: s.weekOffset - 1 })}>{I.left()}</button>
+      {s.weekOffset === 0 ? (
+        <div className="wk"><b>{w.label}</b><span>{w.range}</span></div>
+      ) : (
+        // Away from this week, the label itself takes you back (no separate button, so the header stays on one row).
+        <button className="wk back" data-act="week" data-dir="0" title="Back to this week" aria-label={`${w.label}, ${w.range}. Back to this week`}
+          onClick={() => set({ weekOffset: 0 })}><b>{w.label}</b><span>{w.range} · <u>this week</u></span></button>
+      )}
+      <button className="icon-btn" data-act="week" data-dir="1" title="Next week  ]" aria-label="Next week" onClick={() => set({ weekOffset: s.weekOffset + 1 })}>{I.right()}</button>
+    </>
+  );
+}
+
+/**
+ * One day of a week list. `pool`: the tasks in view (a person's, or a project's); `k`: whose (for remembering which
+ * past days are expanded). `ctx`: 'to' for a person, 'proj' for a project (rows then say whose each task is).
+ */
+export function Day({ s, d, k: who, pool, carried, TD, previews, ctx = 'to', showProject = false }: {
+  s: State; d: string; k: string; pool: Task[]; carried: Task[]; TD: boolean; previews: Preview[]; ctx?: 'to' | 'proj'; showProject?: boolean;
+}) {
+  const mine = pool;
+  const rowCtx = ctx;
+  const carriedCtx = ctx === 'proj' ? 'proj-carried' : 'carried';
   const dd = parseDate(d);
   const label = `${MONS[dd.getMonth()]} ${dd.getDate()}`;
   if (d < s.today) {
     const done = sortRows(mine.filter((t) => t.status === 'done' && shownOn(t, s.today) === d));
     const ghosts = mine.filter((t) => isLate(t, s.today) && t.dueDate === d);
-    const key = `${u}:${d}`;
+    const key = `${who}:${d}`;
     const open = s.expanded[key] || s.weekOffset < 0;
     const parts = [done.length ? `${done.length} done` : '', ghosts.length ? `${ghosts.length} carried to today` : ''].filter(Boolean);
     const toggle = () => set((st) => ({ expanded: { ...st.expanded, [key]: !st.expanded[key] } }));
@@ -124,7 +143,7 @@ function Day({ s, d, u, mine, carried, TD, previews }: { s: State; d: string; u:
             : <span className="dc">{parts.join(' · ')}</span>}
         </div>
         {done.length || ghosts.length ? (
-          <div className="card">{done.map((t) => <TaskRow key={t.id} t={t} ctx="to" />)}{ghosts.map((t) => <TaskRow key={'g' + t.id} t={t} ctx="ghost" />)}</div>
+          <div className="card">{done.map((t) => <TaskRow key={t.id} t={t} ctx={rowCtx} showProject={showProject} />)}{ghosts.map((t) => <TaskRow key={'g' + t.id} t={t} ctx="ghost" />)}</div>
         ) : <div className="empty-day">Nothing recorded</div>}
       </div>
     );
@@ -139,7 +158,7 @@ function Day({ s, d, u, mine, carried, TD, previews }: { s: State; d: string; u:
         <span className="grow"><span className="old">oldest is {Math.max(...carried.map((t) => lateDays(t, s.today)))} days late</span></span>
         <button data-act="move-all" onClick={(e) => openMove(carried.map((t) => t.id), e.currentTarget, 'bulk')}>{I.cal()} Move all</button>
       </div>
-      <div className="rows">{carried.map((t) => <TaskRow key={t.id} t={t} ctx="carried" />)}</div>
+      <div className="rows">{carried.map((t) => <TaskRow key={t.id} t={t} ctx={carriedCtx} showProject={showProject} />)}</div>
     </div>
   );
   return (
@@ -153,7 +172,7 @@ function Day({ s, d, u, mine, carried, TD, previews }: { s: State; d: string; u:
       )}
       {carriedBlock}
       {list.length + previews.length > 0
-        ? <div className="card">{list.map((t) => <TaskRow key={t.id} t={t} ctx="to" />)}{previews.map((x) => <PreviewRow key={`pv${x.task.id}${x.date}`} t={x.task} date={x.date} />)}</div>
+        ? <div className="card">{list.map((t) => <TaskRow key={t.id} t={t} ctx={rowCtx} showProject={showProject} />)}{previews.map((x) => <PreviewRow key={`pv${x.task.id}${x.date}`} t={x.task} date={x.date} />)}</div>
         : !carriedBlock && <div className="empty-day">{TD ? 'Nothing left for today. Nice.' : 'Nothing planned'}</div>}
     </div>
   );
@@ -196,7 +215,7 @@ function AssignedBy({ s, tasks, isMe, who, TD }: { s: State; tasks: Task[]; isMe
   );
 }
 
-function Board({ s, u, w }: { s: State; u: string; w: ReturnType<typeof weekInfo> }) {
+function PersonBoard({ s, u, w }: { s: State; u: string; w: ReturnType<typeof weekInfo> }) {
   const isMe = u === s.me!.id;
   const side = s.boardSide;
   const all = Object.values(s.tasks);
@@ -205,8 +224,24 @@ function Board({ s, u, w }: { s: State; u: string; w: ReturnType<typeof weekInfo
   const nTo = all.filter((t) => t.assigneeId === u && inWeek(t)).length;
   const nBy = all.filter((t) => (t.createdBy === u || t.assignedBy === u) && t.assigneeId !== u && inWeek(t)).length;
   const who = isMe ? 'me' : firstName(s.users[u]);
-  const previews = side === 'to' ? previewsFor(s, u, w.ws, w.we) : [];
+  return (
+    <WeekBoard s={s} w={w} pool={pool} side={side} previews={side === 'to' ? previewsFor(s, u, w.ws, w.we) : []}
+      bar={
+        <div className="seg sm">
+          <button className={side === 'to' ? 'on' : ''} data-act="board-side" data-s="to" onClick={() => set({ boardSide: 'to' })}>Assigned to {who} <span>{nTo}</span></button>
+          <button className={side === 'by' ? 'on' : ''} data-act="board-side" data-s="by" onClick={() => set({ boardSide: 'by' })}>Assigned by {who} <span>{nBy}</span></button>
+        </div>
+      } />
+  );
+}
 
+/**
+ * The week as columns, one per day; cards can be dragged to another day. `pool`: the tasks in view.
+ * `side`: 'to' shows who a task came from, 'by' shows whose it is (a project's board uses 'by').
+ */
+export function WeekBoard({ s, w, pool, side, previews, bar, hideProject = false }: {
+  s: State; w: ReturnType<typeof weekInfo>; pool: Task[]; side: 'to' | 'by'; previews: Preview[]; bar?: ReactNode; hideProject?: boolean;
+}) {
   const onDragOver = (e: DragEvent<HTMLDivElement>) => {
     if (!drag.id) return;
     e.preventDefault();
@@ -229,10 +264,7 @@ function Board({ s, u, w }: { s: State; u: string; w: ReturnType<typeof weekInfo
   return (
     <>
       <div className="board-bar">
-        <div className="seg sm">
-          <button className={side === 'to' ? 'on' : ''} data-act="board-side" data-s="to" onClick={() => set({ boardSide: 'to' })}>Assigned to {who} <span>{nTo}</span></button>
-          <button className={side === 'by' ? 'on' : ''} data-act="board-side" data-s="by" onClick={() => set({ boardSide: 'by' })}>Assigned by {who} <span>{nBy}</span></button>
-        </div>
+        {bar}
         <span className="hint">Drag a card to another day, or select it and press <kbd>⇧</kbd><kbd>←</kbd> <kbd>⇧</kbd><kbd>→</kbd>. Past days are read-only.</span>
       </div>
       <div className="board">
@@ -256,10 +288,10 @@ function Board({ s, u, w }: { s: State; u: string; w: ReturnType<typeof weekInfo
                   <div className="col-carry" data-carry>
                     <div className="cc-h"><span>Carried · {carried.length}</span>
                       <button data-act="move-all" onClick={(e) => openMove(carried.map((t) => t.id), e.currentTarget, 'bulk')}>Move all</button></div>
-                    {carried.map((t) => <TaskCard key={t.id} t={t} side={side} />)}
+                    {carried.map((t) => <TaskCard key={t.id} t={t} side={side} hideProject={hideProject} />)}
                   </div>
                 )}
-                {list.map((t) => <TaskCard key={t.id} t={t} side={side} />)}
+                {list.map((t) => <TaskCard key={t.id} t={t} side={side} hideProject={hideProject} />)}
                 {!past && previews.filter((x) => x.date === d).map((x) => <PreviewCard key={`pv${x.task.id}${x.date}`} t={x.task} date={x.date} />)}
                 {ghosts > 0 && <div className="col-note">{ghosts} carried to today →</div>}
                 {past

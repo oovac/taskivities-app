@@ -18,7 +18,8 @@ export const sharesWith = (s: State, u: User) => myProjects(s).some((p) => onPro
 export const draftEffective = (s: State) => {
   const mine = myProjects(s);
   const projectId = s.draft.projectId && s.projects[s.draft.projectId] && onProject(s.me!, s.draft.projectId) ? s.draft.projectId : mine[0]?.id ?? null;
-  let assigneeId = s.draft.assigneeId || s.viewUser || s.me!.id;
+  // A person's view adds for that person; a project's view adds for me.
+  let assigneeId = s.draft.assigneeId || (s.page === 'tasks' ? s.viewUser : null) || s.me!.id;
   const a = s.users[assigneeId];
   if (!a || !projectId || !onProject(a, projectId) || a.status === 'disabled') assigneeId = s.me!.id;
   return { projectId, assigneeId };
@@ -45,10 +46,13 @@ export const inRange = (d: string, from: string, to: string) => d >= from && d <
 /** An upcoming copy of a repeating task: calculated from the rule for the week views, never saved. */
 export interface Preview { task: Task; date: string }
 /** Upcoming copies of `u`'s repeating tasks between `from` and `to`, after each open copy. */
-export function previewsFor(s: State, u: string, from: string, to: string): Preview[] {
+export const previewsFor = (s: State, u: string, from: string, to: string) => previewsWhere(s, (t) => t.series!.assigneeId === u, from, to);
+
+/** Upcoming copies of the repeating tasks that `keep` picks (e.g. one project's). */
+export function previewsWhere(s: State, keep: (t: Task) => boolean, from: string, to: string): Preview[] {
   const out: Preview[] = [];
   for (const t of Object.values(s.tasks)) {
-    if (t.status !== 'open' || !t.series?.active || t.series.assigneeId !== u) continue;
+    if (t.status !== 'open' || !t.series?.active || !keep(t)) continue;
     for (const date of upcoming(t.series, shownOn(t, s.today), to)) if (date >= from) out.push({ task: t, date });
   }
   return out.sort((a, b) => a.task.priority - b.task.priority);

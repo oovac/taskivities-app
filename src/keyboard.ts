@@ -122,14 +122,14 @@ export function onKeyDown(e: KeyboardEvent) {
   if (isN && !e.shiftKey) {
     e.preventDefault();
     if (s.drawer) closeDrawer(false);
-    if (s.page !== 'tasks') {
+    if (s.page !== 'tasks' && !(s.page === 'projects' && s.view !== 'today')) {
       if (s.page === 'projects' && s.projSel !== 'all') set((st) => ({ draft: { ...st.draft, projectId: s.projSel } }));
       setPage('tasks');
       setTimeout(() => document.getElementById('qa-input')?.focus(), 0);
     } else document.getElementById('qa-input')?.focus();
     return;
   }
-  if (k === 'v' && s.page === 'tasks') {
+  if (k === 'v' && (s.page === 'tasks' || s.page === 'projects')) {
     const order = ['today', 'list', 'board'] as const;
     setView(order[(order.indexOf(s.view) + 1) % 3]);
     return;
@@ -140,10 +140,10 @@ export function onKeyDown(e: KeyboardEvent) {
     return;
   }
   if (k === '[' || k === ']') {
-    if (s.page === 'projects') {
+    if (s.page === 'projects' && s.view === 'today') {
       const n = addDays(s.projDay || s.today, k === ']' ? 1 : -1);
       if (n <= s.today) set({ projDay: n });
-    } else if (s.page === 'tasks' && s.view !== 'today') set({ weekOffset: s.weekOffset + (k === ']' ? 1 : -1) });
+    } else if ((s.page === 'tasks' || s.page === 'projects') && s.view !== 'today') set({ weekOffset: s.weekOffset + (k === ']' ? 1 : -1) });
     return;
   }
 
