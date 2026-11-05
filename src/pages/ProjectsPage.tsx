@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { DOW, addDays, fmt, parseDate } from '../../shared/dates';
 import { isAdmin } from '../../shared/rules';
 import { PRIORITIES, type Task } from '../../shared/types';
-import { ensureRange, openPop, toast } from '../actions';
+import { ensureRange, loadArchived, openPop, restoreTask, toast } from '../actions';
 import { TaskRow } from '../components/rows';
 import { I, ProjBadge } from '../components/ui';
 import { set, useStore, type State } from '../store';
@@ -82,6 +82,39 @@ export function ProjectsPage() {
           {s.projOpen && <div className="card" style={{ marginTop: 8 }}>{open.map((t) => <TaskRow key={t.id} t={t} ctx="popen" />)}</div>}
         </section>
       )}
+      <ArchivedSection s={s} pid={pid} all={all} />
     </>
+  );
+}
+
+/** Archived tasks of this project: collapsed by default; each can be restored (it reappears where it was). */
+function ArchivedSection({ s, pid, all }: { s: State; pid: string; all: boolean }) {
+  useEffect(() => { void loadArchived(pid); }, [pid]);
+  const list = s.archived?.project === pid ? s.archived.tasks : null;
+  if (!list?.length) return null;
+  return (
+    <section className="sec">
+      <button className="collapsed" data-act="proj-archived" aria-expanded={s.archOpen} onClick={() => set({ archOpen: !s.archOpen })}>
+        <span className="dn">Archived</span> hidden from every list
+        <span className="sum">{list.length} task{list.length > 1 ? 's' : ''} {!s.archOpen && I.chev()}</span>
+      </button>
+      {s.archOpen && (
+        <div className="card arch-list" style={{ marginTop: 8 }}>
+          {list.map((t) => (
+            <div key={t.id} className="arch-row">
+              <span className={`st ${t.status === 'done' ? 'ok' : 'inv'}`}>{t.status === 'done' ? 'Done' : 'Open'}</span>
+              <div className="arch-main">
+                <b className={t.status === 'done' ? 'dn' : ''}>{t.title}</b>
+                <span>
+                  {all && <>{s.projects[t.projectId]?.name} · </>}
+                  {displayName(s.users[t.assigneeId])} · due {fmt(t.dueDate)} · archived by {displayName(s.users[t.archivedBy ?? ''])}, {fmt(t.archivedAt!.slice(0, 10))}
+                </span>
+              </div>
+              <button className="btn-ghost sm" data-act="restore" onClick={() => void restoreTask(t.id)}>Restore</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }

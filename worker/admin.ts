@@ -23,7 +23,7 @@ const activeAdmins = async (db: D1Database) =>
   (await db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND status != 'removed'").first<{ n: number }>())!.n;
 const openTasksIn = async (db: D1Database, userId: string, projectId?: string) =>
   (await db
-    .prepare(`SELECT COUNT(*) AS n FROM tasks WHERE assignee_id = ? AND status = 'open'${projectId ? ' AND project_id = ?' : ''}`)
+    .prepare(`SELECT COUNT(*) AS n FROM tasks WHERE assignee_id = ? AND status = 'open' AND archived_at IS NULL${projectId ? ' AND project_id = ?' : ''}`)
     .bind(...(projectId ? [userId, projectId] : [userId]))
     .first<{ n: number }>())!.n;
 const existingProjects = async (db: D1Database) =>
@@ -119,7 +119,7 @@ admin.patch('/users/:id', async (c) => {
     let wanted = b.projects ? [...new Set(b.projects)].filter((p) => known.has(p)) : current;
     if (u.role === 'admin' && !b.projects) {
       // Demoted admins keep access to wherever they still have open work.
-      const { results } = await db.prepare("SELECT DISTINCT project_id FROM tasks WHERE assignee_id = ? AND status = 'open'").bind(id).all<{ project_id: string }>();
+      const { results } = await db.prepare("SELECT DISTINCT project_id FROM tasks WHERE assignee_id = ? AND status = 'open' AND archived_at IS NULL").bind(id).all<{ project_id: string }>();
       wanted = [...new Set([...current, ...results.map((r) => r.project_id)])];
     }
     if (!wanted.length) throw bad('A member needs at least one project.');

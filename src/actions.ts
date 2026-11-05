@@ -727,3 +727,53 @@ export async function resetIcon() {
     toastError(e);
   }
 }
+
+// ---------- archive (instead of delete) ----------
+/** Archives a task: it leaves every list at once (Undo brings it back). Restoring is on the Projects page. */
+export async function archiveTask(id: string) {
+  const t = S().tasks[id];
+  if (!t) return;
+  pending.add(id);
+  mine.set(id, Date.now());
+  // Gone from the lists right away.
+  set((s) => {
+    const tasks = { ...s.tasks };
+    delete tasks[id];
+    return { tasks, drawer: s.drawer === id ? null : s.drawer };
+  });
+  try {
+    await api.post(`/api/tasks/${id}/archive`);
+    toast(`Archived “${t.title}”`, () => { set({ toast: null }); void restoreTask(id); });
+    if (S().archived) void loadArchived(S().archived!.project);
+  } catch (e) {
+    set((s) => ({ tasks: { ...s.tasks, [id]: t } }));
+    toastError(e);
+  } finally {
+    pending.delete(id);
+  }
+}
+
+export async function restoreTask(id: string) {
+  pending.add(id);
+  mine.set(id, Date.now());
+  try {
+    const { task } = await api.post<{ task: Task }>(`/api/tasks/${id}/restore`);
+    putTask(task);
+    set((s) => (s.archived ? { archived: { ...s.archived, tasks: s.archived.tasks.filter((x) => x.id !== id) } } : {}));
+    toast(`Restored “${task.title}”`, undefined, false, { label: 'Open', run: () => openDrawer(id) });
+  } catch (e) {
+    toastError(e);
+  } finally {
+    pending.delete(id);
+  }
+}
+
+/** The Projects page's Archived section ('all' = every project you can see). */
+export async function loadArchived(project: string) {
+  try {
+    const { tasks } = await api.get<{ tasks: Task[] }>(`/api/archived?project=${encodeURIComponent(project)}`);
+    set({ archived: { project, tasks } });
+  } catch (e) {
+    toastError(e);
+  }
+}

@@ -13,7 +13,7 @@ import {
 } from './lib';
 import type { McpProps } from './oauth';
 import { UPLOAD_LINK_MINUTES, addAttachmentBytes, addAttachmentFromUrl, createUploadLink, readAttachment, typeFromName } from './attachments';
-import { addComment, changeChecklist, createTask, loadVisibleTask, updateTask, updateTaskWithNext, visible } from './tasks';
+import { addComment, changeChecklist, createTask, setArchived, loadVisibleTask, updateTask, updateTaskWithNext, visible } from './tasks';
 
 const PRIORITY_NAMES = ['urgent', 'high', 'normal', 'low'] as const;
 type PriorityName = (typeof PRIORITY_NAMES)[number];
@@ -227,7 +227,7 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
           if (to < from) throw bad('"to" must be on or after "from".');
           if (diffDays(to, from) >= MAX_RANGE_DAYS) throw bad(`Ask for at most ${MAX_RANGE_DAYS} days at a time.`);
           const vis = visible(v);
-          const where = [`(status = 'open' OR due_date BETWEEN ? AND ? OR done_on BETWEEN ? AND ?)`, vis.sql];
+          const where = ['archived_at IS NULL', `(status = 'open' OR due_date BETWEEN ? AND ? OR done_on BETWEEN ? AND ?)`, vis.sql];
           const binds: unknown[] = [from, to, from, to, ...vis.binds];
           if (args.user) { where.push('assignee_id = ?'); binds.push(findUser(dir, v, args.user).id); }
           if (args.project) { where.push('project_id = ?'); binds.push(findProject(dir, args.project).id); }
@@ -488,6 +488,22 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
     );
 
     this.server.registerTool(
+      'archive_task',
+      {
+        title: 'Archive or restore a task',
+        description:
+          "Archive a task (the app's way of deleting): it disappears from every list but nothing is lost, and it can be restored. " +
+          'Pass restore: true to bring an archived task back. Only archive what the user asked to remove.',
+        inputSchema: { id: z.string().describe('Task id.'), restore: z.boolean().optional().describe('true to restore an archived task.') },
+      },
+      (args) =>
+        this.run(async (v, dir, t0) => {
+          const t = await setArchived(this.env, v, args.id, !args.restore, this.via);
+          return { [args.restore ? 'restored' : 'archived']: describeTask(t, dir, t0) };
+        }),
+    );
+
+    this.server.registerTool(
       'complete_task',
       {
         title: 'Complete a task',
@@ -542,7 +558,7 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
           if (!isDate(args.date)) throw bad('Use a real day in YYYY-MM-DD form.');
           const day = args.date;
           const { results } = await this.env.DB
-            .prepare(`SELECT ${TASK_COLS} FROM tasks WHERE project_id = ? AND (done_on = ? OR (status = 'open' AND due_date <= ?))`)
+            .prepare(`SELECT ${TASK_COLS} FROM tasks WHERE project_id = ? AND archived_at IS NULL AND (done_on = ? OR (status = 'open' AND due_date <= ?))`)
             .bind(project.id, day, day)
             .all<TaskRow>();
           const tasks = results.map(mapTask);

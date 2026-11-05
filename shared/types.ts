@@ -56,6 +56,9 @@ export interface Task {
   checklist: ChecklistItem[];
   /** Files attached to the task, oldest first. */
   attachments: AttachmentInfo[];
+  /** Archived tasks are hidden everywhere except the Projects page's Archived section. */
+  archivedAt: string | null;
+  archivedBy: string | null;
 }
 
 export type EventType =
@@ -84,7 +87,10 @@ export type EventType =
   | 'check_removed'
   /** Attachments: to_value is the file name. */
   | 'attached'
-  | 'detached';
+  | 'detached'
+  /** Archived (hidden from every list) / restored. */
+  | 'archived'
+  | 'restored';
 
 export interface TaskEvent {
   id: string;

@@ -26,6 +26,13 @@ export async function loadVisibleTask(db: D1Database, v: Viewer, id: string) {
   return t;
 }
 
+/** Like loadVisibleTask, for changes: an archived task has to be restored before it can be changed. */
+export async function loadEditableTask(db: D1Database, v: Viewer, id: string) {
+  const t = await loadVisibleTask(db, v, id);
+  if (t.archived_at) throw bad('This task is archived. Restore it from its project first.');
+  return t;
+}
+
 const isPriority = (p: unknown): p is Priority => p === 1 || p === 2 || p === 3 || p === 4;
 
 // ---------- repeating tasks ----------
@@ -126,7 +133,7 @@ export interface Patch {
  */
 export async function applyPatch(env: Env, v: Viewer, id: string, b: Patch, via: string | null = null) {
   const db = env.DB;
-  const t = await loadVisibleTask(db, v, id);
+  const t = await loadEditableTask(db, v, id);
   const t0 = today(v);
   const now = nowIso();
   const sets: string[] = [];
@@ -328,7 +335,7 @@ export async function updateTask(env: Env, v: Viewer, id: string, b: Patch, via:
  */
 export async function addComment(env: Env, v: Viewer, id: string, text: unknown, via: string | null = null): Promise<Task> {
   const db = env.DB;
-  const t = await loadVisibleTask(db, v, id);
+  const t = await loadEditableTask(db, v, id);
   const body = typeof text === 'string' ? text.replace(/\r\n/g, '\n').trim() : '';
   if (!body) throw bad('Write something first.');
   if (body.length > COMMENT_MAX) throw bad(`Comments can be at most ${COMMENT_MAX} characters.`);
@@ -361,7 +368,7 @@ const cleanItem = (raw: unknown) => {
  */
 export async function changeChecklist(env: Env, v: Viewer, id: string, ch: ChecklistChange, via: string | null = null): Promise<Task> {
   const db = env.DB;
-  const t = await loadVisibleTask(db, v, id);
+  const t = await loadEditableTask(db, v, id);
   const now = nowIso();
   const stmts: D1PreparedStatement[] = [];
   const ev = (type: 'check_added' | 'check_done' | 'check_undone' | 'check_renamed' | 'check_removed', to: string, from?: string) =>
@@ -406,5 +413,25 @@ export async function changeChecklist(env: Env, v: Viewer, id: string, ch: Check
       ...stmts,
     ]);
   }
+  return mapTask((await loadTask(db, t.id))!);
+}
+
+// ---------- archive / restore ----------
+/**
+ * Archives a task (or restores it). Nothing is deleted: the task just leaves every list, count and search,
+ * and its history notes who archived it. Anyone who can see the task can do either.
+ * A repeating task's series is paused while its open copy is archived (it can't make the next copy), and resumes on restore.
+ */
+export async function setArchived(env: Env, v: Viewer, id: string, archive: boolean, via: string | null = null): Promise<Task> {
+  const db = env.DB;
+  const t = await loadVisibleTask(db, v, id);
+  if (!!t.archived_at === archive) return mapTask(t);
+  const now = nowIso();
+  await db.batch([
+    bumpVersion(db),
+    db.prepare(`UPDATE tasks SET archived_at = ?, archived_by = ?, updated_at = ?, version = ${CURRENT_VERSION} WHERE id = ?`)
+      .bind(archive ? now : null, archive ? v.id : null, now, t.id),
+    eventStmt(db, { taskId: t.id, actorId: v.id, via, type: archive ? 'archived' : 'restored', at: now }),
+  ]);
   return mapTask((await loadTask(db, t.id))!);
 }

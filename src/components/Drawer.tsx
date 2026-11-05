@@ -3,7 +3,7 @@ import { addDays, fmt } from '../../shared/dates';
 import { isLate, shownOn } from '../../shared/rules';
 import { describe } from '../../shared/repeat';
 import { CHECK_TEXT_MAX, COMMENT_MAX, PRIORITIES, type AttachmentInfo, type ChecklistItem, type Priority, type TaskEvent } from '../../shared/types';
-import { addChecklistItems, addComment, attachmentUrl, closeDrawer, pickAttachments, removeAttachment, uploadFiles, editChecklist, editNotes, removeChecklistItem, renameChecklistItem, toggleChecklistItem, loadEvents, openPop, patchTask, skipTask, toggleDone } from '../actions';
+import { addChecklistItems, addComment, archiveTask, attachmentUrl, closeDrawer, pickAttachments, removeAttachment, uploadFiles, editChecklist, editNotes, removeChecklistItem, renameChecklistItem, toggleChecklistItem, loadEvents, openPop, patchTask, skipTask, toggleDone } from '../actions';
 import { set, useStore, type State } from '../store';
 import { displayName, firstName, stamp } from '../util';
 import { openMove, LateBadge } from './rows';
@@ -50,6 +50,7 @@ export function Drawer() {
         <div className="dr-top">
           <ProjPill p={p} />
           <span className="spacer" />
+          <button className="icon-btn dr-archive" data-act="archive" title="Archive task  (⌫)" aria-label="Archive task" onClick={() => void archiveTask(t.id)}>{I.trash()}</button>
           <button className="icon-btn" data-act="close-drawer" title="Close  Esc" aria-label="Close" onClick={() => closeDrawer()}>{I.x()}</button>
         </div>
         <div className="dr-body">
@@ -178,6 +179,8 @@ function EventText({ e, s }: { e: TaskEvent; s: State }) {
     case 'check_undone': return <>unchecked <b>{e.toValue}</b></>;
     case 'check_renamed': return <>renamed checklist item “{e.fromValue}” to <b>{e.toValue}</b></>;
     case 'check_removed': return <>removed <b>{e.toValue}</b> from the checklist</>;
+    case 'archived': return <>archived this task</>;
+    case 'restored': return <>restored this task</>;
     case 'attached': return <>attached <b>{e.toValue}</b></>;
     case 'detached': return <>removed the file <b>{e.toValue}</b></>;
     case 'skipped': return <>skipped <b>{e.fromValue ? fmt(e.fromValue) : '?'}</b> · next one <b>{e.toValue ? fmt(e.toValue) : '?'}</b></>;

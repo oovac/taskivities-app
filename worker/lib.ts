@@ -93,7 +93,7 @@ export const sha256hex = async (s: string) =>
 // ---------- row mapping ----------
 // Always selected FROM tasks (no alias): the last column folds in the task's series, if any.
 export const TASK_COLS =
-  'id, title, notes, project_id, assignee_id, created_by, assigned_by, due_date, priority, status, done_at, done_on, done_by, created_at, updated_at, version, series_id, ' +
+  'id, title, notes, project_id, assignee_id, created_by, assigned_by, due_date, priority, status, done_at, done_on, done_by, created_at, updated_at, version, series_id, archived_at, archived_by, ' +
   "(SELECT json_object('id', s.id, 'rule', json(s.rule), 'anchor', s.starts_on, 'active', s.active, 'made', s.made, 'assigneeId', s.assignee_id, 'title', s.title) " +
   'FROM series s WHERE s.id = tasks.series_id) AS series_json, ' +
   "(SELECT COUNT(*) FROM task_events e WHERE e.task_id = tasks.id AND e.type = 'comment') AS comment_count, " +
@@ -105,7 +105,7 @@ export const TASK_COLS =
 export interface TaskRow {
   id: string; title: string; notes: string; project_id: string; assignee_id: string; created_by: string; assigned_by: string;
   due_date: string; priority: number; status: 'open' | 'done'; done_at: string | null; done_on: string | null; done_by: string | null;
-  created_at: string; updated_at: string; version: number; series_id: string | null; series_json: string | null; comment_count: number; checklist_json: string | null; attachments_json: string | null;
+  created_at: string; updated_at: string; version: number; series_id: string | null; archived_at: string | null; archived_by: string | null; series_json: string | null; comment_count: number; checklist_json: string | null; attachments_json: string | null;
 }
 const parseSeries = (j: string | null): SeriesInfo | null => {
   if (!j) return null;
@@ -119,6 +119,8 @@ export const mapTask = (r: TaskRow): Task => ({
   series: parseSeries(r.series_json),
   comments: r.comment_count ?? 0,
   attachments: JSON.parse(r.attachments_json || '[]'),
+  archivedAt: r.archived_at ?? null,
+  archivedBy: r.archived_by ?? null,
   checklist: (JSON.parse(r.checklist_json || '[]') as { id: string; text: string; done: number }[]).map((c) => ({ id: c.id, text: c.text, done: !!c.done })),
 });
 

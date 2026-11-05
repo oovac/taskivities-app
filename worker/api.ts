@@ -7,7 +7,7 @@ import {
 } from './lib';
 import { gmailStatus } from './gmail';
 import { loadSettings } from './settings';
-import { type ChecklistChange, type Patch, addComment, applyPatch, changeChecklist, commit, createTask, loadVisibleTask, updateTaskWithNext, visible } from './tasks';
+import { type ChecklistChange, type Patch, addComment, applyPatch, changeChecklist, setArchived, commit, createTask, loadVisibleTask, updateTaskWithNext, visible } from './tasks';
 
 export const api = new Hono<AppEnv>();
 
@@ -53,7 +53,7 @@ api.get('/tasks', async (c) => {
   const to = isDate(c.req.query('to')) ? c.req.query('to')! : addDays(t0, 365);
   const vis = visible(v);
   const { results } = await c.env.DB
-    .prepare(`SELECT ${TASK_COLS} FROM tasks WHERE (status = 'open' OR due_date BETWEEN ? AND ? OR done_on BETWEEN ? AND ?) AND ${vis.sql}`)
+    .prepare(`SELECT ${TASK_COLS} FROM tasks WHERE archived_at IS NULL AND (status = 'open' OR due_date BETWEEN ? AND ? OR done_on BETWEEN ? AND ?) AND ${vis.sql}`)
     .bind(from, to, from, to, ...vis.binds)
     .all<TaskRow>();
   return c.json({ from, to, tasks: results.map(mapTask), ...(await getMeta(c.env.DB)) });
@@ -67,8 +67,10 @@ api.get('/sync', async (c) => {
   const base = { version: meta.version, directoryVersion: meta.directoryVersion, today: today(v) };
   if (meta.version <= since) return c.json({ changed: false, ...base } satisfies SyncResponse);
   const { results } = await c.env.DB.prepare(`SELECT ${TASK_COLS} FROM tasks WHERE version > ?`).bind(since).all<TaskRow>();
-  const tasks = results.filter((r) => canSeeProject(v, r.project_id)).map(mapTask);
-  const gone = results.filter((r) => !canSeeProject(v, r.project_id)).map((r) => r.id);
+  // Archived tasks leave everyone's lists like tasks they can't see (restoring brings them back with a new version).
+  const shown = (r: TaskRow) => canSeeProject(v, r.project_id) && !r.archived_at;
+  const tasks = results.filter(shown).map(mapTask);
+  const gone = results.filter((r) => !shown(r)).map((r) => r.id);
   return c.json({ changed: true, ...base, tasks, gone } satisfies SyncResponse);
 });
 
@@ -106,6 +108,22 @@ api.post('/tasks/move', async (c) => {
   await commit(c.env, all);
   const placeholders = b.ids.map(() => '?').join(', ');
   const { results } = await db.prepare(`SELECT ${TASK_COLS} FROM tasks WHERE id IN (${placeholders})`).bind(...b.ids).all<TaskRow>();
+  return c.json({ tasks: results.map(mapTask) });
+});
+
+// ---------- archive (instead of delete) ----------
+api.post('/tasks/:id/archive', async (c) => c.json({ task: await setArchived(c.env, c.get('viewer'), c.req.param('id'), true) }));
+api.post('/tasks/:id/restore', async (c) => c.json({ task: await setArchived(c.env, c.get('viewer'), c.req.param('id'), false) }));
+/** Archived tasks in one project (or all the viewer can see), newest first. Only the Projects page asks for these. */
+api.get('/archived', async (c) => {
+  const v = c.get('viewer');
+  const project = c.req.query('project');
+  const vis = visible(v);
+  const where = ['archived_at IS NOT NULL', vis.sql];
+  const binds: unknown[] = [...vis.binds];
+  if (project && project !== 'all') { where.push('project_id = ?'); binds.push(project); }
+  const { results } = await c.env.DB.prepare(`SELECT ${TASK_COLS} FROM tasks WHERE ${where.join(' AND ')} ORDER BY archived_at DESC LIMIT 500`)
+    .bind(...binds).all<TaskRow>();
   return c.json({ tasks: results.map(mapTask) });
 });
 

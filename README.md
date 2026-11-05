@@ -20,7 +20,7 @@ worker/   index.ts (routes + OAuth provider) · auth.ts (Google + sessions) · a
           mcp.ts (MCP tools) · oauth.ts (/authorize consent page for assistants) · admin.ts (people, projects, settings) · settings.ts (logo) · gmail.ts + invite-mail.ts (invite emails) · webhooks.ts · lib.ts
 shared/   types, date helpers and rules used by both the Worker and the app
 src/      React app: pages/ (Tasks, Projects, Team, Settings, Login), components/, actions.ts (all writes), keyboard.ts, focus.ts
-migrations/ (0001 schema, 0002 time zones, 0003 repeating tasks, 0004 settings, 0005 Gmail tokens, 0006 webhooks, 0007 checklists, 0008 attachments, 0009 upload links)   seed/dev.sql (local sample data)
+migrations/ (0001 schema, 0002 time zones, 0003 repeating tasks, 0004 settings, 0005 Gmail tokens, 0006 webhooks, 0007 checklists, 0008 attachments, 0009 upload links, 0010 archive)   seed/dev.sql (local sample data)
 scripts/tenant.mjs (per-instance deploys)   tenants/ (each instance's Cloudflare IDs; only example.env is committed)
 ```
 
@@ -42,6 +42,7 @@ scripts/tenant.mjs (per-instance deploys)   tenants/ (each instance's Cloudflare
 - **Attachments** (optional per instance; `worker/attachments.ts`, migration 0008): files live in an R2 bucket (binding `FILES`, `R2_BUCKET` in the tenants file); without one the app hides "Attach". Drop files on a task, paste a screenshot, or press **⇧A**. Up to 25 MB per file and 50 per task. Every download goes through the Worker, which checks the person can see the task; only images, PDFs and plain text open in the browser (under a sandboxing CSP), everything else downloads, so an uploaded HTML or SVG file can't run code. Only the uploader or an admin can remove a file: it's deleted from R2 and the history keeps its name. Rows show a 📎 count.
 - **Checklist:** each task can have one checklist (`checklist_items`, migration 0007). Anyone who can see the task can add items (pasting several lines adds them all), tick, rename or remove them, and every change is logged in the history. Rows show progress ("2/5"). A repeating task's next copy starts with the same items, unticked. Press **⇧C** to jump to it (and **⇧N** for notes); empty notes and checklists fold into small "Add" buttons.
 - **Comments** live in the task's history (`type = 'comment'`), so they're permanent like everything else there: no editing or deleting. Anyone who can see the task can comment, on open or done tasks, up to 4,000 characters. A comment moves the task's version on, so everyone's app picks it up on the next poll, and the assignee and creator get a "New comment" notice. Rows show a comment count. Press **C** on a task to comment.
+- **Archive, not delete:** the trash button on a task (or **⌫ / Delete** on a selected task) archives it: it leaves every list, count, sync and assistant listing at once (with Undo), and nothing is lost. Archived tasks, open or done, are listed only on the **Projects** page, in a collapsed "Archived" section, where anyone on the project can restore them. An archived task can't be edited, commented on or ticked until it's restored. A repeating task whose open copy is archived pauses (no next copy) and carries on when restored. Migration 0010.
 - **History is append-only.** Every write updates `tasks` and inserts into `task_events` in the same D1 batch, and database triggers refuse any `UPDATE` or `DELETE` on `task_events`.
 - **Roles:**
   - Admins see every project and are the only ones who manage people and projects.
@@ -75,6 +76,7 @@ The Worker serves a remote MCP server at `https://<your-app-host>/mcp`. In Claud
 | `list_tasks(user?, project?, from?, to?, status?)` | Tasks by the day the app shows them on, with the same rollover rule (`shownOn`): "today" includes carried-over tasks. Defaults to today; at most 92 days |
 | `create_task(title, project, due_date, assignee, priority, notes?, repeat?)` | All five main fields required. The tool description includes the project descriptions, so the assistant can pick the project without asking. `repeat` makes it a repeating task |
 | `update_task(id, title?, notes?, project?, due_date?, priority?, status?, repeat?, stop_repeating?, skip?)` | Only the fields given change; `status: "open"` reopens. On a repeating task, can change, stop or skip the repeat |
+| `archive_task(id, restore?)` | Archives a task (hidden everywhere, nothing lost), or restores it |
 | `complete_task(id)` | Marks it done today; for a repeating task, returns the new copy as `next_copy` |
 | `list_comments(id)` | The task's comments, oldest first |
 | `attach_file(id, name?, text \| base64 \| url)` | Attaches a file: text it writes, a small base64 file (≤ 2 MB), or a public https link the server downloads (≤ 25 MB; no local addresses) |

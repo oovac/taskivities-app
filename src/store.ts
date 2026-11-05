@@ -80,6 +80,9 @@ export interface State {
   projSel: string; // project id or 'all'
   projDay: string;
   projOpen: boolean;
+  /** Projects page: archived tasks of the selected project (null = not loaded), and whether the section is open. */
+  archived: { project: string; tasks: Task[] } | null;
+  archOpen: boolean;
 }
 
 const pageFromPath = (): Page => {
@@ -139,6 +142,8 @@ export const useStore = create<State>()(() => ({
   projSel: 'all',
   projDay: '',
   projOpen: false,
+  archived: null,
+  archOpen: false,
 }));
 
 export const S = () => useStore.getState();

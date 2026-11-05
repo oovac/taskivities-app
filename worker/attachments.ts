@@ -6,7 +6,7 @@
 import { Hono } from 'hono';
 import { ATTACH_MAX_BYTES, ATTACH_PER_TASK_MAX, type Task } from '../shared/types';
 import { type AppEnv, type Env, type Viewer, HttpError, CURRENT_VERSION, bad, bumpVersion, eventStmt, forbidden, loadViewer, mapTask, notFound, nowIso, randomToken, sha256hex, uid } from './lib';
-import { loadTask, loadVisibleTask } from './tasks';
+import { loadEditableTask, loadTask, loadVisibleTask } from './tasks';
 
 interface AttachmentRow {
   id: string; task_id: string; key: string; name: string; size: number; type: string; uploaded_by: string; uploaded_at: string;
@@ -47,7 +47,7 @@ const touch = (db: D1Database, taskId: string, now: string) => [
 export async function addAttachment(env: Env, v: Viewer, taskId: string, body: ReadableStream | null, size: number, rawName: string | undefined, rawType: string | undefined, via: string | null = null): Promise<Task> {
   const files = bucket(env);
   const db = env.DB;
-  const t = await loadVisibleTask(db, v, taskId);
+  const t = await loadEditableTask(db, v, taskId);
   if (!body || !Number.isFinite(size) || size <= 0) throw bad('That file is empty.');
   if (size > ATTACH_MAX_BYTES) throw new HttpError(400, `Files can be at most ${ATTACH_MAX_BYTES / 1024 / 1024} MB.`);
   const { n } = (await db.prepare('SELECT COUNT(*) AS n FROM attachments WHERE task_id = ? AND removed_at IS NULL').bind(t.id).first<{ n: number }>())!;
@@ -81,6 +81,7 @@ async function loadAttachment(env: Env, v: Viewer, taskId: string, id: string) {
 /** Removing is for whoever uploaded it, or an admin. The file is deleted; the history keeps its name. */
 export async function removeAttachment(env: Env, v: Viewer, taskId: string, id: string, via: string | null = null): Promise<Task> {
   const { t, a } = await loadAttachment(env, v, taskId, id);
+  if (t.archived_at) throw bad('This task is archived. Restore it from its project first.');
   if (a.uploaded_by !== v.id && v.role !== 'admin') throw forbidden('Only the person who attached it, or an admin, can remove it.');
   const now = nowIso();
   await env.DB.batch([
@@ -197,7 +198,7 @@ export const UPLOAD_LINK_MINUTES = 15;
 /** Makes a link that accepts one POSTed file for this task, as this person, for 15 minutes. Returns the secret path. */
 export async function createUploadLink(env: Env, v: Viewer, taskId: string, name: string | undefined, via: string | null) {
   bucket(env);
-  const t = await loadVisibleTask(env.DB, v, taskId);
+  const t = await loadEditableTask(env.DB, v, taskId);
   const secret = randomToken(32);
   const now = new Date();
   const expires = new Date(now.getTime() + UPLOAD_LINK_MINUTES * 60_000).toISOString();

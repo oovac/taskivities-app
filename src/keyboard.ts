@@ -3,7 +3,7 @@ import { addDays } from '../shared/dates';
 import { isAdmin } from '../shared/rules';
 import type { Priority } from '../shared/types';
 import {
-  closeConnect, closeDrawer, closeHelp, closePop, moveTasks, openDrawer, openHelp, openPop, setPage, setPriority, setView, skipTask, toast, toggleDone, closeHook, editChecklist, editNotes, pickAttachments } from './actions';
+  closeConnect, closeDrawer, closeHelp, closePop, moveTasks, openDrawer, openHelp, openPop, setPage, setPriority, setView, skipTask, toast, toggleDone, closeHook, editChecklist, editNotes, pickAttachments, archiveTask } from './actions';
 import { openMove } from './components/rows';
 import { curNav, focusLater, focusNav, navEls, trapTab } from './focus';
 import { S, set } from './store';
@@ -174,6 +174,7 @@ export function onKeyDown(e: KeyboardEvent) {
   const isDiv = onNav && t.tagName === 'DIV';
   if ((k === 'Enter' && isDiv && !s.drawer) || (k === 'o' && !s.drawer)) { e.preventDefault(); openDrawer(task.id); return; }
   if (k === 'e') { e.preventDefault(); openDrawer(task.id, true); return; }
+  if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); void archiveTask(task.id); return; }
   if (isN && e.shiftKey) { e.preventDefault(); editNotes(task.id); return; }
   if ((k === 'a' || k === 'A') && e.shiftKey) { e.preventDefault(); pickAttachments(task.id); return; }
   // C = comment, ⇧C = checklist (by Shift, like N / ⇧N).
