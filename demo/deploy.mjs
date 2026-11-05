@@ -8,10 +8,12 @@
 // The instance is an ordinary tenants/<instance>.env (create it with `npm run tenant -- create demo`, without
 // Google secrets: the demo signs people in as sample users). Optional there: DEMO_RESET_CRON (default "0 * * * *").
 // R2_BUCKET is ignored: demo uploads are kept as sample files, not stored.
+// Notifications: the first deploy creates the Web Push keys (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY) as secrets, like `npm run deploy`.
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ensurePushKeys } from '../scripts/push-keys.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, '.wrangler', 'tenants');
@@ -116,5 +118,6 @@ if (!cmd) {
   rmSync(join(ROOT, 'dist'), { recursive: true, force: true });
   run('npx', ['vite', 'build'], { TASKIVITIES_WRANGLER_CONFIG: cfg });
   run(WRANGLER, ['deploy', ...(dry ? ['--dry-run'] : []), ...as], acct);
+  if (!dry) ensurePushKeys({ config: cfg, args: as, env: acct });
   if (!dry) console.log(`\n✔ Deployed. The first sign-in loads the sample data; after that it resets on "${t.DEMO_RESET_CRON || '0 * * * *'}" (UTC).\n`);
 }

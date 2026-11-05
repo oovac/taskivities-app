@@ -8,6 +8,7 @@ A separate folder: nothing in `worker/`, `shared/` or `src/` knows about it, and
 - **Uploads:** anything uploaded is kept as `samples/sample.png` (images) or `samples/sample.pdf` (anything else), under the visitor's file name (`files.ts`). Nothing is stored: there's no R2 bucket, and a stand-in bucket serves the samples. AI assistants' attachments get the same treatment.
 - **Logo and app icon uploads** are refused with a message.
 - **Banner:** every app page gets a "Demo · resets every hour · Run your own →" bar.
+- **Notifications:** work as in the app. The first deploy creates the instance's push keys (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`) as secrets. Everyone shares the sample people, so a visitor who turns notifications on as Jordan hears about what other visitors do as Sara; the reset deletes every device, and a device signs up again the next time its visitor opens the demo. The morning summary doesn't run (the demo's Cron Trigger only resets).
 - **Reset:** a Cron Trigger (`DEMO_RESET_CRON`, default `0 * * * *`, UTC) empties every table, reloads `seed/dev.sql` (dates relative to today) and signs everyone out (`reset.ts`). The first sign-in on an empty database loads the sample too.
 
 ## Commands
