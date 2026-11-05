@@ -67,12 +67,11 @@ export function App() {
           {admin && <button className={s.page === 'settings' ? 'on' : ''} data-act="page" data-pg="settings" aria-current={s.page === 'settings' ? 'page' : undefined} onClick={() => setPage('settings')}>Settings</button>}
         </nav>
         <div className="spacer" />
-        <button className="ai-btn" data-act="connect" title="Connect Claude or another AI assistant" onClick={openConnect}>{I.bolt(14)}<span>Connect AI</span></button>
+        <button className="ai-btn" data-act="connect" title="MCP: connect Claude or another AI assistant" onClick={openConnect}>{I.bolt(14)}<span>MCP</span></button>
         <button className="icon-btn kb-btn" title="Keyboard shortcuts  (?)" aria-label="Keyboard shortcuts" onClick={openHelp}>{I.kbd()}</button>
         <SyncPill />
         <button className="me" data-act="account" title={`${s.me.name} · ${admin ? 'Admin' : 'Member'}`} onClick={(e) => openPop({ type: 'account' }, e.currentTarget)}>
           <Avatar user={s.me} size={30} />
-          <span className={`role-dot ${admin ? 'admin' : ''}`}>{admin ? 'Admin' : 'Member'}</span>
         </button>
       </div>
       <div className="app-scroll">

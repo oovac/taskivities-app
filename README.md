@@ -37,6 +37,7 @@ scripts/tenant.mjs (per-instance deploys)   tenants/ (each instance's Cloudflare
   - **Skip** moves the open copy to the next scheduled date. Reopening a finished copy leaves the next copy in place.
   - Edits to the open copy (title, notes, priority, project, assignee) carry forward to future copies, except a transfer marked "just this one". Date moves only affect that copy.
   - The week views show upcoming copies as faint previews, calculated in the browser and never saved.
+- **Light and dark themes:** each person picks Light, Dark or System (follows the OS, live) in the account menu; it's saved in that browser. Every colour in `src/styles.css` comes from variables in `:root`, and `[data-theme="dark"]` swaps them; `index.html` applies the choice before the page draws, so there's no flash. Logos sit on a light tile in the dark theme, since they're usually drawn for light backgrounds. The assistant consent page follows the OS setting.
 - **Comments** live in the task's history (`type = 'comment'`), so they're permanent like everything else there: no editing or deleting. Anyone who can see the task can comment, on open or done tasks, up to 4,000 characters. A comment moves the task's version on, so everyone's app picks it up on the next poll, and the assignee and creator get a "New comment" notice. Rows show a comment count. Press **C** on a task to comment.
 - **History is append-only.** Every write updates `tasks` and inserts into `task_events` in the same D1 batch, and database triggers refuse any `UPDATE` or `DELETE` on `task_events`.
 - **Roles:**

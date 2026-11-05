@@ -59,7 +59,7 @@ export function PrioIcon({ p, s = 14 }: { p: Priority; s?: number }) {
       </svg>
     );
   const on = 5 - p;
-  const f = (n: number) => (on >= n ? c : '#DCDCE3');
+  const f = (n: number) => (on >= n ? c : 'var(--line-strong)');
   return (
     <svg viewBox="0 0 16 16" width={s} height={s} aria-hidden="true">
       <rect x="2" y="9" width="3" height="5" rx="1" fill={f(1)} />

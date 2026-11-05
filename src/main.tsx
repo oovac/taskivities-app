@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { Login } from './pages/Login';
 import './styles.css';
+import { applyTheme } from './theme';
+
+applyTheme();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>{location.pathname === '/login' ? <Login /> : <App />}</StrictMode>,

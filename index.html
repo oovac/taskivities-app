@@ -3,7 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#4F46E5" />
+    <meta name="theme-color" content="#F7F7F9" />
+    <!-- Light / dark theme before anything draws (same rule as src/theme.ts), so there's no flash. -->
+    <script>try{var t=localStorage.getItem('tv:theme');if(t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.dataset.theme='dark'}catch(e){}</script>
     <link rel="icon" href="/logo.svg" type="image/svg+xml" />
     <title>Taskivities</title>
   </head>

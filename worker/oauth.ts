@@ -34,6 +34,15 @@ function page(title: string, body: string, status = 200, headers = new Headers()
   button{font:inherit;font-weight:600;border-radius:8px;padding:8px 16px;cursor:pointer;border:1px solid #D0D0D7;background:#fff}
   button.primary{background:#4F46E5;border-color:#4F46E5;color:#fff}
   .muted{font-size:12.5px;color:#7A7A85}
+  @media (prefers-color-scheme: dark){
+    :root{color-scheme:dark}
+    body{background:#0E0E13;color:#ECECF1} b{color:#ECECF1}
+    .card{background:#17171D;border-color:#2B2B35;box-shadow:none}
+    p,ul{color:#C8C8D2} .muted{color:#9A9AA8}
+    .warn{background:rgba(247,144,9,.12);border-color:rgba(247,144,9,.38);color:#FEC84B}
+    button{background:#17171D;border-color:#3B3B47;color:#ECECF1}
+    button.primary{background:#6366F1;border-color:#6366F1;color:#fff}
+  }
 </style>
 <div class="card">${body}</div></html>`,
     { status, headers },

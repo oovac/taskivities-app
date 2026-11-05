@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { AppSettings, Priority, Project, Role, Task, TaskEvent, User, WebhookInfo } from '../shared/types';
 import { NORMAL } from '../shared/types';
 import type { Repeat } from '../shared/repeat';
+import { type ThemePref, themePref } from './theme';
 
 export type Page = 'tasks' | 'projects' | 'team' | 'settings';
 export type View = 'today' | 'list' | 'board';
@@ -43,6 +44,8 @@ export interface State {
   gmail: { email: string } | null;
   /** Admins: webhooks (loaded on the Settings page), and the one open in the editor. */
   hooks: WebhookInfo[] | null;
+  /** Light / dark / follow the system (this browser only). */
+  theme: ThemePref;
   hookEdit: string | null;
   range: { from: string; to: string } | null;
   lastSync: number;
@@ -96,6 +99,7 @@ export const useStore = create<State>()(() => ({
   settings: { customLogo: false, logoVersion: '0' },
   gmail: null,
   hooks: null,
+  theme: themePref(),
   hookEdit: null,
   range: null,
   lastSync: Date.now(),

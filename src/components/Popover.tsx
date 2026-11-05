@@ -8,6 +8,7 @@ import {
   updateUser, viewPerson,
 } from '../actions';
 import { focusLater } from '../focus';
+import { type ThemePref, setThemePref } from '../theme';
 import { S, set, useStore, type Pop, type State } from '../store';
 import { displayName, draftEffective, firstName, isLate, myProjects, shownOn } from '../util';
 import { projectDayData } from '../pages/ProjectsPage';
@@ -335,6 +336,16 @@ function AccountPop({ s }: { s: State }) {
       <div className="pop-h" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
         <Avatar user={me} size={30} />
         <span><b style={{ color: 'var(--text)', display: 'block' }}>{displayName(me)}</b><span style={{ fontWeight: 400 }}>{me.email} · {me.role === 'admin' ? 'Admin' : 'Member'}</span></span>
+      </div>
+      <div className="pop-sep" />
+      <div className="theme-row">
+        <span>Theme</span>
+        <div className="seg sm" role="group" aria-label="Theme">
+          {(['system', 'light', 'dark'] as ThemePref[]).map((t) => (
+            <button key={t} className={s.theme === t ? 'on' : ''} aria-pressed={s.theme === t} data-act="theme" data-theme-opt={t}
+              onClick={() => { setThemePref(t); set({ theme: t }); }}>{t === 'system' ? 'System' : t === 'light' ? 'Light' : 'Dark'}</button>
+          ))}
+        </div>
       </div>
       <div className="pop-sep" />
       <button className="opt" onClick={() => { closePop(false); openConnect(); }}>{I.bolt(15)}Connect an AI assistant</button>
