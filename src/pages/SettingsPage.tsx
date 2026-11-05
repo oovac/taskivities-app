@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { isAdmin } from '../../shared/rules';
-import { connectGmail, createHook, disconnectGmail, loadHooks, openHook, resetLogo, uploadLogo } from '../actions';
+import { connectGmail, createHook, disconnectGmail, loadHooks, openHook, resetIcon, resetLogo, uploadIcon, uploadLogo } from '../actions';
+import { ICON_SIZES } from '../../shared/types';
 import { hookStatus } from '../components/WebhookSheet';
 import { logoUrl } from '../brand';
 import { I, LogoMark } from '../components/ui';
@@ -80,6 +81,7 @@ export function SettingsPage() {
           </div>
         </div>
       </section>
+      <AppIcon />
       <Webhooks />
       <section className="sec">
         <div className="sec-h"><h2>Invite emails</h2><span className="cnt">{s.gmail ? 'On' : 'Off'} · just for you</span></div>
@@ -137,6 +139,85 @@ function Webhooks() {
           <button className="btn-primary" data-act="hook-new" onClick={() => void add()}>{I.plus(14)} New webhook</button>
         </div>
         {err && <div className="set-err" role="alert">{err}</div>}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Resizes an uploaded image to each home-screen icon size (PNG). Non-square images are centred on white;
+ * transparent areas become white too, since iPhones would show them as black.
+ */
+async function makeIcons(file: File): Promise<{ icons: Record<number, string>; small: boolean }> {
+  if (!/^image\/(png|jpeg|webp)$/.test(file.type)) throw new Error('Choose a PNG image (JPEG and WebP work too).');
+  if (file.size > 10 * 1024 * 1024) throw new Error('That image is over 10 MB.');
+  let img: ImageBitmap;
+  try { img = await createImageBitmap(file); } catch { throw new Error("That image couldn't be read."); }
+  const icons: Record<number, string> = {};
+  for (const size of ICON_SIZES) {
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    const g = c.getContext('2d')!;
+    g.fillStyle = '#fff';
+    g.fillRect(0, 0, size, size);
+    g.imageSmoothingQuality = 'high';
+    const scale = Math.min(size / img.width, size / img.height);
+    const w = img.width * scale, h = img.height * scale;
+    g.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+    const blob = await new Promise<Blob>((ok, fail) => c.toBlob((b) => (b ? ok(b) : fail(new Error("That image couldn't be converted."))), 'image/png'));
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    icons[size] = btoa(bin);
+  }
+  return { icons, small: Math.min(img.width, img.height) < 512 };
+}
+
+function AppIcon() {
+  const s = useStore();
+  const file = useRef<HTMLInputElement>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const { customIcon, iconVersion } = s.settings;
+  const pick = async (f: File | undefined) => {
+    if (!f) return;
+    setErr(null); setNote(null); setBusy(true);
+    try {
+      const { icons, small } = await makeIcons(f);
+      const e = await uploadIcon(icons);
+      setErr(e);
+      if (!e && small) setNote('That image is smaller than 512×512, so the icon may look a little soft. A larger square PNG works best.');
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Upload failed.');
+    } finally {
+      setBusy(false);
+      if (file.current) file.current.value = '';
+    }
+  };
+  return (
+    <section className="sec">
+      <div className="sec-h"><h2>App icon</h2><span className="cnt">{customIcon ? 'Custom' : 'Built-in'} · phone home screens</span></div>
+      <div className="card set-card">
+        <div className="set-prev icon-prev" aria-label="Preview">
+          <div className="ip-phone">
+            <img src={`/icons/180.png?v=${iconVersion}`} alt="" />
+            <span>Taskivities</span>
+          </div>
+        </div>
+        <div className="set-body">
+          <p>Shown when someone adds Taskivities to their phone's home screen, and in app switchers. <b>A square PNG, 512×512 or larger</b>, works best.
+            Phones round the corners themselves; transparent areas become white.</p>
+          <div className="set-actions">
+            <button className="btn-primary" data-act="icon-upload" disabled={busy} onClick={() => file.current?.click()}>
+              {busy ? 'Uploading…' : customIcon ? 'Replace icon…' : 'Upload PNG icon…'}
+            </button>
+            {customIcon && <button className="btn-ghost" data-act="icon-reset" disabled={busy} onClick={() => { setErr(null); setNote(null); void resetIcon(); }}>Use the built-in icon</button>}
+          </div>
+          {err && <div className="set-err" role="alert">{err}</div>}
+          {note && <div className="set-note" role="status">{note}</div>}
+          <input ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden aria-hidden="true" tabIndex={-1} onChange={(e) => void pick(e.target.files?.[0])} />
+        </div>
       </div>
     </section>
   );

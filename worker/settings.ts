@@ -1,6 +1,6 @@
 // App settings edited by admins on the Settings page. For now: the logo (SVG only).
 import type { Context } from 'hono';
-import type { AppSettings } from '../shared/types';
+import { type AppSettings, ICON_SIZES } from '../shared/types';
 import { type AppEnv, auditStmt, bad, bumpDirectory, nowIso } from './lib';
 
 export const LOGO_MAX_BYTES = 256 * 1024;
@@ -12,11 +12,13 @@ const getSetting = (db: D1Database, key: string) =>
 
 /** What every signed-in client gets in /api/bootstrap. */
 export async function loadSettings(db: D1Database): Promise<AppSettings> {
-  const logo = await getSetting(db, 'logo');
+  const [logo, icon] = await Promise.all([getSetting(db, 'logo'), getSetting(db, 'icon_512')]);
   return {
     customLogo: !!logo?.value,
     // Changes whenever the logo does, so /logo.svg?v=… can be cached for good.
     logoVersion: logo ? String(Date.parse(logo.updated_at)) : '0',
+    customIcon: !!icon?.value,
+    iconVersion: icon ? String(Date.parse(icon.updated_at)) : '0',
   };
 }
 
@@ -76,4 +78,84 @@ export async function serveLogo(c: Context<AppEnv>) {
   if (row?.value) return new Response(row.value, { headers });
   const res = await c.env.ASSETS.fetch(new Request(new URL('/favicon.svg', c.req.url)));
   return new Response(res.body, { status: res.status, headers });
+}
+
+// ---------- home-screen icon (PNG) and the web app manifest ----------
+// The admin's browser resizes the uploaded image to each size in ICON_SIZES (Workers can't resize images),
+// and this checks each one really is a PNG of that size before storing it (base64 in settings: icon_180 …).
+const ICON_MAX_BYTES = 600 * 1024;
+
+function pngSize(bytes: Uint8Array): [number, number] | null {
+  const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+  if (bytes.length < 24 || sig.some((b, i) => bytes[i] !== b)) return null;
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return [dv.getUint32(16), dv.getUint32(20)]; // IHDR width, height
+}
+
+export function checkIcons(raw: unknown): Record<number, string> {
+  if (!raw || typeof raw !== 'object') throw bad('Choose a PNG image.');
+  const out: Record<number, string> = {};
+  for (const size of ICON_SIZES) {
+    const b64 = (raw as Record<string, unknown>)[size];
+    if (typeof b64 !== 'string' || !b64) throw bad(`Missing the ${size}×${size} icon.`);
+    let bytes: Uint8Array;
+    try { bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)); } catch { throw bad("That icon couldn't be read."); }
+    if (bytes.byteLength > ICON_MAX_BYTES) throw bad('That icon is too large. Try a simpler image.');
+    const dims = pngSize(bytes);
+    if (!dims) throw bad('Icons must be PNG images.');
+    if (dims[0] !== size || dims[1] !== size) throw bad(`The ${size} icon must be exactly ${size}×${size} pixels.`);
+    out[size] = b64;
+  }
+  return out;
+}
+
+export async function saveIcons(db: D1Database, actorId: string, icons: Record<number, string> | null) {
+  const now = nowIso();
+  await db.batch([
+    ...ICON_SIZES.map((size) =>
+      db.prepare(
+        'INSERT INTO settings (key, value, updated_by, updated_at) VALUES (?, ?, ?, ?) ' +
+          'ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at',
+      ).bind(`icon_${size}`, icons?.[size] ?? '', actorId, now)),
+    auditStmt(db, actorId, icons ? 'icon_changed' : 'icon_reset', null, null),
+    bumpDirectory(db),
+  ]);
+  return loadSettings(db);
+}
+
+/** GET /icons/<size>.png: the uploaded icon, or the built-in one. Public (phones fetch it when installing). */
+export async function serveIcon(c: Context<AppEnv>) {
+  const size = Number((c.req.param('file') ?? '').replace(/\.png$/, ''));
+  if (!(ICON_SIZES as readonly number[]).includes(size)) return c.notFound();
+  const row = await getSetting(c.env.DB, `icon_${size}`);
+  const cache = c.req.query('v') ? 'public, max-age=31536000, immutable' : 'no-cache';
+  if (row?.value) {
+    return new Response(Uint8Array.from(atob(row.value), (ch) => ch.charCodeAt(0)), {
+      headers: { 'content-type': 'image/png', 'cache-control': cache, 'x-content-type-options': 'nosniff' },
+    });
+  }
+  const res = await c.env.ASSETS.fetch(new Request(new URL(`/default-icons/${size}.png`, c.req.url)));
+  return new Response(res.body, { status: res.status, headers: { 'content-type': 'image/png', 'cache-control': cache } });
+}
+
+/** GET /manifest.webmanifest: what phones need to install the app to the home screen. */
+export async function serveManifest(c: Context<AppEnv>) {
+  const { iconVersion } = await loadSettings(c.env.DB);
+  const icon = (size: number, purpose: string) => ({ src: `/icons/${size}.png?v=${iconVersion}`, sizes: `${size}x${size}`, type: 'image/png', purpose });
+  return c.json(
+    {
+      name: 'Taskivities',
+      short_name: 'Taskivities',
+      description: "Your team's week, at a glance.",
+      id: '/',
+      start_url: '/',
+      scope: '/',
+      display: 'standalone',
+      background_color: '#F7F7F9',
+      theme_color: '#F7F7F9',
+      icons: [icon(192, 'any'), icon(512, 'any'), icon(512, 'maskable')],
+    },
+    200,
+    { 'content-type': 'application/manifest+json', 'cache-control': 'no-cache' },
+  );
 }

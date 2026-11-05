@@ -50,7 +50,7 @@ b{font-weight:600}
 
 /* ---------- app ---------- */
 .app{position:relative;height:100vh;height:100dvh;display:flex;flex-direction:column;min-height:0;background:var(--bg);overflow:hidden}
-.topbar{height:56px;flex:none;display:flex;align-items:center;gap:14px;padding:0 22px;background:var(--panel);border-bottom:1px solid var(--line)}
+.topbar{--tb-h:56px;--tb-x:22px;height:calc(var(--tb-h) + env(safe-area-inset-top));flex:none;display:flex;align-items:center;gap:14px;padding:env(safe-area-inset-top) max(var(--tb-x),env(safe-area-inset-right)) 0 max(var(--tb-x),env(safe-area-inset-left));background:var(--panel);border-bottom:1px solid var(--line)}
 .logo{display:flex;align-items:center;gap:9px;font-weight:700;letter-spacing:-.01em;font-size:15.5px}
 .logo-img{width:26px;height:26px;display:block;flex:none;object-fit:contain}
 .logo-img.big{width:52px;height:52px;margin:0 auto 16px}
@@ -445,7 +445,7 @@ kbd{display:inline-grid;place-items:center;min-width:21px;height:21px;padding:0 
 
 
 @media (max-width:640px){
-  .topbar{padding:0 16px;height:52px}
+  .topbar{--tb-x:16px;--tb-h:52px}
   .page{padding:16px 14px 110px}
   .sync .lbl-t{display:none}
   .sync{padding:6px}
@@ -530,6 +530,15 @@ kbd{display:inline-grid;place-items:center;min-width:21px;height:21px;padding:0 
 .ai-btn{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;font-size:12.5px;font-weight:500;color:var(--purple-ink);background:var(--purple-soft)}
 .ai-btn:hover{background:var(--purple-soft)}
 @media (max-width:640px){ .ai-btn span{display:none} .ai-btn{padding:6px} }
+/* Phones: the tabs scroll sideways instead of pushing the account button off screen; no keyboard, so no shortcuts button. */
+@media (max-width:640px){
+  .kb-btn{display:none}
+  .topbar .spacer{display:none}
+  .topnav{flex:1 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none;margin-left:2px}
+  .topnav::-webkit-scrollbar{display:none}
+  .topnav button{padding:6px 8px;white-space:nowrap;flex:none}
+  .topbar > .ai-btn,.topbar > .sync,.topbar > .me{flex:none}
+}
 
 /* ---------- repeating tasks ---------- */
 .rep{display:inline-flex;vertical-align:-1px;margin-left:6px;color:var(--faint)}
@@ -739,3 +748,23 @@ a.att-n:hover{color:var(--accent);text-decoration:underline}
 .att-bar i{display:block;height:100%;background:var(--accent);transition:width .15s}
 .dr-drop{position:absolute;inset:8px;z-index:5;border:2px dashed var(--accent);border-radius:14px;background:color-mix(in srgb,var(--panel) 85%,transparent);display:flex;align-items:center;justify-content:center;gap:8px;font-weight:600;color:var(--accent);pointer-events:none}
 .clipmark{display:inline-flex;align-items:center;gap:2px;margin-left:7px;font-size:11px;font-weight:500;color:var(--faint);vertical-align:1px}
+
+/* App icon preview (Settings) */
+.icon-prev{width:auto;align-items:center}
+.ip-phone{display:flex;flex-direction:column;align-items:center;gap:6px;padding:18px 26px;border-radius:16px;background:linear-gradient(160deg,#6E8CF7,#B57BE8);color:#fff;font-size:11.5px;font-weight:500;text-shadow:0 1px 2px rgba(0,0,0,.25)}
+.ip-phone img{width:60px;height:60px;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,.2);display:block}
+.set-note{margin-top:12px;padding:8px 10px;border-radius:8px;background:var(--warn-soft);color:var(--warn-ink);font-size:12.5px}
+
+/* ---------- installed on a phone (home-screen app) ---------- */
+/* Room for the notch and the home bar. Zero in a normal browser tab, so harmless there. */
+.app-scroll{padding-bottom:env(safe-area-inset-bottom)}
+.toast{bottom:calc(22px + env(safe-area-inset-bottom))}
+.drawer .dr-body{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+@media (display-mode: standalone){
+  /* No browser around it: stop the page from rubber-banding as a whole and from selecting text on long-press of buttons. */
+  html,body{overscroll-behavior:none}
+  button,.row,.tcard{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+}
+.opt-hint{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;font-size:12.5px;color:var(--muted);line-height:1.45}
+.opt-hint svg{flex:none;margin-top:2px}
+.opt-hint b{color:var(--text-2);font-weight:600}

@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { EMAIL_RE } from '../shared/rules';
 import { DESCRIPTION_MAX, PROJECT_COLORS, USER_COLORS, type Role } from '../shared/types';
 import { disconnect, sendInvites, type SendResult } from './gmail';
-import { checkSvg, saveLogo } from './settings';
+import { checkIcons, checkSvg, saveIcons, saveLogo } from './settings';
 import { webhookAdmin } from './webhooks';
 import {
   type AppEnv, type Ctx, type ProjectRow, type UserRow, CURRENT_VERSION, auditStmt, bad, bumpDirectory, bumpVersion, conflict, eventStmt,
@@ -240,6 +240,12 @@ admin.put('/settings/logo', async (c) => {
   const b = await c.req.json<{ svg?: unknown }>();
   return c.json({ settings: await saveLogo(c.env.DB, c.get('viewer').id, checkSvg(b.svg)) });
 });
+
+admin.put('/settings/icon', async (c) => {
+  const b = await c.req.json<{ icons?: unknown }>();
+  return c.json({ settings: await saveIcons(c.env.DB, c.get('viewer').id, checkIcons(b.icons)) });
+});
+admin.delete('/settings/icon', async (c) => c.json({ settings: await saveIcons(c.env.DB, c.get('viewer').id, null) }));
 
 admin.delete('/settings/logo', async (c) => c.json({ settings: await saveLogo(c.env.DB, c.get('viewer').id, null) }));
 

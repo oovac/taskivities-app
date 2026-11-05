@@ -706,3 +706,24 @@ export function pickAttachments(id: string) {
   // The picker input is in the drawer; give it a moment to render when the drawer was just opened.
   setTimeout(() => document.querySelector<HTMLInputElement>('#attach-input')?.click(), wasOpen ? 0 : 60);
 }
+
+// ---------- home-screen icon (admins) ----------
+export async function uploadIcon(icons: Record<number, string>): Promise<string | null> {
+  try {
+    const r = await api.put<{ settings: AppSettings }>('/api/admin/settings/icon', { icons });
+    set({ settings: r.settings });
+    toast('App icon updated. Phones pick it up the next time the app is added to the home screen.');
+    return null;
+  } catch (e) {
+    return e instanceof ApiError ? e.message : 'Upload failed.';
+  }
+}
+export async function resetIcon() {
+  try {
+    const r = await api.del<{ settings: AppSettings }>('/api/admin/settings/icon');
+    set({ settings: r.settings });
+    toast('Back to the built-in app icon');
+  } catch (e) {
+    toastError(e);
+  }
+}

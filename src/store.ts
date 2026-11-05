@@ -66,6 +66,8 @@ export interface State {
   uploads: Upload[];
   /** Attachments are on for this instance (it has an R2 bucket). */
   attachmentsOn: boolean;
+  /** The browser offered to install the app (account menu shows "Install app"). */
+  canInstall: boolean;
   pop: Pop | null;
   toast: Toast | null;
   help: boolean;
@@ -105,7 +107,7 @@ export const useStore = create<State>()(() => ({
   tz: 'UTC',
   version: 0,
   dirVersion: 0,
-  settings: { customLogo: false, logoVersion: '0' },
+  settings: { customLogo: false, logoVersion: '0', customIcon: false, iconVersion: '0' },
   gmail: null,
   hooks: null,
   theme: themePref(),
@@ -124,6 +126,7 @@ export const useStore = create<State>()(() => ({
   checklistOpen: false,
   uploads: [],
   attachmentsOn: false,
+  canInstall: false,
   pop: null,
   toast: null,
   help: false,

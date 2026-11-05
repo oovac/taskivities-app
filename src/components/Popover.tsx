@@ -9,6 +9,7 @@ import {
 } from '../actions';
 import { focusLater } from '../focus';
 import { type ThemePref, setThemePref } from '../theme';
+import { installApp, isInstalled, isIOS } from '../install';
 import { S, set, useStore, type Pop, type State } from '../store';
 import { displayName, draftEffective, firstName, isLate, myProjects, shownOn } from '../util';
 import { projectDayData } from '../pages/ProjectsPage';
@@ -349,6 +350,11 @@ function AccountPop({ s }: { s: State }) {
       </div>
       <div className="pop-sep" />
       <button className="opt" onClick={() => { closePop(false); openConnect(); }}>{I.bolt(15)}Connect an AI assistant</button>
+      {!isInstalled() && (s.canInstall ? (
+        <button className="opt" data-act="install" onClick={() => { closePop(false); void installApp(); }}>{I.phone(15)}Install app</button>
+      ) : isIOS() ? (
+        <div className="opt-hint">{I.phone(15)}<span>To install: tap <b>Share</b>, then <b>Add to Home Screen</b>.</span></div>
+      ) : null)}
       <button className="opt" onClick={() => void signOut()}>Sign out</button>
     </>
   );

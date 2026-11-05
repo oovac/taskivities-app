@@ -6,7 +6,7 @@ import { authRoutes, requireSession, sameOrigin } from './auth';
 import { type AppEnv, type Env, HttpError } from './lib';
 import { TaskivitiesMCP } from './mcp';
 import { oauthRoutes } from './oauth';
-import { serveLogo } from './settings';
+import { serveIcon, serveLogo, serveManifest } from './settings';
 import { hookRoutes } from './webhooks';
 import { attachmentRoutes, uploadRoutes } from './attachments';
 
@@ -23,6 +23,9 @@ app.onError((err, c) => {
 
 // The logo (header, sign-in page, browser tab icon). Public, so the sign-in page can show it.
 app.get('/logo.svg', serveLogo);
+// Installing to a phone's home screen: the manifest and the icons (public; phones fetch them without a session).
+app.get('/manifest.webmanifest', serveManifest);
+app.get('/icons/:file', serveIcon);
 
 // Incoming webhooks from other services (public; the secret is in the URL). See worker/webhooks.ts.
 app.route('/hooks', hookRoutes);

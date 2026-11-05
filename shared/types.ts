@@ -105,7 +105,14 @@ export interface AppSettings {
   customLogo: boolean;
   /** Cache-buster for /logo.svg; changes whenever the logo does. */
   logoVersion: string;
+  /** An uploaded home-screen icon (PNG) is in use (otherwise the built-in one). */
+  customIcon: boolean;
+  /** Cache-buster for /icons/<size>.png. */
+  iconVersion: string;
 }
+
+/** Home-screen icon sizes: iPhone (180) and Android / install prompts (192, 512). */
+export const ICON_SIZES = [180, 192, 512] as const;
 
 export interface Bootstrap {
   me: User;
