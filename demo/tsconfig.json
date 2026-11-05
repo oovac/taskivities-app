@@ -1,0 +1,5 @@
+{
+  "extends": "../tsconfig.worker.json",
+  "compilerOptions": { "tsBuildInfoFile": "../node_modules/.tmp/tsconfig.demo.tsbuildinfo" },
+  "include": [".", "../worker", "../shared"]
+}
