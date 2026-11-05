@@ -198,7 +198,7 @@ npm run deploy -- <instance>
 
 The admin's browser checks [the releases](https://github.com/taskivities/taskivities-app/releases) at most every 6 hours (`src/updates.ts`): the Worker can't, because Workers share outgoing addresses and GitHub limits unauthenticated requests per address. Nothing about the team is sent. Members never see it. To follow your own fork's releases instead, set `UPDATE_REPO=owner/repo` in `tenants/<instance>.env`; `UPDATE_REPO=off` turns the notice off (the demo has it off).
 
-**Publishing a release** (maintainers): `npm version minor` (or `patch`/`major`) bumps the version, commits and tags it; `git push --follow-tags` pushes both, and the Release workflow (`.github/workflows/release.yml`) publishes the GitHub release with notes generated from the commits. Instances show the notice within 6 hours (as soon as an admin opens the app after that).
+**Publishing a release** (maintainers): what changed is collected under `## Unreleased` in [CHANGELOG.md](CHANGELOG.md) as it's built (see [AGENTS.md](AGENTS.md)). `npm version minor` (or `patch`/`major`) refuses to run if that section is empty; otherwise it bumps the version, turns Unreleased into the new version's section, commits and tags it. `git push --follow-tags` pushes both, and the Release workflow (`.github/workflows/release.yml`) publishes the GitHub release with that section as its notes (or notes generated from the commits, if it has none). Instances show the notice within 6 hours (as soon as an admin opens the app after that).
 
 ### Day to day
 

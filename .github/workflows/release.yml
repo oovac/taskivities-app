@@ -1,7 +1,9 @@
 # Publishes a GitHub release when a version tag is pushed. Instances compare their own version with the latest
 # release and show their admins "Update available" (src/updates.ts).
 #
-#   npm version minor          # or patch / major: bumps package.json, commits, and tags v0.x.y
+#   (add what changed under "## Unreleased" in CHANGELOG.md, and commit)
+#   npm version minor          # or patch / major: bumps package.json, turns "Unreleased" into this version's
+#                              # section in CHANGELOG.md, commits, and tags v0.x.y
 #   git push --follow-tags     # pushes the commit and the tag; this workflow publishes the release
 name: Release
 on:
@@ -18,7 +20,13 @@ jobs:
         run: |
           v="v$(node -p "require('./package.json').version")"
           if [ "$v" != "$GITHUB_REF_NAME" ]; then echo "Tag $GITHUB_REF_NAME doesn't match package.json ($v)"; exit 1; fi
-      - name: Publish the release (notes from the commits and pull requests since the last one)
-        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
+      - name: Publish the release (notes from CHANGELOG.md, or generated from the commits if it has none)
+        run: |
+          node scripts/changelog.mjs notes "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
+          if [ -s "$RUNNER_TEMP/notes.md" ]; then
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md"
+          else
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --generate-notes
+          fi
         env:
           GH_TOKEN: ${{ github.token }}

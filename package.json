@@ -12,6 +12,8 @@
     "deploy": "node scripts/tenant.mjs deploy",
     "tenant": "node scripts/tenant.mjs",
     "push-keys": "node scripts/push-keys.mjs",
+    "preversion": "node scripts/changelog.mjs check",
+    "version": "node scripts/changelog.mjs stamp && git add CHANGELOG.md",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:seed:local": "wrangler d1 execute DB --local --file=seed/dev.sql",
     "db:reset:local": "rm -rf .wrangler/state && npm run db:migrate:local && npm run db:seed:local",
