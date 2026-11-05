@@ -6,13 +6,13 @@ import { z } from 'zod';
 import { diffDays, isDate } from '../shared/dates';
 import { isLate, shownOn } from '../shared/rules';
 import { describe as describeRepeat } from '../shared/repeat';
-import { DESCRIPTION_MAX, PRIORITIES, TITLE_MAX, type Priority, type Project, type Task, type User } from '../shared/types';
+import { COMMENT_MAX, DESCRIPTION_MAX, PRIORITIES, TITLE_MAX, type Priority, type Project, type Task, type User } from '../shared/types';
 import {
   type Env, type ProjectRow, type TaskRow, type UserRow, type Viewer,
   HttpError, TASK_COLS, bad, canSeeProject, loadViewer, mapProject, mapTask, mapUser, today,
 } from './lib';
 import type { McpProps } from './oauth';
-import { createTask, loadVisibleTask, updateTask, updateTaskWithNext, visible } from './tasks';
+import { addComment, createTask, loadVisibleTask, updateTask, updateTaskWithNext, visible } from './tasks';
 
 const PRIORITY_NAMES = ['urgent', 'high', 'normal', 'low'] as const;
 type PriorityName = (typeof PRIORITY_NAMES)[number];
@@ -98,6 +98,7 @@ function describeTask(t: Task, dir: Directory, t0: string) {
     ...(t.status === 'done' ? { done_on: t.doneOn, done_by: userLabel(dir, t.doneBy) } : {}),
     ...(t.notes ? { notes: t.notes } : {}),
     ...(t.series?.active ? { repeats: describeRepeat(t.series.rule, t.series.anchor) } : {}),
+    ...(t.comments ? { comments: t.comments } : {}),
   };
 }
 
@@ -315,6 +316,43 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
           }, this.via);
           return { updated: describeTask(task, dir, t0), ...(next ? { next_copy: describeTask(next, dir, t0) } : {}) };
         }),
+    );
+
+    this.server.registerTool(
+      'list_comments',
+      {
+        title: 'Read comments',
+        description: 'The comments on a task, oldest first: who wrote them, when, and the text. Tasks with comments show a "comments" count in list_tasks.',
+        inputSchema: { id: z.string().describe('Task id from list_tasks.') },
+        annotations: { readOnlyHint: true },
+      },
+      (args) =>
+        this.run(async (v, dir) => {
+          const t = await loadVisibleTask(this.env.DB, v, args.id);
+          const { results } = await this.env.DB
+            .prepare("SELECT actor_id, via, note, at FROM task_events WHERE task_id = ? AND type = 'comment' ORDER BY at, rowid")
+            .bind(t.id).all<{ actor_id: string; via: string | null; note: string; at: string }>();
+          return {
+            task: t.title,
+            comments: results.map((c) => ({ by: userLabel(dir, c.actor_id), at: c.at, text: c.note, ...(c.via ? { via: c.via } : {}) })),
+          };
+        }),
+    );
+
+    this.server.registerTool(
+      'add_comment',
+      {
+        title: 'Comment on a task',
+        description:
+          `Add a comment to a task, as you. Everyone on the task's project sees it in the task's history, marked as written via this assistant. ` +
+          `Comments can't be edited or deleted, so only post what the user asked for. Up to ${COMMENT_MAX} characters.`,
+        inputSchema: {
+          id: z.string().describe('Task id from list_tasks.'),
+          text: z.string().min(1).max(COMMENT_MAX).describe('The comment. Plain text; line breaks are kept.'),
+        },
+      },
+      (args) =>
+        this.run(async (v, dir, t0) => ({ commented_on: describeTask(await addComment(this.env, v, args.id, args.text, this.via), dir, t0) })),
     );
 
     this.server.registerTool(

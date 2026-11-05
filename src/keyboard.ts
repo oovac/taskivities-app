@@ -5,7 +5,7 @@ import type { Priority } from '../shared/types';
 import {
   closeConnect, closeDrawer, closeHelp, closePop, moveTasks, openDrawer, openHelp, openPop, setPage, setPriority, setView, skipTask, toast, toggleDone, closeHook } from './actions';
 import { openMove } from './components/rows';
-import { curNav, focusNav, navEls, trapTab } from './focus';
+import { curNav, focusLater, focusNav, navEls, trapTab } from './focus';
 import { S, set } from './store';
 import { shownOn } from './util';
 
@@ -172,6 +172,7 @@ export function onKeyDown(e: KeyboardEvent) {
   const isDiv = onNav && t.tagName === 'DIV';
   if ((k === 'Enter' && isDiv && !s.drawer) || (k === 'o' && !s.drawer)) { e.preventDefault(); openDrawer(task.id); return; }
   if (k === 'e') { e.preventDefault(); openDrawer(task.id, true); return; }
+  if (k === 'c') { e.preventDefault(); if (s.drawer !== task.id) openDrawer(task.id); focusLater('#comment-box'); return; }
   if (k === 'x' || (k === ' ' && (isDiv || t.classList.contains('drawer')))) { e.preventDefault(); toggleDone(task.id); return; }
   const anchor = (act: 'move' | 'assign' | 'repeat') =>
     (s.drawer ? document.querySelector<HTMLElement>(`.drawer [data-act="${act}"]`) : curNav()?.querySelector<HTMLElement>(`[data-act="${act}"]`)) || curNav();

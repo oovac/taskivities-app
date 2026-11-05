@@ -37,6 +37,7 @@ scripts/tenant.mjs (per-instance deploys)   tenants/ (each instance's Cloudflare
   - **Skip** moves the open copy to the next scheduled date. Reopening a finished copy leaves the next copy in place.
   - Edits to the open copy (title, notes, priority, project, assignee) carry forward to future copies, except a transfer marked "just this one". Date moves only affect that copy.
   - The week views show upcoming copies as faint previews, calculated in the browser and never saved.
+- **Comments** live in the task's history (`type = 'comment'`), so they're permanent like everything else there: no editing or deleting. Anyone who can see the task can comment, on open or done tasks, up to 4,000 characters. A comment moves the task's version on, so everyone's app picks it up on the next poll, and the assignee and creator get a "New comment" notice. Rows show a comment count. Press **C** on a task to comment.
 - **History is append-only.** Every write updates `tasks` and inserts into `task_events` in the same D1 batch, and database triggers refuse any `UPDATE` or `DELETE` on `task_events`.
 - **Roles:**
   - Admins see every project and are the only ones who manage people and projects.
@@ -71,6 +72,8 @@ The Worker serves a remote MCP server at `https://<your-app-host>/mcp`. In Claud
 | `create_task(title, project, due_date, assignee, priority, notes?, repeat?)` | All five main fields required. The tool description includes the project descriptions, so the assistant can pick the project without asking. `repeat` makes it a repeating task |
 | `update_task(id, title?, notes?, project?, due_date?, priority?, status?, repeat?, stop_repeating?, skip?)` | Only the fields given change; `status: "open"` reopens. On a repeating task, can change, stop or skip the repeat |
 | `complete_task(id)` | Marks it done today; for a repeating task, returns the new copy as `next_copy` |
+| `list_comments(id)` | The task's comments, oldest first |
+| `add_comment(id, text)` | Posts a comment as the user, marked "via <assistant>" |
 | `transfer_task(id, to, note?, this_only?)` | The new assignee must be on the task's project. `this_only` leaves future copies of a repeating task with the current person |
 | `project_day(project, date)` | What got finished in a project that day (by priority, then due date), plus what's still open |
 

@@ -105,6 +105,9 @@ export async function sync() {
         if ((mine.get(t.id) ?? 0) < Date.now() - 15000) flashIds.push(t.id);
         if (!prev && t.assigneeId === me && t.createdBy !== me) {
           toast(`${firstName(s.users[t.createdBy])} assigned you “${t.title}”`);
+        } else if (prev && t.comments > prev.comments && (t.assigneeId === me || t.createdBy === me) && (mine.get(t.id) ?? 0) < Date.now() - 15000) {
+          // Someone else commented on a task that's mine (assigned to me or created by me).
+          toast(`New comment on “${t.title}”`, undefined, false, { label: 'Open', run: () => openDrawer(t.id) });
         }
       }
       for (const id of r.gone ?? []) delete tasks[id];
@@ -576,4 +579,21 @@ export async function replayHookRequest(id: string, rid: string) {
 async function openCreated(taskId: string) {
   await sync();
   if (S().tasks[taskId]) openDrawer(taskId);
+}
+
+// ---------- comments ----------
+/** Posts a comment. Returns true when it was saved (so the box can clear). */
+export async function addComment(id: string, text: string): Promise<boolean> {
+  pending.add(id);
+  mine.set(id, Date.now());
+  try {
+    const { task } = await api.post<{ task: Task }>(`/api/tasks/${id}/comments`, { text });
+    putTask(task); // drops the cached history, so the drawer reloads it with the comment
+    return true;
+  } catch (e) {
+    toastError(e);
+    return false;
+  } finally {
+    pending.delete(id);
+  }
 }

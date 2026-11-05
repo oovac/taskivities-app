@@ -26,6 +26,7 @@ export const I = {
   board: (s = 14) => <Svg s={s}><rect x="1.8" y="2.5" width="3.4" height="11" rx="1" /><rect x="6.3" y="2.5" width="3.4" height="7.5" rx="1" /><rect x="10.8" y="2.5" width="3.4" height="9.5" rx="1" /></Svg>,
   sun: (s = 14) => <Svg s={s}><circle cx="8" cy="8" r="2.8" /><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1" /></Svg>,
   kbd: (s = 17) => <Svg s={s}><rect x="1.5" y="4" width="13" height="8.5" rx="1.8" /><path d="M4 6.6h.01M6.7 6.6h.01M9.3 6.6h.01M12 6.6h.01M4.5 9.9h7" /></Svg>,
+  chat: (s = 15) => <Svg s={s}><path d="M3 3.5h10a1.5 1.5 0 0 1 1.5 1.5v5.5A1.5 1.5 0 0 1 13 12H7l-3 2.5V12H3a1.5 1.5 0 0 1-1.5-1.5V5A1.5 1.5 0 0 1 3 3.5z" /></Svg>,
   mail: (s = 15) => <Svg s={s}><rect x="2" y="3.5" width="12" height="9" rx="1.8" /><path d="M2.5 4.5L8 8.6l5.5-4.1" /></Svg>,
   link: (s = 15) => <Svg s={s}><path d="M6.8 9.2a2.6 2.6 0 0 0 3.7 0l2.2-2.2a2.6 2.6 0 0 0-3.7-3.7l-.9.9M9.2 6.8a2.6 2.6 0 0 0-3.7 0L3.3 9a2.6 2.6 0 0 0 3.7 3.7l.9-.9" /></Svg>,
   trash: (s = 15) => <Svg s={s}><path d="M2.8 4.3h10.4M6.3 4.3V2.8h3.4v1.5M4.3 4.3l.6 9h6.2l.6-9" /></Svg>,

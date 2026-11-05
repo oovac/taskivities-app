@@ -2,7 +2,7 @@
 // Every check about who may see or change a task lives here, so the two can't drift apart.
 import { addDays, isDate } from '../shared/dates';
 import { type Repeat, cleanRepeat, describe, firstDate, nextDate, sameRule } from '../shared/repeat';
-import { NOTES_MAX, TITLE_MAX, type Priority, type Task } from '../shared/types';
+import { COMMENT_MAX, NOTES_MAX, TITLE_MAX, type Priority, type Task } from '../shared/types';
 import {
   type Env, type EventRow, type TaskRow, type Viewer,
   CURRENT_VERSION, TASK_COLS, bad, bumpVersion, canSeeProject, eventStmt, forbidden, mapTask, notFound, nowIso, today, uid,
@@ -312,4 +312,25 @@ export async function updateTaskWithNext(env: Env, v: Viewer, id: string, b: Pat
 /** Validate, write and return the updated task. */
 export async function updateTask(env: Env, v: Viewer, id: string, b: Patch, via: string | null = null): Promise<Task> {
   return (await updateTaskWithNext(env, v, id, b, via)).task;
+}
+
+// ---------- comments ----------
+/**
+ * Adds a comment to a task's history. Anyone who can see the task can comment, on open or done tasks.
+ * Comments are history entries, so like the rest of the history they can't be edited or deleted.
+ * The task's version moves on too, so everyone's open copy reloads its history on the next poll.
+ */
+export async function addComment(env: Env, v: Viewer, id: string, text: unknown, via: string | null = null): Promise<Task> {
+  const db = env.DB;
+  const t = await loadVisibleTask(db, v, id);
+  const body = typeof text === 'string' ? text.replace(/\r\n/g, '\n').trim() : '';
+  if (!body) throw bad('Write something first.');
+  if (body.length > COMMENT_MAX) throw bad(`Comments can be at most ${COMMENT_MAX} characters.`);
+  const now = nowIso();
+  await db.batch([
+    bumpVersion(db),
+    db.prepare(`UPDATE tasks SET updated_at = ?, version = ${CURRENT_VERSION} WHERE id = ?`).bind(now, t.id),
+    eventStmt(db, { taskId: t.id, actorId: v.id, via, type: 'comment', note: body, at: now }),
+  ]);
+  return mapTask((await loadTask(db, t.id))!);
 }

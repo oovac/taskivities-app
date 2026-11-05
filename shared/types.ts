@@ -50,6 +50,8 @@ export interface Task {
   version: number;
   /** Set when this task is a copy of a repeating task. */
   series: SeriesInfo | null;
+  /** Number of comments in its history. */
+  comments: number;
 }
 
 export type EventType =
@@ -67,7 +69,9 @@ export type EventType =
   | 'repeat_changed'
   | 'repeat_stopped'
   /** Skipped this copy: the date moved to the next scheduled one. */
-  | 'skipped';
+  | 'skipped'
+  /** A comment: the text is in `note`. Like everything in the history, it can't be edited or deleted. */
+  | 'comment';
 
 export interface TaskEvent {
   id: string;
@@ -162,3 +166,4 @@ export const USER_COLORS = ['#4F46E5', '#DB2777', '#0E9384', '#E8590C', '#2E90FA
 export const DESCRIPTION_MAX = 600;
 export const TITLE_MAX = 300;
 export const NOTES_MAX = 10000;
+export const COMMENT_MAX = 4000;

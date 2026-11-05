@@ -68,7 +68,7 @@ export function TaskRow({ t, ctx }: { t: Task; ctx: RowCtx }) {
         onClick={() => (ghost ? openDrawer(t.id) : toggleDone(t.id))}>{I.check()}</button>
       <div className="row-main" data-act="open" onClick={() => openDrawer(t.id)}>
         {(!done || report) && <PrioTag p={t.priority} />}
-        <div className="row-title">{t.title}{!done && t.series?.active && <RepeatMark t={t} />}</div>
+        <div className="row-title">{t.title}{!done && t.series?.active && <RepeatMark t={t} />}{t.comments > 0 && <CommentMark n={t.comments} />}</div>
       </div>
       <div className="meta">{meta}</div>
       {!done && !ghost && (
@@ -108,7 +108,7 @@ export function TaskCard({ t, side }: { t: Task; side: 'to' | 'by' }) {
       data-nav={`task:${t.id}`} tabIndex={-1} aria-label={ariaFor(t, today)} draggable={!done} onDragStart={onDragStart} onDragEnd={onDragEnd}>
       <button className="chk" tabIndex={-1} data-act="toggle" title={done ? 'Mark not done' : 'Mark done'} onClick={() => toggleDone(t.id)}>{I.check()}</button>
       <div className="tc-body" data-act="open" onClick={() => openDrawer(t.id)}>
-        <div className="tc-title">{!done && <PrioTag p={t.priority} />}{t.title}{!done && t.series?.active && <RepeatMark t={t} />}</div>
+        <div className="tc-title">{!done && <PrioTag p={t.priority} />}{t.title}{!done && t.series?.active && <RepeatMark t={t} />}{t.comments > 0 && <CommentMark n={t.comments} />}</div>
         <div className="tc-meta">
           <span className="tc-proj"><i style={{ background: p?.color }} />{p?.name}</span>
           {late && <LateBadge t={t} today={today} />}
@@ -118,6 +118,10 @@ export function TaskCard({ t, side }: { t: Task; side: 'to' | 'by' }) {
     </div>
   );
 }
+
+const CommentMark = ({ n }: { n: number }) => (
+  <span className="cmark" title={`${n} comment${n > 1 ? 's' : ''}`} aria-label={`${n} comment${n > 1 ? 's' : ''}`}>{I.chat(11)}{n}</span>
+);
 
 const RepeatMark = ({ t }: { t: Task }) => (
   <span className="rep" title={`Repeats: ${describe(t.series!.rule, t.series!.anchor)}`} aria-label="Repeating">{I.refresh(11)}</span>

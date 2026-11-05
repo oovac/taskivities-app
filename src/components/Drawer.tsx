@@ -1,9 +1,9 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { addDays, fmt } from '../../shared/dates';
 import { isLate, shownOn } from '../../shared/rules';
 import { describe } from '../../shared/repeat';
-import { PRIORITIES, type Priority, type TaskEvent } from '../../shared/types';
-import { closeDrawer, loadEvents, openPop, patchTask, skipTask, toggleDone } from '../actions';
+import { COMMENT_MAX, PRIORITIES, type Priority, type TaskEvent } from '../../shared/types';
+import { addComment, closeDrawer, loadEvents, openPop, patchTask, skipTask, toggleDone } from '../actions';
 import { useStore, type State } from '../store';
 import { displayName, firstName, stamp } from '../util';
 import { openMove, LateBadge } from './rows';
@@ -83,14 +83,27 @@ export function Drawer() {
           <div className="lbl">Notes</div>
           <textarea data-field="notes" placeholder="Add details or links…" value={notes} onChange={(e) => setNotes(e.target.value)}
             onBlur={() => notes.trim() !== t.notes && void patchTask(t.id, { notes })} />
-          <div className="lbl">History <span className="muted">· every change, permanently recorded</span></div>
+          <div className="lbl">Comments &amp; history <span className="muted">· permanently recorded</span></div>
+          <CommentBox key={t.id} taskId={t.id} />
           {!events ? <div className="trail-loading">Loading history…</div> : (
             <ol className="trail">
               {late && (
                 <li className="sys"><span className="av" style={{ '--s': '22px' } as React.CSSProperties}>{I.refresh()}</span>
                   <div><div className="tx">Rolling over each day since <B>{fmt(addDays(t.dueDate, 1))}</B> (shown, not logged)</div></div></li>
               )}
-              {[...events].reverse().map((e) => (
+              {[...events].reverse().map((e) => e.type === 'comment' ? (
+                <li key={e.id} className="cmt">
+                  <Avatar user={s.users[e.actorId]} />
+                  <div>
+                    <div className="tx">
+                      <b>{firstName(s.users[e.actorId])}</b>
+                      {e.via && <> <span className="via" title={`Written by an AI assistant acting as ${displayName(s.users[e.actorId])}`}>via {e.via}</span></>}
+                      <span className="tm"> · {stamp(e.at, s.today)}</span>
+                    </div>
+                    <div className="bubble">{linkify(e.note ?? '')}</div>
+                  </div>
+                </li>
+              ) : (
                 <li key={e.id}>
                   <Avatar user={s.users[e.actorId]} />
                   <div>
@@ -136,4 +149,37 @@ function EventText({ e, s }: { e: TaskEvent; s: State }) {
     case 'skipped': return <>skipped <b>{e.fromValue ? fmt(e.fromValue) : '?'}</b> · next one <b>{e.toValue ? fmt(e.toValue) : '?'}</b></>;
     default: return <>{e.type}</>;
   }
+}
+
+/** Plain text with web addresses turned into links (opened in a new tab). */
+function linkify(text: string) {
+  return text.split(/(https?:\/\/[^\s<>"]+[^\s<>".,;:!?)\]'])/g).map((part, i) =>
+    i % 2 ? <a key={i} href={part} target="_blank" rel="noopener noreferrer">{part}</a> : part,
+  );
+}
+
+function CommentBox({ taskId }: { taskId: string }) {
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const send = async () => {
+    if (!text.trim() || busy) return;
+    setBusy(true);
+    if (await addComment(taskId, text)) setText('');
+    setBusy(false);
+    ref.current?.focus();
+  };
+  return (
+    <div className="cbox">
+      <textarea ref={ref} id="comment-box" data-field="comment" rows={text.includes('\n') || text.length > 60 ? 3 : 1} maxLength={COMMENT_MAX}
+        placeholder="Write a comment…  (C)" aria-label="Write a comment" value={text} onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send(); } }} />
+      {text.trim() && (
+        <div className="cbox-f">
+          <span>⌘ Enter to post · everyone on the project can see it</span>
+          <button className="btn-primary sm" disabled={busy} onClick={() => void send()}>{busy ? 'Posting…' : 'Comment'}</button>
+        </div>
+      )}
+    </div>
+  );
 }

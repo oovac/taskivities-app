@@ -7,7 +7,7 @@ import {
 } from './lib';
 import { gmailStatus } from './gmail';
 import { loadSettings } from './settings';
-import { type Patch, applyPatch, commit, createTask, loadVisibleTask, updateTaskWithNext, visible } from './tasks';
+import { type Patch, addComment, applyPatch, commit, createTask, loadVisibleTask, updateTaskWithNext, visible } from './tasks';
 
 export const api = new Hono<AppEnv>();
 
@@ -107,6 +107,11 @@ api.post('/tasks/move', async (c) => {
   const placeholders = b.ids.map(() => '?').join(', ');
   const { results } = await db.prepare(`SELECT ${TASK_COLS} FROM tasks WHERE id IN (${placeholders})`).bind(...b.ids).all<TaskRow>();
   return c.json({ tasks: results.map(mapTask) });
+});
+
+api.post('/tasks/:id/comments', async (c) => {
+  const b = await c.req.json<{ text?: string }>();
+  return c.json({ task: await addComment(c.env, c.get('viewer'), c.req.param('id'), b.text) });
 });
 
 api.get('/tasks/:id/events', async (c) => {

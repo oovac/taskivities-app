@@ -62,9 +62,14 @@ export function TasksPage() {
           ) : (
             <>
               <button className="icon-btn" data-act="week" data-dir="-1" title="Previous week  [" aria-label="Previous week" onClick={() => set({ weekOffset: s.weekOffset - 1 })}>{I.left()}</button>
-              <div className="wk"><b>{w.label}</b><span>{w.range}</span></div>
+              {s.weekOffset === 0 ? (
+                <div className="wk"><b>{w.label}</b><span>{w.range}</span></div>
+              ) : (
+                // Away from this week, the label itself takes you back (no separate button, so the header stays on one row).
+                <button className="wk back" data-act="week" data-dir="0" title="Back to this week" aria-label={`${w.label}, ${w.range}. Back to this week`}
+                  onClick={() => set({ weekOffset: 0 })}><b>{w.label}</b><span>{w.range} · <u>this week</u></span></button>
+              )}
               <button className="icon-btn" data-act="week" data-dir="1" title="Next week  ]" aria-label="Next week" onClick={() => set({ weekOffset: s.weekOffset + 1 })}>{I.right()}</button>
-              <button className="btn-ghost" data-act="week" data-dir="0" disabled={s.weekOffset === 0} onClick={() => set({ weekOffset: 0 })}>This week</button>
             </>
           )}
         </div>
