@@ -1,8 +1,8 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { fmt } from '../../shared/dates';
 import { EMAIL_RE, isAdmin } from '../../shared/rules';
 import { DESCRIPTION_MAX, PROJECT_COLORS, type Role } from '../../shared/types';
-import { addPeople, connectGmail, copyInviteLink, openPop, resendInvite, saveProject } from '../actions';
+import { addPeople, archiveProject, connectGmail, copyInviteLink, loadArchivedProjects, openPop, resendInvite, restoreProject, saveProject } from '../actions';
 import { activeSelector, focusLater } from '../focus';
 import { S, set, useStore, type ProjEdit, type State } from '../store';
 import { displayName, people } from '../util';
@@ -32,6 +32,8 @@ export function TeamPage() {
   const admins = list.filter(isAdmin).length;
   const invited = list.filter((u) => u.status === 'invited').length;
   const projects = Object.values(s.projects).sort((a, b) => a.name.localeCompare(b.name));
+  const disabled = Object.values(s.users).filter((u) => u.status === 'disabled')
+    .sort((a, b) => (b.disabledAt ?? '').localeCompare(a.disabledAt ?? '') || displayName(a).localeCompare(displayName(b)));
 
   return (
     <>
@@ -94,14 +96,15 @@ export function TeamPage() {
                       onClick={() => void copyInviteLink()}>{I.link()}</button>
                   ))}
                   {!me && (
-                    <button className="icon-btn" data-act="uremove" data-u={u.id} title="Remove from team" aria-label={`Remove ${displayName(u)}`}
-                      onClick={(e) => openPop({ type: 'uremove', userId: u.id }, e.currentTarget)}>{I.trash()}</button>
+                    <button className="icon-btn" data-act="udisable" data-u={u.id} title="Disable" aria-label={`Disable ${displayName(u)}`}
+                      onClick={(e) => openPop({ type: 'udisable', userId: u.id }, e.currentTarget)}>{I.ban()}</button>
                   )}
                 </div>
               </div>
             );
           })}
         </div>
+        {disabled.length > 0 && <DisabledPeople s={s} list={disabled} />}
         <p className="fine">Admins see every project and manage people. Members see and work on tasks only in their projects, and can only assign tasks to people on the same project.</p>
       </section>
       <section className="sec">
@@ -111,7 +114,7 @@ export function TeamPage() {
           {projects.map((p) => {
             const ppl = people(s).filter((u) => u.status === 'active' && !isAdmin(u) && u.projects.includes(p.id));
             return (
-              <div key={p.id} className="prow">
+              <div key={p.id} className={`prow ${s.flash['p:' + p.id] ? 'flash' : ''}`}>
                 <i style={{ background: p.color }} />
                 <div className="pname">
                   <b>{p.name}</b>
@@ -126,9 +129,72 @@ export function TeamPage() {
           })}
           {!projects.length && <div className="prow"><span className="n">No projects yet. Create the first one.</span></div>}
         </div>
+        <ArchivedProjects s={s} />
       </section>
       {s.projEdit && <ProjectEditor pe={s.projEdit} s={s} />}
     </>
+  );
+}
+
+/** Disabled people: they can't sign in, but their history stays. Collapsed by default; each can be enabled again. */
+function DisabledPeople({ s, list }: { s: State; list: State['users'][string][] }) {
+  return (
+    <div className="sub-sec">
+      <button className="collapsed" data-act="disabled-toggle" aria-expanded={s.disabledOpen} onClick={() => set({ disabledOpen: !s.disabledOpen })}>
+        <span className="dn">Disabled</span> can't sign in · their work and history stay
+        <span className="sum">{list.length} {list.length === 1 ? 'person' : 'people'} {!s.disabledOpen && I.chev()}</span>
+      </button>
+      {s.disabledOpen && (
+        <div className="card arch-list" style={{ marginTop: 8 }}>
+          {list.map((u) => (
+            <div key={u.id} className={`arch-row ${s.flash['u:' + u.id] ? 'flash' : ''}`}>
+              <Avatar user={u} size={28} />
+              <div className="arch-main">
+                <b>{displayName(u)}</b>
+                <span>
+                  {u.email}{u.email && ' · '}{u.role === 'admin' ? 'Admin' : u.projects.map((p) => s.projects[p]?.name).filter(Boolean).join(', ') || 'No projects'}
+                  {u.disabledAt && <> · disabled{u.disabledBy && s.users[u.disabledBy] ? ` by ${displayName(s.users[u.disabledBy])}` : ''}, {fmt(u.disabledAt.slice(0, 10))}</>}
+                </span>
+              </div>
+              <button className="btn-ghost sm" data-act="uenable" data-u={u.id} aria-label={`Enable ${displayName(u)}`} onClick={(e) => openPop({ type: 'uenable', userId: u.id }, e.currentTarget)}>Enable</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Archived projects: hidden from everyone with all their tasks. Collapsed by default; each can be restored. */
+function ArchivedProjects({ s }: { s: State }) {
+  const n = Object.keys(s.projects).length;
+  useEffect(() => { void loadArchivedProjects(); }, [n]);
+  const list = s.archivedProjects;
+  if (!list?.length) return null;
+  return (
+    <div className="sub-sec">
+      <button className="collapsed" data-act="archproj-toggle" aria-expanded={s.archProjOpen} onClick={() => set({ archProjOpen: !s.archProjOpen })}>
+        <span className="dn">Archived</span> hidden from everyone, with their tasks
+        <span className="sum">{list.length} project{list.length > 1 ? 's' : ''} {!s.archProjOpen && I.chev()}</span>
+      </button>
+      {s.archProjOpen && (
+        <div className="card arch-list" style={{ marginTop: 8 }}>
+          {list.map((p) => (
+            <div key={p.id} className="arch-row">
+              <i className="arch-dot" style={{ background: p.color }} />
+              <div className="arch-main">
+                <b>{p.name}</b>
+                <span>
+                  {p.done} done · {p.open} open
+                  {p.archivedAt && <> · archived{p.archivedBy && s.users[p.archivedBy] ? ` by ${displayName(s.users[p.archivedBy])}` : ''}, {fmt(p.archivedAt.slice(0, 10))}</>}
+                </span>
+              </div>
+              <button className="btn-ghost sm" data-act="prestore" data-p={p.id} aria-label={`Restore ${p.name}`} onClick={() => void restoreProject(p.id)}>Restore</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -211,6 +277,13 @@ export function ProjectEditor({ pe, s }: { pe: ProjEdit; s: State }) {
     focusLater(pe.id ? `[data-act="pe-open"][data-p="${pe.id}"]` : '[data-act="pe-new"]');
   };
   const members = people(s).filter((u) => !isAdmin(u));
+  const openHere = pe.id ? Object.values(s.tasks).filter((t) => t.projectId === pe.id && t.status === 'open').length : 0;
+  const archive = async () => {
+    upd({ busy: true, err: null });
+    const err = await archiveProject(pe.id!);
+    if (err) { upd({ busy: false, archiving: false, err }); return; }
+    focusLater('[data-act="pe-new"]');
+  };
   return (
     <>
       <div className="backdrop" onClick={close} />
@@ -256,11 +329,22 @@ export function ProjectEditor({ pe, s }: { pe: ProjEdit; s: State }) {
             {!members.length && <span className="muted-s">No members yet. Add people on this page first.</span>}
           </div>
         </div>
-        <div className="inv-foot sheet-f">
-          <span className="muted-s"><span className="kbd-i">⌘ Enter</span> to save</span>
-          <button className="btn-ghost" onClick={close}>Cancel</button>
-          <button className="btn-primary" disabled={pe.busy} onClick={() => void save()}>{pe.busy ? 'Saving…' : isNew ? 'Create project' : 'Save'}</button>
-        </div>
+        {pe.archiving ? (
+          <div className="inv-foot sheet-f pe-arch" role="alert">
+            <span className="muted-s">
+              Archive {pe.name || 'this project'}? It's hidden from everyone{openHere ? `, with its ${openHere} open task${openHere > 1 ? 's' : ''}` : ''}, until you restore it from this page. Nothing is deleted.
+            </span>
+            <button className="btn-ghost" onClick={() => { upd({ archiving: false }); focusLater('[data-act="pe-archive"]'); }}>Cancel</button>
+            <button className="btn-danger" data-act="pe-archive-yes" disabled={pe.busy} onClick={() => void archive()}>{pe.busy ? 'Archiving…' : 'Archive'}</button>
+          </div>
+        ) : (
+          <div className="inv-foot sheet-f">
+            {!isNew && <button className="btn-ghost pe-arch-btn" data-act="pe-archive" onClick={() => { upd({ archiving: true, err: null }); focusLater('[data-act="pe-archive-yes"]'); }}>{I.archive()} Archive</button>}
+            <span className="muted-s"><span className="kbd-i">⌘ Enter</span> to save</span>
+            <button className="btn-ghost" onClick={close}>Cancel</button>
+            <button className="btn-primary" disabled={pe.busy} onClick={() => void save()}>{pe.busy ? 'Saving…' : isNew ? 'Create project' : 'Save'}</button>
+          </div>
+        )}
       </div>
     </>
   );

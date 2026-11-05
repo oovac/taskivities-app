@@ -3,13 +3,13 @@ import { addDays, rel, weekStart } from '../shared/dates';
 import { type Repeat, describe } from '../shared/repeat';
 import { onProject } from '../shared/rules';
 import { ATTACH_MAX_BYTES } from '../shared/types';
-import type { AppSettings, Bootstrap, InviteEmailResult, WebhookInfo, WebhookRequestInfo, Priority, Project, Role, SyncResponse, Task, TaskEvent, User } from '../shared/types';
+import type { AppSettings, ArchivedProject, Bootstrap, InviteEmailResult, WebhookInfo, WebhookRequestInfo, Priority, Project, Role, SyncResponse, Task, TaskEvent, User } from '../shared/types';
 import { PRIORITIES } from '../shared/types';
 import { api, ApiError } from './api';
 import { applyFavicon } from './brand';
 import { activeSelector, focusLater, selFor } from './focus';
 import { type Page, type Pop, type PopType, type State, S, emptyDraft, set } from './store';
-import { draftEffective, firstName, myProjects, sharesWith } from './util';
+import { displayName, draftEffective, firstName, myProjects, sharesWith } from './util';
 
 const pending = new Set<string>(); // tasks with an edit in flight (ignore sync for them)
 const mine = new Map<string, number>(); // tasks I changed recently (don't flash my own edits)
@@ -456,12 +456,26 @@ export async function updateUser(id: string, body: { role?: Role; projects?: str
     toastError(e);
   }
 }
-export async function removeUser(id: string, transferTo?: string) {
+/** Disables someone (after giving their open tasks to `transferTo`). They stay on the Team page and can be enabled again. */
+export async function disableUser(id: string, transferTo?: string) {
   const u = S().users[id];
   try {
-    const r = await api.del<{ transferred: number }>(`/api/admin/users/${id}${transferTo ? `?transferTo=${transferTo}` : ''}`);
+    const r = await api.post<{ transferred: number }>(`/api/admin/users/${id}/disable${transferTo ? `?transferTo=${transferTo}` : ''}`);
     await reloadDirectory();
-    toast(`Removed ${u?.name || u?.email}${r.transferred ? ` · ${r.transferred} task${r.transferred > 1 ? 's' : ''} moved to ${firstName(S().users[transferTo!])}` : ''}`);
+    toast(`Disabled ${displayName(u)}${r.transferred ? ` · ${r.transferred} task${r.transferred > 1 ? 's' : ''} moved to ${firstName(S().users[transferTo!])}` : ''}`,
+      () => { set({ toast: null }); void enableUser(id); });
+  } catch (e) {
+    toastError(e);
+  }
+}
+/** Enables someone again: members get `projects` (or the projects they had). */
+export async function enableUser(id: string, projects?: string[]) {
+  try {
+    await api.post(`/api/admin/users/${id}/enable`, projects ? { projects } : {});
+    await reloadDirectory();
+    const u = S().users[id];
+    toast(`${displayName(u)} can sign in again`);
+    flash(['u:' + id]);
   } catch (e) {
     toastError(e);
   }
@@ -482,7 +496,7 @@ export async function saveProject(p: { id: string | null; name: string; color: s
 
 // ---------- access-aware lookups used by menus ----------
 export const assignable = (s: State, projectId: string): User[] =>
-  Object.values(s.users).filter((u) => u.status !== 'removed' && onProject(u, projectId));
+  Object.values(s.users).filter((u) => u.status !== 'disabled' && onProject(u, projectId));
 export const switchablePeople = (s: State): User[] =>
   Object.values(s.users).filter((u) => u.status === 'active' && (u.id === s.me!.id || sharesWith(s, u)));
 export const projectList = (s: State): Project[] => myProjects(s);
@@ -773,6 +787,41 @@ export async function loadArchived(project: string) {
   try {
     const { tasks } = await api.get<{ tasks: Task[] }>(`/api/archived?project=${encodeURIComponent(project)}`);
     set({ archived: { project, tasks } });
+  } catch (e) {
+    toastError(e);
+  }
+}
+
+// ---------- archived projects (admins, Team page) ----------
+export async function loadArchivedProjects() {
+  try {
+    const { projects } = await api.get<{ projects: ArchivedProject[] }>('/api/admin/projects/archived');
+    set({ archivedProjects: projects });
+  } catch (e) {
+    toastError(e);
+  }
+}
+/** Archives a project: it and its tasks leave every list for everyone (Undo brings them back). */
+export async function archiveProject(id: string) {
+  const p = S().projects[id];
+  try {
+    await api.post(`/api/admin/projects/${id}/archive`);
+    set((s) => ({ projEdit: null, ...(s.projSel === id ? { projSel: 'all' } : {}) }));
+    await reloadDirectory();
+    void loadArchivedProjects();
+    toast(`Archived ${p?.name ?? 'the project'}`, () => { set({ toast: null }); void restoreProject(id); });
+    return null;
+  } catch (e) {
+    return e instanceof Error ? e.message : 'Could not archive.';
+  }
+}
+export async function restoreProject(id: string) {
+  try {
+    await api.post(`/api/admin/projects/${id}/restore`);
+    await reloadDirectory();
+    set((s) => ({ archivedProjects: s.archivedProjects?.filter((p) => p.id !== id) ?? null }));
+    toast(`Restored ${S().projects[id]?.name ?? 'the project'}`);
+    flash(['p:' + id]);
   } catch (e) {
     toastError(e);
   }

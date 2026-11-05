@@ -4,7 +4,7 @@ import { type Freq, type Repeat, cleanRepeat, describe, presets, sameRule } from
 import { isAdmin, onProject } from '../../shared/rules';
 import { PRIORITIES, type Priority } from '../../shared/types';
 import {
-  assignable, closePop, defaultDraftDate, moveTasks, openConnect, removeUser, setPage, setPriority, setProject, setRepeat, signOut, switchablePeople, transfer,
+  assignable, closePop, defaultDraftDate, moveTasks, openConnect, disableUser, enableUser, setPage, setPriority, setProject, setRepeat, signOut, switchablePeople, transfer,
   updateUser, viewPerson, editNotes, editChecklist, pickAttachments, archiveTask,
 } from '../actions';
 import { focusLater } from '../focus';
@@ -63,7 +63,8 @@ function Content({ p, s }: { p: Pop; s: State }) {
     case 'projpick': return <ProjPickPop s={s} />;
     case 'urole': return <RolePop p={p} s={s} />;
     case 'uproj': return <UserProjectsPop p={p} s={s} />;
-    case 'uremove': return <RemovePop p={p} s={s} />;
+    case 'udisable': return <DisablePop p={p} s={s} />;
+    case 'uenable': return <EnablePop p={p} s={s} />;
     case 'account': return <AccountPop s={s} />;
     case 'taskmenu': return <TaskMenu p={p} s={s} />;
     case 'repeat': return <RepeatPop p={p} s={s} />;
@@ -267,7 +268,7 @@ function ProjPickPop({ s }: { s: State }) {
 
 function RolePop({ p, s }: { p: Pop; s: State }) {
   const u = s.users[p.userId!];
-  const admins = Object.values(s.users).filter((x) => x.status !== 'removed' && x.role === 'admin').length;
+  const admins = Object.values(s.users).filter((x) => x.status !== 'disabled' && x.role === 'admin').length;
   const lastAdmin = u.role === 'admin' && admins <= 1;
   const choose = (role: 'admin' | 'member') => {
     closePop(true);
@@ -307,27 +308,61 @@ function UserProjectsPop({ p, s }: { p: Pop; s: State }) {
   );
 }
 
-function RemovePop({ p, s }: { p: Pop; s: State }) {
+function DisablePop({ p, s }: { p: Pop; s: State }) {
   const u = s.users[p.userId!];
   const open = Object.values(s.tasks).filter((t) => t.assigneeId === u.id && t.status === 'open');
   const projs = [...new Set(open.map((t) => t.projectId))];
-  const admins = Object.values(s.users).filter((x) => x.status !== 'removed' && x.role === 'admin').length;
-  if (u.role === 'admin' && admins <= 1) return <><div className="pop-h">Can't remove the last admin</div><div className="pop-body">Make someone else an admin first.</div></>;
+  const admins = Object.values(s.users).filter((x) => x.status !== 'disabled' && x.role === 'admin').length;
+  if (u.role === 'admin' && admins <= 1) return <><div className="pop-h">Can't disable the last admin</div><div className="pop-body">Make someone else an admin first.</div></>;
   const targets = Object.values(s.users).filter((x) => x.id !== u.id && x.status === 'active' && projs.every((pid) => onProject(x, pid)));
-  const go = (to?: string) => { closePop(false); focusLater('[data-act="inv-open"]'); void removeUser(u.id, to); };
+  const go = (to?: string) => { closePop(false); focusLater('[data-act="inv-open"]'); void disableUser(u.id, to); };
   return (
     <>
-      <div className="pop-h">Remove {displayName(u)}?</div>
-      <div className="pop-body">{u.status === 'invited' ? 'Their invite is cancelled and the address can no longer sign in.' : 'They lose access immediately. Their finished work and history stay.'}</div>
+      <div className="pop-h">Disable {displayName(u)}?</div>
+      <div className="pop-body">
+        {u.status === 'invited' ? 'Their invite stops working and the address can\'t sign in.' : 'They can\'t sign in, and their assistants lose access.'}
+        {' '}Their work and history stay, and you can enable them again from the Team page.
+      </div>
       {open.length ? (
         <>
           <div className="pop-h">First, give their {open.length} open task{open.length > 1 ? 's' : ''} to</div>
           {targets.map((x) => (
-            <button key={x.id} className="opt" onClick={() => go(x.id)}><Avatar user={x} />{displayName(x)}{x.id === s.me!.id && <span style={{ color: 'var(--faint)' }}> (you)</span>}<span className="r">then remove</span></button>
+            <button key={x.id} className="opt" onClick={() => go(x.id)}><Avatar user={x} />{displayName(x)}{x.id === s.me!.id && <span style={{ color: 'var(--faint)' }}> (you)</span>}<span className="r">then disable</span></button>
           ))}
           <div className="pop-foot">Only people on all of their projects are listed.</div>
         </>
-      ) : <div style={{ padding: 4 }}><button className="btn-danger" onClick={() => go()}>Remove from team</button></div>}
+      ) : <div style={{ padding: 4 }}><button className="btn-danger" data-act="do-disable" onClick={() => go()}>Disable</button></div>}
+    </>
+  );
+}
+
+/** Enable a disabled person again. Members pick their projects (preselected: the ones they had). */
+function EnablePop({ p, s }: { p: Pop; s: State }) {
+  const u = s.users[p.userId!];
+  const all = Object.values(s.projects).sort((a, b) => a.name.localeCompare(b.name));
+  const [picked, setPicked] = useState<string[]>(() => u.projects.filter((id) => s.projects[id]));
+  const member = u.role === 'member';
+  const go = () => { closePop(false); focusLater('[data-act="disabled-toggle"]'); void enableUser(u.id, member ? picked : undefined); };
+  return (
+    <>
+      <div className="pop-h">Enable {displayName(u)}?</div>
+      <div className="pop-body">
+        {member ? 'They can sign in again and see these projects:' : 'They can sign in again as an admin, with access to every project.'}
+      </div>
+      {member && all.map((pr) => {
+        const on = picked.includes(pr.id);
+        return (
+          <button key={pr.id} className={`opt check ${on ? 'on' : ''}`} role="menuitemcheckbox" aria-checked={on} data-p={pr.id}
+            onClick={() => setPicked(on ? picked.filter((x) => x !== pr.id) : [...picked, pr.id])}>
+            <span className="cb">{on && I.check()}</span><Dot color={pr.color} />{pr.name}
+          </button>
+        );
+      })}
+      <div style={{ padding: 4 }}>
+        <button className="btn-primary" data-act="do-enable" disabled={member && !picked.length} onClick={go}>
+          {member && !picked.length ? 'Pick a project' : 'Enable'}
+        </button>
+      </div>
     </>
   );
 }

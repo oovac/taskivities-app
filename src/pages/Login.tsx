@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { LogoMark } from '../components/ui';
+import { useEffect, useState } from 'react';
+import { I, LogoMark } from '../components/ui';
 
 const GLOGO = (
   <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
@@ -19,8 +19,12 @@ const MESSAGES: Record<string, string> = {
   cancelled: 'Sign-in was cancelled. Try again when you\'re ready.',
   expired: 'That sign-in link expired. Please try again.',
   google: "Google didn't complete the sign-in. Please try again.",
-  unverified: "That Google account's email isn't verified.",
+  workos: "The email sign-in didn't complete. Please try again.",
+  unverified: "That account's email address isn't verified.",
 };
+
+/** Which sign-in methods this instance has set up (WorkOS is optional). */
+type Methods = { google: boolean; workos: boolean };
 
 export function Login() {
   const params = new URLSearchParams(location.search);
@@ -34,6 +38,13 @@ export function Login() {
     return v;
   });
   const [devEmail, setDevEmail] = useState('jordan@example.com');
+  // null while loading, so an instance without Google doesn't flash its button.
+  const [methods, setMethods] = useState<Methods | null>(null);
+  useEffect(() => {
+    const fallback: Methods = { google: true, workos: false };
+    fetch('/auth/methods').then((r) => (r.ok ? r.json() : fallback)).then((m: Methods) => setMethods(m)).catch(() => setMethods(fallback));
+  }, []);
+  const q = nextQs ? `?${nextQs}` : '';
   return (
     <div className="app">
       <div className="signin">
@@ -43,11 +54,12 @@ export function Login() {
           <p>Your team's week, at a glance.</p>
           {error === 'no_access' && (
             <div className="si-msg" role="alert">
-              {denied ? <><b>{denied}</b> doesn't</> : "That Google account doesn't"} have access to Taskivities. Ask an admin to add this address, or sign in with the one they added.
+              {denied ? <><b>{denied}</b> doesn't</> : "That account doesn't"} have access to Taskivities. Ask an admin to add this address (or enable it again, if it was disabled), or sign in with the one they added.
             </div>
           )}
           {error && MESSAGES[error] && <div className="si-msg" role="alert">{MESSAGES[error]}</div>}
-          <a className="gbtn" href={`/auth/login${nextQs ? `?${nextQs}` : ''}`} style={{ textDecoration: 'none', color: 'inherit' }}>{GLOGO} Continue with Google</a>
+          {methods?.google && <a className="gbtn" href={`/auth/login${q}`}>{GLOGO} Continue with Google</a>}
+          {methods?.workos && <a className="gbtn" data-act="signin-email" href={`/auth/workos${q}`}>{I.mail(18)} Continue with email</a>}
           <div className="si-foot">Only people an admin has added can sign in.</div>
           {import.meta.env.DEV && (
             <div className="si-dev">

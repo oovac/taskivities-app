@@ -7,7 +7,7 @@ import { checkIcons, checkSvg, saveIcons, saveLogo } from './settings';
 import { webhookAdmin } from './webhooks';
 import {
   type AppEnv, type Ctx, type ProjectRow, type UserRow, CURRENT_VERSION, auditStmt, bad, bumpDirectory, bumpVersion, conflict, eventStmt,
-  forbidden, getUser, memberProjects, notFound, nowIso, uid,
+  forbidden, getUser, mapProject, memberProjects, notFound, nowIso, uid,
 } from './lib';
 
 export const admin = new Hono<AppEnv>();
@@ -20,12 +20,14 @@ admin.use('*', async (c, next) => {
 admin.route('/webhooks', webhookAdmin);
 
 const activeAdmins = async (db: D1Database) =>
-  (await db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND status != 'removed'").first<{ n: number }>())!.n;
+  (await db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND status != 'disabled'").first<{ n: number }>())!.n;
 const openTasksIn = async (db: D1Database, userId: string, projectId?: string) =>
   (await db
     .prepare(`SELECT COUNT(*) AS n FROM tasks WHERE assignee_id = ? AND status = 'open' AND archived_at IS NULL${projectId ? ' AND project_id = ?' : ''}`)
     .bind(...(projectId ? [userId, projectId] : [userId]))
     .first<{ n: number }>())!.n;
+/** Enabling someone again: active if they've signed in before, otherwise still invited. */
+const ENABLED_STATUS = "CASE WHEN last_seen_at IS NULL THEN 'invited' ELSE 'active' END";
 const existingProjects = async (db: D1Database) =>
   new Set((await db.prepare('SELECT id FROM projects WHERE archived = 0').all<{ id: string }>()).results.map((r) => r.id));
 
@@ -49,11 +51,11 @@ admin.post('/users', async (c) => {
   const now = nowIso();
   for (const email of emails) {
     const existing = await db.prepare('SELECT * FROM users WHERE email = ?').bind(email).first<UserRow>();
-    if (existing && existing.status !== 'removed') { skipped.push(email); continue; }
+    if (existing && existing.status !== 'disabled') { skipped.push(email); continue; }
     const id = existing?.id ?? uid();
     if (existing) {
-      // Someone removed earlier is added back as a fresh invite.
-      stmts.push(db.prepare("UPDATE users SET role = ?, status = 'invited', added_by = ?, added_at = ? WHERE id = ?").bind(role, v.id, now, id));
+      // Someone disabled earlier is enabled again, with the role and projects chosen here.
+      stmts.push(db.prepare(`UPDATE users SET role = ?, status = ${ENABLED_STATUS}, disabled_at = NULL, disabled_by = NULL WHERE id = ?`).bind(role, id));
       stmts.push(db.prepare('DELETE FROM project_members WHERE user_id = ?').bind(id));
     } else {
       stmts.push(
@@ -100,7 +102,7 @@ admin.patch('/users/:id', async (c) => {
   const db = c.env.DB;
   const id = c.req.param('id');
   const u = await getUser(db, id);
-  if (!u || u.status === 'removed') throw notFound('Person not found.');
+  if (!u || u.status === 'disabled') throw notFound('Person not found.');
   const b = await c.req.json<{ role?: Role; projects?: string[] }>();
   const stmts: D1PreparedStatement[] = [];
   let role = u.role;
@@ -137,16 +139,24 @@ admin.patch('/users/:id', async (c) => {
   return c.json({ ok: true });
 });
 
-/** Remove someone. Their open tasks go to `transferTo` first, in the same batch, each transfer logged. */
-admin.delete('/users/:id', async (c) => {
+/**
+ * Disable someone. Nothing about them is deleted: they can't sign in (their sessions, assistant connections and Gmail
+ * connection end), but they stay on the Team page, in every task's history, and on their projects, ready to be enabled again.
+ * Their open tasks go to `transferTo` first, in the same batch, each transfer logged; their repeating tasks go with them.
+ */
+admin.post('/users/:id/disable', async (c) => {
   const v = c.get('viewer');
   const db = c.env.DB;
   const id = c.req.param('id');
   const u = await getUser(db, id);
-  if (!u || u.status === 'removed') throw notFound('Person not found.');
-  if (id === v.id) throw forbidden("You can't remove yourself.");
-  if (u.role === 'admin' && (await activeAdmins(db)) <= 1) throw conflict("Can't remove the last admin.");
-  const { results: open } = await db.prepare("SELECT id, project_id FROM tasks WHERE assignee_id = ? AND status = 'open'").bind(id).all<{ id: string; project_id: string }>();
+  if (!u) throw notFound('Person not found.');
+  if (u.status === 'disabled') return c.json({ ok: true, transferred: 0 });
+  if (id === v.id) throw forbidden("You can't disable yourself.");
+  if (u.role === 'admin' && (await activeAdmins(db)) <= 1) throw conflict("Can't disable the last admin.");
+  // Open tasks in archived projects stay with them: they're hidden, and can be handed on once the project is restored.
+  const { results: open } = await db.prepare(
+    "SELECT id, project_id FROM tasks WHERE assignee_id = ? AND status = 'open' AND project_id IN (SELECT id FROM projects WHERE archived = 0)",
+  ).bind(id).all<{ id: string; project_id: string }>();
   const to = c.req.query('transferTo');
   const stmts: D1PreparedStatement[] = [];
   const now = nowIso();
@@ -163,17 +173,44 @@ admin.delete('/users/:id', async (c) => {
     stmts.push(db.prepare('UPDATE series SET assignee_id = ?, updated_at = ? WHERE assignee_id = ? AND active = 1').bind(to, now, id));
     for (const t of open) {
       stmts.push(db.prepare(`UPDATE tasks SET assignee_id = ?, assigned_by = ?, updated_at = ?, version = ${CURRENT_VERSION} WHERE id = ?`).bind(to, v.id, now, t.id));
-      stmts.push(eventStmt(db, { taskId: t.id, actorId: v.id, type: 'transferred', from: id, to, note: `${u.name || u.email} was removed from the team`, at: now }));
+      stmts.push(eventStmt(db, { taskId: t.id, actorId: v.id, type: 'transferred', from: id, to, note: `${u.name || u.email} was disabled`, at: now }));
     }
   }
-  stmts.push(db.prepare("UPDATE users SET status = 'removed' WHERE id = ?").bind(id));
-  stmts.push(db.prepare('DELETE FROM project_members WHERE user_id = ?').bind(id));
+  stmts.push(db.prepare("UPDATE users SET status = 'disabled', disabled_at = ?, disabled_by = ? WHERE id = ?").bind(now, v.id, id));
   stmts.push(db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(id));
   stmts.push(db.prepare('DELETE FROM google_tokens WHERE user_id = ?').bind(id)); // and their Gmail connection
-  stmts.push(auditStmt(db, v.id, 'user_removed', id, { transferred: open.length, to: to ?? null }));
+  stmts.push(auditStmt(db, v.id, 'user_disabled', id, { transferred: open.length, to: to ?? null }));
   stmts.push(bumpDirectory(db));
   await db.batch(stmts);
   return c.json({ ok: true, transferred: open.length });
+});
+
+/** Enable someone again, with the role and projects they had (members can be given `projects` instead). */
+admin.post('/users/:id/enable', async (c) => {
+  const v = c.get('viewer');
+  const db = c.env.DB;
+  const id = c.req.param('id');
+  const u = await getUser(db, id);
+  if (!u) throw notFound('Person not found.');
+  if (u.status !== 'disabled') return c.json({ ok: true });
+  const b = await c.req.json<{ projects?: string[] }>().catch(() => ({} as { projects?: string[] }));
+  const known = await existingProjects(db);
+  const stmts: D1PreparedStatement[] = [];
+  if (u.role === 'member') {
+    const current = await memberProjects(db, id);
+    const wanted = b.projects ? [...new Set(b.projects)].filter((p) => known.has(p)) : current.filter((p) => known.has(p));
+    if (!wanted.length) throw bad('Pick at least one project for them.');
+    if (b.projects) {
+      // Archived projects they were on are kept, so restoring one brings them back to it.
+      for (const p of current.filter((p) => known.has(p) && !wanted.includes(p))) stmts.push(db.prepare('DELETE FROM project_members WHERE user_id = ? AND project_id = ?').bind(id, p));
+      for (const p of wanted.filter((p) => !current.includes(p))) stmts.push(db.prepare('INSERT OR IGNORE INTO project_members (user_id, project_id) VALUES (?, ?)').bind(id, p));
+    }
+  }
+  stmts.push(db.prepare(`UPDATE users SET status = ${ENABLED_STATUS}, disabled_at = NULL, disabled_by = NULL WHERE id = ?`).bind(id));
+  stmts.push(auditStmt(db, v.id, 'user_enabled', id, b.projects ? { projects: b.projects } : null));
+  stmts.push(bumpDirectory(db));
+  await db.batch(stmts);
+  return c.json({ ok: true });
 });
 
 // ---------- projects ----------
@@ -199,7 +236,7 @@ admin.post('/projects', async (c) => {
   const id = uid();
   const stmts = [
     db.prepare('INSERT INTO projects (id, name, color, description, archived, created_at) VALUES (?, ?, ?, ?, 0, ?)').bind(id, p.name, p.color, p.description, nowIso()),
-    ...(b.members ?? []).map((u) => db.prepare("INSERT OR IGNORE INTO project_members (user_id, project_id) SELECT id, ? FROM users WHERE id = ? AND role = 'member' AND status != 'removed'").bind(id, u)),
+    ...(b.members ?? []).map((u) => db.prepare("INSERT OR IGNORE INTO project_members (user_id, project_id) SELECT id, ? FROM users WHERE id = ? AND role = 'member' AND status != 'disabled'").bind(id, u)),
     auditStmt(db, v.id, 'project_created', id, p),
     bumpDirectory(db),
   ];
@@ -217,7 +254,10 @@ admin.patch('/projects/:id', async (c) => {
   const p = await validateProject(db, { name: b.name ?? cur.name, color: b.color ?? cur.color, description: b.description ?? cur.description }, id);
   const stmts: D1PreparedStatement[] = [db.prepare('UPDATE projects SET name = ?, color = ?, description = ? WHERE id = ?').bind(p.name, p.color, p.description, id)];
   if (b.members) {
-    const { results } = await db.prepare('SELECT user_id FROM project_members WHERE project_id = ?').bind(id).all<{ user_id: string }>();
+    // Disabled people keep their place on the project (for when they're enabled again); the editor doesn't list them.
+    const { results } = await db.prepare(
+      "SELECT m.user_id FROM project_members m JOIN users u ON u.id = m.user_id WHERE m.project_id = ? AND u.status != 'disabled'",
+    ).bind(id).all<{ user_id: string }>();
     const current = results.map((r) => r.user_id);
     for (const u of current.filter((u) => !b.members!.includes(u))) {
       const n = await openTasksIn(db, u, id);
@@ -227,12 +267,55 @@ admin.patch('/projects/:id', async (c) => {
       stmts.push(db.prepare('DELETE FROM project_members WHERE user_id = ? AND project_id = ?').bind(u, id));
     }
     for (const u of b.members.filter((u) => !current.includes(u))) {
-      stmts.push(db.prepare("INSERT OR IGNORE INTO project_members (user_id, project_id) SELECT id, ? FROM users WHERE id = ? AND role = 'member' AND status != 'removed'").bind(id, u));
+      stmts.push(db.prepare("INSERT OR IGNORE INTO project_members (user_id, project_id) SELECT id, ? FROM users WHERE id = ? AND role = 'member' AND status != 'disabled'").bind(id, u));
     }
   }
   stmts.push(auditStmt(db, v.id, 'project_updated', id, p), bumpDirectory(db));
   await db.batch(stmts);
   return c.json({ ok: true });
+});
+
+/**
+ * Archive a project (or restore it). Nothing is deleted: the project and all its tasks, open or done, disappear from
+ * every list, count, search and assistant until it's restored, and then come back as they were. Its incoming webhooks
+ * stop making tasks, and its repeating tasks pause. Members keep their place on it.
+ */
+async function setProjectArchived(c: Ctx, archive: boolean) {
+  const v = c.get('viewer');
+  const db = c.env.DB;
+  const id = c.req.param('id')!;
+  const cur = await db.prepare('SELECT * FROM projects WHERE id = ?').bind(id).first<ProjectRow>();
+  if (!cur) throw notFound('Project not found.');
+  if (!!cur.archived === archive) return c.json({ ok: true });
+  if (!archive) {
+    const dup = await db.prepare('SELECT id FROM projects WHERE name = ? COLLATE NOCASE AND archived = 0').bind(cur.name).first();
+    if (dup) throw conflict(`Another project is already called ${cur.name}. Rename that one first.`);
+  }
+  const now = nowIso();
+  await db.batch([
+    bumpVersion(db),
+    db.prepare('UPDATE projects SET archived = ?, archived_at = ?, archived_by = ? WHERE id = ?').bind(archive ? 1 : 0, archive ? now : null, archive ? v.id : null, id),
+    // Every task in it changes version, so open apps drop them (or get them back) on their next sync.
+    db.prepare(`UPDATE tasks SET version = ${CURRENT_VERSION} WHERE project_id = ?`).bind(id),
+    auditStmt(db, v.id, archive ? 'project_archived' : 'project_restored', id, { name: cur.name }),
+    bumpDirectory(db),
+  ]);
+  return c.json({ ok: true });
+}
+admin.post('/projects/:id/archive', (c) => setProjectArchived(c, true));
+admin.post('/projects/:id/restore', (c) => setProjectArchived(c, false));
+
+/** Archived projects, newest first, with how much is in each. Only the Team page asks for these. */
+admin.get('/projects/archived', async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT p.*,
+       (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.archived_at IS NULL AND t.status = 'open') AS open_count,
+       (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.archived_at IS NULL AND t.status = 'done') AS done_count
+     FROM projects p WHERE p.archived = 1 ORDER BY p.archived_at DESC, p.name`,
+  ).all<ProjectRow & { open_count: number; done_count: number }>();
+  return c.json({
+    projects: results.map((r) => ({ ...mapProject(r), archivedAt: r.archived_at, archivedBy: r.archived_by, open: r.open_count, done: r.done_count })),
+  });
 });
 
 // ---------- app settings ----------

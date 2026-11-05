@@ -33,7 +33,7 @@ interface Directory {
 
 async function loadDirectory(db: D1Database, v: Viewer): Promise<Directory> {
   const [users, members, projects] = await Promise.all([
-    db.prepare("SELECT * FROM users WHERE status != 'removed' ORDER BY name").all<UserRow>(),
+    db.prepare("SELECT * FROM users WHERE status != 'disabled' ORDER BY name").all<UserRow>(),
     db.prepare('SELECT user_id, project_id FROM project_members').all<{ user_id: string; project_id: string }>(),
     db.prepare('SELECT * FROM projects WHERE archived = 0 ORDER BY name').all<ProjectRow>(),
   ]);

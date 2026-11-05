@@ -10,7 +10,7 @@ export const firstName = (u: User | undefined) => (!u ? 'Someone' : u.name ? u.n
 export const myProjects = (s: State): Project[] =>
   !s.me ? [] : Object.values(s.projects).filter((p) => onProject(s.me!, p.id)).sort((a, b) => a.name.localeCompare(b.name));
 export const people = (s: State): User[] =>
-  Object.values(s.users).filter((u) => u.status !== 'removed').sort((a, b) => displayName(a).localeCompare(displayName(b)));
+  Object.values(s.users).filter((u) => u.status !== 'disabled').sort((a, b) => displayName(a).localeCompare(displayName(b)));
 /** Someone whose work I can see at least some of. */
 export const sharesWith = (s: State, u: User) => myProjects(s).some((p) => onProject(u, p.id));
 
@@ -20,7 +20,7 @@ export const draftEffective = (s: State) => {
   const projectId = s.draft.projectId && s.projects[s.draft.projectId] && onProject(s.me!, s.draft.projectId) ? s.draft.projectId : mine[0]?.id ?? null;
   let assigneeId = s.draft.assigneeId || s.viewUser || s.me!.id;
   const a = s.users[assigneeId];
-  if (!a || !projectId || !onProject(a, projectId) || a.status === 'removed') assigneeId = s.me!.id;
+  if (!a || !projectId || !onProject(a, projectId) || a.status === 'disabled') assigneeId = s.me!.id;
   return { projectId, assigneeId };
 };
 

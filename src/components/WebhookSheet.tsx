@@ -60,7 +60,7 @@ export function WebhookSheet() {
   useEffect(() => { document.querySelector<HTMLElement>('#hk-name')?.focus(); }, []);
 
   const members = useMemo(
-    () => Object.values(s.users).filter((u) => u.status !== 'removed' && (isAdmin(u) || u.projects.includes(m.projectId))).sort((a, b) => displayName(a).localeCompare(displayName(b))),
+    () => Object.values(s.users).filter((u) => u.status !== 'disabled' && (isAdmin(u) || u.projects.includes(m.projectId))).sort((a, b) => displayName(a).localeCompare(displayName(b))),
     [s.users, m.projectId],
   );
   if (!h) return null;

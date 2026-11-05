@@ -10,6 +10,9 @@ export interface Env {
   TEAM_TZ?: string;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
+  /** Optional second sign-in, through WorkOS AuthKit: emailed codes, Microsoft, passkeys, and whatever else is enabled there. */
+  WORKOS_CLIENT_ID?: string;
+  WORKOS_API_KEY?: string;
   ADMIN_EMAILS?: string;
   /** Optional: key for encrypting stored Gmail tokens. Defaults to one derived from GOOGLE_CLIENT_SECRET. */
   TOKEN_KEY?: string;
@@ -32,6 +35,8 @@ export interface Viewer {
   role: 'admin' | 'member';
   /** Member project ids (empty for admins). */
   projects: string[];
+  /** Archived projects: hidden from everyone, admins included, until restored. */
+  archived: string[];
   /** The viewer's own IANA time zone. "Today" is always the viewer's today. */
   tz: string;
 }
@@ -63,10 +68,13 @@ export async function loadViewer(env: Env, userId: string): Promise<Viewer | nul
   return toViewer(env, u, validTz(u.time_zone) || defaultTz(env));
 }
 export const toViewer = async (env: Env, u: UserRow, tz: string): Promise<Viewer> => ({
-  id: u.id, email: u.email, name: u.name, role: u.role, projects: u.role === 'admin' ? [] : await memberProjects(env.DB, u.id), tz,
+  id: u.id, email: u.email, name: u.name, role: u.role, projects: u.role === 'admin' ? [] : await memberProjects(env.DB, u.id),
+  archived: (await env.DB.prepare('SELECT id FROM projects WHERE archived = 1').all<{ id: string }>()).results.map((r) => r.id), tz,
 });
 
-export const canSeeProject = (v: Viewer, projectId: string) => v.role === 'admin' || v.projects.includes(projectId);
+/** Can this viewer see the project's work? Nobody sees an archived project's (restore it first). */
+export const canSeeProject = (v: Viewer, projectId: string) =>
+  !v.archived.includes(projectId) && (v.role === 'admin' || v.projects.includes(projectId));
 
 export class HttpError extends Error {
   constructor(public status: 400 | 401 | 403 | 404 | 409 | 500, message: string) {
@@ -126,14 +134,18 @@ export const mapTask = (r: TaskRow): Task => ({
 
 export interface UserRow {
   id: string; email: string; name: string; avatar_url: string | null; color: string; role: 'admin' | 'member';
-  status: 'invited' | 'active' | 'removed'; added_by: string | null; added_at: string; last_seen_at: string | null; time_zone: string | null;
+  status: 'invited' | 'active' | 'disabled'; added_by: string | null; added_at: string; last_seen_at: string | null; time_zone: string | null;
+  disabled_at: string | null; disabled_by: string | null;
 }
 export const mapUser = (r: UserRow, projects: string[]): User => ({
   id: r.id, email: r.email, name: r.name || r.email.split('@')[0], avatarUrl: r.avatar_url, color: r.color, role: r.role,
   status: r.status, projects: r.role === 'admin' ? [] : projects, addedAt: r.added_at, timeZone: r.time_zone,
+  disabledAt: r.disabled_at ?? null, disabledBy: r.disabled_by ?? null,
 });
 
-export interface ProjectRow { id: string; name: string; color: string; description: string; archived: number; created_at: string }
+export interface ProjectRow {
+  id: string; name: string; color: string; description: string; archived: number; created_at: string; archived_at: string | null; archived_by: string | null;
+}
 export const mapProject = (r: ProjectRow): Project => ({ id: r.id, name: r.name, color: r.color, description: r.description, archived: !!r.archived });
 
 export interface EventRow { id: string; task_id: string; actor_id: string; via: string | null; type: string; from_value: string | null; to_value: string | null; note: string | null; at: string }
@@ -153,7 +165,7 @@ export async function memberProjects(db: D1Database, userId: string): Promise<st
 /** Is this (active or invited) user able to see work in this project? */
 export async function userOnProject(db: D1Database, userId: string, projectId: string): Promise<boolean> {
   const u = await getUser(db, userId);
-  if (!u || u.status === 'removed') return false;
+  if (!u || u.status === 'disabled') return false;
   if (u.role === 'admin') return true;
   const r = await db.prepare('SELECT 1 FROM project_members WHERE user_id = ? AND project_id = ?').bind(userId, projectId).first();
   return !!r;

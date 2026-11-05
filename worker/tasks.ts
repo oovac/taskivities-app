@@ -9,11 +9,14 @@ import {
   userOnProject,
 } from './lib';
 
-/** SQL fragment limiting tasks to the projects the viewer can see. */
+/** SQL fragment limiting tasks to the projects the viewer can see (never an archived project's). */
 export const visible = (v: Viewer, alias = '') =>
   v.role === 'admin'
-    ? { sql: '1 = 1', binds: [] as unknown[] }
-    : { sql: `${alias}project_id IN (SELECT project_id FROM project_members WHERE user_id = ?)`, binds: [v.id] as unknown[] };
+    ? { sql: `${alias}project_id IN (SELECT id FROM projects WHERE archived = 0)`, binds: [] as unknown[] }
+    : {
+        sql: `${alias}project_id IN (SELECT m.project_id FROM project_members m JOIN projects p ON p.id = m.project_id WHERE m.user_id = ? AND p.archived = 0)`,
+        binds: [v.id] as unknown[],
+      };
 
 export async function loadTask(db: D1Database, id: string) {
   return db.prepare(`SELECT ${TASK_COLS} FROM tasks WHERE id = ?`).bind(id).first<TaskRow>();

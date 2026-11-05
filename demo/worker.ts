@@ -115,8 +115,8 @@ export default {
 
     if (path === '/login' && method === 'GET') return loginPage(req);
     if (path === '/auth/demo-login' && method === 'GET') return demoLogin(req, env);
-    // No Google sign-in in the demo.
-    if (path === '/auth/login') return Response.redirect(new URL(`/login${url.search}`, url).toString(), 302);
+    // No Google or WorkOS sign-in in the demo.
+    if (path === '/auth/login' || path.startsWith('/auth/workos')) return Response.redirect(new URL(`/login${url.search}`, url).toString(), 302);
     if (path === '/auth/gmail') return Response.redirect(new URL('/settings?gmail=unavailable', url).toString(), 302);
     if (method === 'PUT' && /^\/api\/admin\/settings\/(logo|icon)$/.test(path))
       return json({ error: 'Uploading a logo or app icon is turned off in the demo. On your own instance, admins upload them here.' }, 403);

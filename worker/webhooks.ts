@@ -70,7 +70,7 @@ const toReqInfo = (r: ReqRow): WebhookRequestInfo => ({
 /** People a task on this project can go to (admins are on every project). */
 async function projectMembers(db: D1Database, projectId: string): Promise<(Member & { tz: string | null })[]> {
   const { results } = await db.prepare(
-    `SELECT id, email, name, time_zone FROM users WHERE status != 'removed'
+    `SELECT id, email, name, time_zone FROM users WHERE status != 'disabled'
        AND (role = 'admin' OR id IN (SELECT user_id FROM project_members WHERE project_id = ?))`,
   ).bind(projectId).all<{ id: string; email: string; name: string; time_zone: string | null }>();
   return results.map((u) => ({ id: u.id, email: u.email, name: u.name, tz: u.time_zone }));

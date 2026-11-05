@@ -252,6 +252,7 @@ function create(name, opts) {
     console.log(`\n✔ Wrote tenants/${name}.env\n\nNext:\n` +
       `  npm run tenant -- secret ${name} GOOGLE_CLIENT_ID\n` +
       `  npm run tenant -- secret ${name} GOOGLE_CLIENT_SECRET\n` +
+      `  (optional, sign-in without Google: secret ${name} WORKOS_CLIENT_ID and WORKOS_API_KEY; see the README)\n` +
       `  npm run deploy -- ${name}\n`);
   } finally {
     rmSync(scratch, { recursive: true, force: true });

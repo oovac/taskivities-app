@@ -2,7 +2,8 @@
 import type { SeriesInfo } from './repeat';
 
 export type Role = 'admin' | 'member';
-export type UserStatus = 'invited' | 'active' | 'removed';
+/** Disabled people can't sign in, but stay on the Team page (and in every task's history) and can be enabled again. */
+export type UserStatus = 'invited' | 'active' | 'disabled';
 export type Priority = 1 | 2 | 3 | 4; // 1 Urgent · 2 High · 3 Normal (default) · 4 Low
 
 export interface User {
@@ -18,6 +19,9 @@ export interface User {
   addedAt: string;
   /** IANA time zone from their browser (null until they've opened the app). */
   timeZone: string | null;
+  /** When and by whom they were disabled (null unless disabled). */
+  disabledAt: string | null;
+  disabledBy: string | null;
 }
 
 export interface Project {
@@ -27,6 +31,15 @@ export interface Project {
   /** Written mainly for AI assistants (MCP clients): what belongs here, what doesn't, naming conventions. */
   description: string;
   archived: boolean;
+}
+
+/** An archived project, as the Team page lists it. */
+export interface ArchivedProject extends Project {
+  archivedAt: string | null;
+  archivedBy: string | null;
+  /** Its tasks (not counting archived tasks): hidden with it, back when it's restored. */
+  open: number;
+  done: number;
 }
 
 export interface Task {

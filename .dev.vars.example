@@ -4,6 +4,11 @@
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 
+# Optional: "Continue with email" sign-in through WorkOS AuthKit (use the Staging environment's values).
+# Redirect URI to add in WorkOS: http://localhost:5173/auth/workos/callback
+WORKOS_CLIENT_ID=
+WORKOS_API_KEY=
+
 # Optional, comma-separated: addresses always let in as admins. (On an empty database the first person to sign in
 # becomes the admin anyway.)
 ADMIN_EMAILS=

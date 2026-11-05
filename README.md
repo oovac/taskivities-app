@@ -11,16 +11,16 @@ The design reference is [`docs/wireframes.html`](docs/wireframes.html). Open it 
 | App | React 19 + TypeScript, built with Vite, served as static assets by the Worker |
 | API | One Cloudflare Worker using [Hono](https://hono.dev) (`worker/`) |
 | Database | Cloudflare D1 (SQLite). Schema in `migrations/` |
-| Sign-in | Google OAuth (code + PKCE), handled in the Worker, with HttpOnly session cookies stored in D1 |
+| Sign-in | Google OAuth (code + PKCE) and, optionally, WorkOS AuthKit (emailed codes, Microsoft, passkeys) for people without Google; handled in the Worker, with HttpOnly session cookies stored in D1 |
 | Live updates | The browser polls `/api/sync?since=<version>` every 10s (every 60s when the tab is hidden) |
 | AI assistants | Remote MCP server at `/mcp` (Streamable HTTP) on the same Worker: Cloudflare's `agents` SDK (`McpAgent`, one Durable Object per session) behind `@cloudflare/workers-oauth-provider` (OAuth 2.1 + dynamic client registration, tokens in KV) |
 
 ```
-worker/   index.ts (routes + OAuth provider) · auth.ts (Google + sessions) · api.ts (REST: tasks, sync) · tasks.ts (task rules shared by REST and MCP)
+worker/   index.ts (routes + OAuth provider) · auth.ts (Google, WorkOS + sessions) · api.ts (REST: tasks, sync) · tasks.ts (task rules shared by REST and MCP)
           mcp.ts (MCP tools) · oauth.ts (/authorize consent page for assistants) · admin.ts (people, projects, settings) · settings.ts (logo) · gmail.ts + invite-mail.ts (invite emails) · webhooks.ts · lib.ts
 shared/   types, date helpers and rules used by both the Worker and the app
 src/      React app: pages/ (Tasks, Projects, Team, Settings, Login), components/, actions.ts (all writes), keyboard.ts, focus.ts
-migrations/ (0001 schema, 0002 time zones, 0003 repeating tasks, 0004 settings, 0005 Gmail tokens, 0006 webhooks, 0007 checklists, 0008 attachments, 0009 upload links, 0010 archive)   seed/dev.sql (local sample data)
+migrations/ (0001 schema, 0002 time zones, 0003 repeating tasks, 0004 settings, 0005 Gmail tokens, 0006 webhooks, 0007 checklists, 0008 attachments, 0009 upload links, 0010 archive, 0011 disabled people, 0012 archived projects)   seed/dev.sql (local sample data)
 scripts/tenant.mjs (per-instance deploys)   tenants/ (each instance's Cloudflare IDs; only example.env is committed)
 ```
 
@@ -43,6 +43,8 @@ scripts/tenant.mjs (per-instance deploys)   tenants/ (each instance's Cloudflare
 - **Checklist:** each task can have one checklist (`checklist_items`, migration 0007). Anyone who can see the task can add items (pasting several lines adds them all), tick, rename or remove them, and every change is logged in the history. Rows show progress ("2/5"). A repeating task's next copy starts with the same items, unticked. Press **⇧C** to jump to it (and **⇧N** for notes); empty notes and checklists fold into small "Add" buttons.
 - **Comments** live in the task's history (`type = 'comment'`), so they're permanent like everything else there: no editing or deleting. Anyone who can see the task can comment, on open or done tasks, up to 4,000 characters. A comment moves the task's version on, so everyone's app picks it up on the next poll, and the assignee and creator get a "New comment" notice. Rows show a comment count. Press **C** on a task to comment.
 - **Archive, not delete:** **Archive task** in a task's ⋯ menu archives it (deliberately not a one-click button or a shortcut): it leaves every list, count, sync and assistant listing at once (with Undo), and nothing is lost. Archived tasks, open or done, are listed only on the **Projects** page, in a collapsed "Archived" section, where anyone on the project can restore them. An archived task can't be edited, commented on or ticked until it's restored. A repeating task whose open copy is archived pauses (no next copy) and carries on when restored. Migration 0010.
+- **Archiving projects:** admins archive an old project from its **Edit** sheet on the Team page. It's hidden from everyone, admins included, together with all its tasks (open and done): lists, counts, sync, webhooks and assistants treat it like a project nobody is on, its repeating tasks pause and its webhooks stop making tasks. Nothing is deleted, and members keep their place on it. Archived projects are listed in a collapsed "Archived" section under the Team page's projects, where an admin restores one and everything comes back as it was (a project of the same name has to be renamed first). Migration 0012.
+- **Disabling people, not deleting them:** the ⊘ button on the Team page disables someone (after their open tasks are handed to someone on the same projects). They can't sign in, their assistants lose access, their Gmail connection is deleted, and they can't be assigned anything; but their row stays, every task's history still names them, and their projects are remembered. Disabled people are listed in a collapsed "Disabled" section, where an admin enables them again (members confirm or change their projects). Adding a disabled person's address again also enables them. You can't disable yourself or the last admin. Migration 0011 (it renames the old `removed` status to `disabled`).
 - **History is append-only.** Every write updates `tasks` and inserts into `task_events` in the same D1 batch, and database triggers refuse any `UPDATE` or `DELETE` on `task_events`.
 - **Roles:**
   - Admins see every project and are the only ones who manage people and projects.
@@ -59,7 +61,7 @@ scripts/tenant.mjs (per-instance deploys)   tenants/ (each instance's Cloudflare
   - Credentials and IP addresses in headers (`authorization`, cookies, `x-forwarded-*`, Cloudflare's client IP headers) are never stored. Pause keeps logging without creating tasks; "Stop & edit samples" goes back to collecting.
 - **Invite emails** (optional, per admin; `worker/gmail.ts`):
   - An admin connects their Gmail on the **Settings** page. Google is asked for **`gmail.send` only**: the app can send mail as them, never read it. After that, adding people (and the resend button on the Team page) emails each one an invite from the admin's own address, with a sign-in button.
-  - The refresh token is stored encrypted (AES-GCM) in `google_tokens`, with a key derived from `GOOGLE_CLIENT_SECRET` (or the optional `TOKEN_KEY` secret). Disconnecting deletes it and revokes it at Google; removing the person deletes it too.
+  - The refresh token is stored encrypted (AES-GCM) in `google_tokens`, with a key derived from `GOOGLE_CLIENT_SECRET` (or the optional `TOKEN_KEY` secret). Disconnecting deletes it and revokes it at Google; disabling the person deletes it too.
   - **It never blocks adding people.** Not connected, the permission unticked, a revoked or expired token, the Gmail API off, or a Gmail error: the person is still added, and the admin is offered the sign-in link to share. A connection Google no longer accepts is dropped so the app shows "not connected" again.
   - It reuses the sign-in callback (`/auth/callback`), so there's no extra redirect URI to register, and it only connects the Google account the admin signs in with.
 - **Sign-in:** only email addresses added by an admin can sign in. On a brand-new install, the **first person to sign in becomes the admin** (the check is one atomic insert, so only one person can win). The optional `ADMIN_EMAILS` secret names addresses that are always let in as admins, which is useful for getting back in if you lock yourself out.
@@ -87,7 +89,7 @@ The Worker serves a remote MCP server at `https://<your-app-host>/mcp`. In Claud
 | `transfer_task(id, to, note?, this_only?)` | The new assignee must be on the task's project. `this_only` leaves future copies of a repeating task with the current person |
 | `project_day(project, date)` | What got finished in a project that day (by priority, then due date), plus what's still open |
 
-People and projects are given by name (or email, or "me"), not ids. Access is checked on every call, so removing someone or taking them off a project applies to their assistant at once. Access tokens last an hour; a connection lasts a year from approval, after which the person signs in again. Removing a person (or setting them inactive) cuts their assistant off immediately.
+People and projects are given by name (or email, or "me"), not ids. Access is checked on every call, so disabling someone, taking them off a project or archiving a project applies to their assistant at once. Access tokens last an hour; a connection lasts a year from approval, after which the person signs in again. Disabling a person cuts their assistant off immediately.
 
 ## Run it locally
 
@@ -147,6 +149,7 @@ What makes an instance is a small file, `tenants/<instance>.env`, which is **not
    npm run tenant -- secret acme GOOGLE_CLIENT_SECRET
    ```
    Optional: `ADMIN_EMAILS` (comma-separated addresses that are always let in as admins).
+   - **Optional: sign-in without Google** (see below): `WORKOS_CLIENT_ID` and `WORKOS_API_KEY`.
 5. **Deploy:**
    ```bash
    npm run deploy -- acme
@@ -154,6 +157,26 @@ What makes an instance is a small file, `tenants/<instance>.env`, which is **not
    This creates or updates the database tables, builds the app, and deploys it to that instance's Worker. The MCP Durable Object and custom domains are set up on the first deploy.
 6. **Sign in right away:** on an empty install the first person to sign in becomes the admin. Add your team on the **Team** page, and upload your logo on the **Settings** page.
 7. **Connect an assistant:** in Claude, add a custom connector with `https://<your-app-host>/mcp` and sign in. Nothing else to configure: assistants sign in through the same Google client.
+
+### Sign-in without Google (optional, WorkOS)
+
+Google sign-in works for any address with a Google account, including work addresses that aren't Gmail (people can make one at Google for their existing email). For people who don't want one, an instance can add a **Continue with email** button, run by [WorkOS AuthKit](https://workos.com/authkit): its hosted page sends a sign-in code by email, and can also offer Microsoft, passkeys or other methods you turn on there. WorkOS's free tier covers this (check [their pricing](https://workos.com/pricing)).
+
+Nothing else changes: WorkOS only proves the email address. The address still has to be on the Team page (the first sign-in on an empty install still becomes the admin), roles and projects work the same, and assistants connecting over MCP can sign in either way. Taskivities keeps its own 30-day session and ends the WorkOS session at once, so signing out here signs out, and the next sign-in asks again.
+
+1. Create an account at [dashboard.workos.com](https://dashboard.workos.com). Use the **Production** environment for live instances (Staging is for `http://localhost`).
+2. **Authentication:** turn on the methods to offer, for example **Magic Auth** (emailed codes), **Microsoft OAuth** and **Passkeys**. Google can stay off there: the app has its own Google button.
+3. **Redirects:** add `https://<your-app-host>/auth/workos/callback` for each instance (and `http://localhost:5173/auth/workos/callback` in Staging for local development). Set the **sign-in endpoint** (where AuthKit sends people to start a sign-in) to `https://<your-app-host>/auth/workos`.
+4. **API Keys:** copy the **Client ID** (`client_…`) and the **API key** (`sk_…`) into the instance:
+   ```bash
+   npm run tenant -- secret acme WORKOS_CLIENT_ID
+   ```
+   ```bash
+   npm run tenant -- secret acme WORKOS_API_KEY
+   ```
+5. Deploy. The sign-in page shows **Continue with email** whenever both are set; without them it shows Google only. An instance can also run on WorkOS alone, without the Google secrets (invite emails through Gmail then aren't available).
+
+One WorkOS environment can serve several instances: add each one's redirect URI.
 
 ### Day to day
 
@@ -175,8 +198,7 @@ Deploying to every instance after a code change is one command per instance; the
 
 ## Not built yet
 
-- **A list of connected assistants** in the app, with a way to disconnect them. For now a connection ends after a year, when the person is removed, or when an admin deletes its grant from the `OAUTH_KV` namespace.
-- **Archiving projects** from the UI. The column exists, but there's no button yet.
+- **A list of connected assistants** in the app, with a way to disconnect them. For now a connection ends after a year, when the person is disabled, or when an admin deletes its grant from the `OAUTH_KV` namespace.
 - **Automated tests.** So far everything has been checked by hand in the browser and with the API.
 
 ## License

@@ -1,12 +1,12 @@
 import { create } from 'zustand';
-import type { AppSettings, Priority, Project, Role, Task, TaskEvent, User, WebhookInfo } from '../shared/types';
+import type { AppSettings, ArchivedProject, Priority, Project, Role, Task, TaskEvent, User, WebhookInfo } from '../shared/types';
 import { NORMAL } from '../shared/types';
 import type { Repeat } from '../shared/repeat';
 import { type ThemePref, themePref } from './theme';
 
 export type Page = 'tasks' | 'projects' | 'team' | 'settings';
 export type View = 'today' | 'list' | 'board';
-export type PopType = 'move' | 'assign' | 'prio' | 'proj' | 'person' | 'projpick' | 'urole' | 'uproj' | 'uremove' | 'account' | 'repeat' | 'taskmenu' | 'pages';
+export type PopType = 'move' | 'assign' | 'prio' | 'proj' | 'person' | 'projpick' | 'urole' | 'uproj' | 'udisable' | 'uenable' | 'account' | 'repeat' | 'taskmenu' | 'pages';
 
 export interface Pop {
   type: PopType;
@@ -26,7 +26,11 @@ export interface Upload { id: string; taskId: string; name: string; loaded: numb
 export interface Toast { id: number; text: string; undo?: () => void; error?: boolean; action?: { label: string; run: () => void } }
 export interface Draft { title: string; notes: string; open: boolean; projectId: string | null; dueDate: string | null; assigneeId: string | null; priority: Priority; repeat: Repeat | null }
 export interface InviteDraft { emails: string; role: Role; projects: string[]; err: string | null; busy?: boolean }
-export interface ProjEdit { id: string | null; name: string; color: string; description: string; members: string[]; err: string | null; returnSel: string | null; busy?: boolean }
+export interface ProjEdit {
+  id: string | null; name: string; color: string; description: string; members: string[]; err: string | null; returnSel: string | null; busy?: boolean;
+  /** Showing the "Archive this project?" confirmation. */
+  archiving?: boolean;
+}
 
 export interface State {
   ready: boolean;
@@ -83,6 +87,10 @@ export interface State {
   /** Projects page: archived tasks of the selected project (null = not loaded), and whether the section is open. */
   archived: { project: string; tasks: Task[] } | null;
   archOpen: boolean;
+  /** Team page: archived projects (null = not loaded) and disabled people, each in a section that starts collapsed. */
+  archivedProjects: ArchivedProject[] | null;
+  archProjOpen: boolean;
+  disabledOpen: boolean;
 }
 
 const pageFromPath = (): Page => {
@@ -144,6 +152,9 @@ export const useStore = create<State>()(() => ({
   projOpen: false,
   archived: null,
   archOpen: false,
+  archivedProjects: null,
+  archProjOpen: false,
+  disabledOpen: false,
 }));
 
 export const S = () => useStore.getState();

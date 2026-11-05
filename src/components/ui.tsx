@@ -38,6 +38,8 @@ export const I = {
   users: (s = 15) => <Svg s={s}><circle cx="6" cy="5.5" r="2.3" /><path d="M1.8 13.2c.4-2.2 2.1-3.5 4.2-3.5s3.8 1.3 4.2 3.5" /><path d="M10.4 3.4a2.2 2.2 0 0 1 0 4.2M12 9.9c1.2.5 2 1.6 2.2 3.3" /></Svg>,
   gear: (s = 15) => <Svg s={s}><circle cx="8" cy="8" r="2.1" /><path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M3.6 12.4l1.1-1.1M11.3 4.7l1.1-1.1" /></Svg>,
   trash: (s = 15) => <Svg s={s}><path d="M2.8 4.3h10.4M6.3 4.3V2.8h3.4v1.5M4.3 4.3l.6 9h6.2l.6-9" /></Svg>,
+  ban: (s = 15) => <Svg s={s}><circle cx="8" cy="8" r="5.6" /><path d="M4 4l8 8" /></Svg>,
+  archive: (s = 15) => <Svg s={s}><rect x="2" y="2.8" width="12" height="3.2" rx="1" /><path d="M3.2 6v6.2a1 1 0 0 0 1 1h7.6a1 1 0 0 0 1-1V6M6.5 8.6h3" /></Svg>,
 };
 
 /** The app's logo: config/logo.svg if there is one, otherwise the built-in mark. */

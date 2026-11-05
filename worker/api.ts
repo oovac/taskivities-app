@@ -39,8 +39,8 @@ api.get('/bootstrap', async (c) => {
   }
   const all = users.results.map((u) => mapUser(u, byUser.get(u.id) ?? []));
   const me = all.find((u) => u.id === v.id)!;
-  // Removed people stay in the list (history still names them) but without their email.
-  const list = all.map((u) => (u.status === 'removed' ? { ...u, email: '' } : u));
+  // Disabled people stay in the list (history still names them); only admins see their email.
+  const list = all.map((u) => (u.status === 'disabled' && v.role !== 'admin' ? { ...u, email: '' } : u));
   const body: Bootstrap = { me, users: list, projects: visibleProjects.map(mapProject), today: today(v), tz: v.tz, ...meta, settings, gmail, attachments: !!c.env.FILES };
   return c.json(body);
 });

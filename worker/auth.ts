@@ -1,5 +1,5 @@
-// Google sign-in (OAuth 2.0 authorization code + PKCE) and cookie sessions.
-// Only emails that exist in `users` (added by an admin) can get in. On a brand-new install the first person
+// Sign-in (Google, and optionally WorkOS AuthKit) and cookie sessions. Both only prove an email address: whoever it is
+// gets in through signIn(), which lets in only emails that exist in `users` (added by an admin). On a brand-new install the first person
 // to sign in becomes the admin. ADMIN_EMAILS (optional) names extra addresses that are always let in as admins.
 import { Hono, type MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
@@ -142,6 +142,81 @@ authRoutes.get('/callback', async (c) => {
   return signIn(c, info.email, info.name ?? '', info.picture ?? null, next);
 });
 
+// ---------- WorkOS AuthKit (optional; on when WORKOS_CLIENT_ID and WORKOS_API_KEY are set) ----------
+// For people without a Google account. AuthKit's hosted page offers whatever is enabled in the WorkOS dashboard
+// (emailed codes, Microsoft, passkeys, …) and hands back a verified email. Taskivities keeps its own session, so the
+// WorkOS session is ended right away: signing out here really signs out, and the next sign-in asks again.
+const WORKOS = 'https://api.workos.com/user_management';
+const workosOn = (c: Ctx) => !!(c.env.WORKOS_CLIENT_ID && c.env.WORKOS_API_KEY);
+const googleOn = (c: Ctx) => !!(c.env.GOOGLE_CLIENT_ID && c.env.GOOGLE_CLIENT_SECRET);
+const workosRedirect = (c: Ctx) => `${new URL(c.req.url).origin}/auth/workos/callback`;
+
+/** Which sign-in buttons the sign-in page shows. */
+authRoutes.get('/methods', (c) => c.json({ google: googleOn(c), workos: workosOn(c) }));
+
+authRoutes.get('/workos', (c) => {
+  if (!workosOn(c)) return c.text('Email sign-in is not configured: set WORKOS_CLIENT_ID and WORKOS_API_KEY.', 500);
+  const state = randomToken(16);
+  setCookie(c, 'tv_workos', state, { ...cookieBase(c), path: '/auth', maxAge: 600 });
+  const next = safeNext(c.req.query('next'));
+  if (next !== '/') setCookie(c, NEXT_COOKIE, next, { ...cookieBase(c), path: '/auth', maxAge: 600 });
+  else deleteCookie(c, NEXT_COOKIE, { path: '/auth' });
+  const u = new URL(`${WORKOS}/authorize`);
+  u.search = new URLSearchParams({
+    client_id: c.env.WORKOS_CLIENT_ID!, redirect_uri: workosRedirect(c), response_type: 'code', provider: 'authkit', state,
+  }).toString();
+  return c.redirect(u.toString());
+});
+
+authRoutes.get('/workos/callback', async (c) => {
+  const { code, state, error } = c.req.query();
+  const saved = getCookie(c, 'tv_workos');
+  const next = safeNext(getCookie(c, NEXT_COOKIE));
+  deleteCookie(c, 'tv_workos', { path: '/auth' });
+  deleteCookie(c, NEXT_COOKIE, { path: '/auth' });
+  if (!workosOn(c)) return c.redirect('/login');
+  if (error || !code) return c.redirect(`/login?error=${error === 'access_denied' || !error ? 'cancelled' : 'workos'}`);
+  if (!saved || saved !== state) return c.redirect('/login?error=expired');
+  const res = await fetch(`${WORKOS}/authenticate`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      client_id: c.env.WORKOS_CLIENT_ID, client_secret: c.env.WORKOS_API_KEY, grant_type: 'authorization_code', code,
+      ip_address: c.req.header('cf-connecting-ip'), user_agent: c.req.header('user-agent'),
+    }),
+  }).catch(() => null);
+  if (!res?.ok) return c.redirect('/login?error=workos');
+  const r = await res.json<{
+    user?: { email?: string; email_verified?: boolean; first_name?: string | null; last_name?: string | null; profile_picture_url?: string | null };
+    access_token?: string;
+  }>();
+  const sid = sessionIdOf(r.access_token);
+  if (sid) {
+    c.executionCtx.waitUntil(fetch(`${WORKOS}/sessions/revoke`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${c.env.WORKOS_API_KEY}` },
+      body: JSON.stringify({ session_id: sid }),
+    }).catch(() => undefined));
+  }
+  const u = r.user;
+  if (!u?.email || u.email_verified === false) return c.redirect('/login?error=unverified');
+  const name = [u.first_name, u.last_name].filter(Boolean).join(' ');
+  return signIn(c, u.email, name, u.profile_picture_url || null, next);
+});
+
+/** The WorkOS session id ("sid") inside its access token. The token came straight from WorkOS, so it isn't re-verified. */
+function sessionIdOf(token: string | undefined): string | null {
+  try {
+    const part = token?.split('.')[1];
+    if (!part) return null;
+    const json = atob(part.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(part.length / 4) * 4, '='));
+    const sid = (JSON.parse(json) as { sid?: unknown }).sid;
+    return typeof sid === 'string' ? sid : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Local development only: sign in as any existing user without Google. */
 authRoutes.get('/dev-login', async (c) => {
   if (c.env.DEV_LOGIN !== '1' || !isLocal(c)) return c.notFound();
@@ -164,10 +239,10 @@ async function signIn(c: Ctx, rawEmail: string, name: string, picture: string | 
   const bootstrapAdmins = (c.env.ADMIN_EMAILS || '').toLowerCase().split(/[\s,;]+/).filter(Boolean);
   let user = await db.prepare('SELECT * FROM users WHERE email = ?').bind(email).first<UserRow>();
 
-  if ((!user || user.status === 'removed') && bootstrapAdmins.includes(email)) {
+  if ((!user || user.status === 'disabled') && bootstrapAdmins.includes(email)) {
     if (user) {
       await db.batch([
-        db.prepare("UPDATE users SET role = 'admin', status = 'active', name = ?, avatar_url = ?, last_seen_at = ? WHERE id = ?")
+        db.prepare("UPDATE users SET role = 'admin', status = 'active', disabled_at = NULL, disabled_by = NULL, name = ?, avatar_url = ?, last_seen_at = ? WHERE id = ?")
           .bind(name || user.name, picture, now, user.id),
         bumpDirectory(db),
       ]);
@@ -197,7 +272,7 @@ async function signIn(c: Ctx, rawEmail: string, name: string, picture: string | 
     if (user) await bumpDirectory(db).run();
   }
 
-  if (!user || user.status === 'removed') {
+  if (!user || user.status === 'disabled') {
     // Shown on the sign-in page so people know which address was refused.
     setCookie(c, 'tv_denied', email, { secure: cookieBase(c).secure, sameSite: 'Lax', path: '/', maxAge: 300 });
     return c.redirect('/login?error=no_access');
