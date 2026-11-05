@@ -5,7 +5,7 @@
 // (with a sandboxing Content-Security-Policy); anything else downloads.
 import { Hono } from 'hono';
 import { ATTACH_MAX_BYTES, ATTACH_PER_TASK_MAX, type Task } from '../shared/types';
-import { type AppEnv, type Env, type Viewer, HttpError, CURRENT_VERSION, bad, bumpVersion, eventStmt, forbidden, mapTask, notFound, nowIso, uid } from './lib';
+import { type AppEnv, type Env, type Viewer, HttpError, CURRENT_VERSION, bad, bumpVersion, eventStmt, forbidden, loadViewer, mapTask, notFound, nowIso, randomToken, sha256hex, uid } from './lib';
 import { loadTask, loadVisibleTask } from './tasks';
 
 interface AttachmentRow {
@@ -100,6 +100,64 @@ export async function readAttachment(env: Env, v: Viewer, taskId: string, id: st
   return { a, obj };
 }
 
+// ---------- for AI assistants (MCP attach_file) ----------
+const BY_EXT: Record<string, string> = {
+  txt: 'text/plain', md: 'text/markdown', markdown: 'text/markdown', csv: 'text/csv', tsv: 'text/tab-separated-values', json: 'application/json',
+  yaml: 'application/yaml', yml: 'application/yaml', xml: 'application/xml', html: 'text/html', htm: 'text/html', log: 'text/plain',
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', svg: 'image/svg+xml',
+  pdf: 'application/pdf', zip: 'application/zip', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+};
+export const typeFromName = (name: string) => BY_EXT[name.toLowerCase().split('.').pop() ?? ''] ?? 'application/octet-stream';
+
+/** Attaches bytes held in memory (text or decoded data from an assistant). */
+export function addAttachmentBytes(env: Env, v: Viewer, taskId: string, bytes: Uint8Array, name: string, type: string | undefined, via: string | null) {
+  return addAttachment(env, v, taskId, new Blob([bytes]).stream(), bytes.byteLength, encodeURIComponent(name), type || typeFromName(name), via);
+}
+
+/**
+ * Downloads a public https file and attaches it. Only http(s) on standard ports, no local addresses,
+ * at most ATTACH_MAX_BYTES, 20 seconds. The name comes from the caller, the server's filename, or the link.
+ */
+export async function addAttachmentFromUrl(env: Env, v: Viewer, taskId: string, rawUrl: string, name: string | undefined, type: string | undefined, via: string | null) {
+  await loadVisibleTask(env.DB, v, taskId); // check access before fetching anything
+  let url: URL;
+  try { url = new URL(rawUrl); } catch { throw bad("That isn't a valid link."); }
+  if (url.protocol !== 'https:') throw bad('Only https links can be attached.');
+  if (url.port && url.port !== '443') throw bad('Only links on the standard https port can be attached.');
+  if (/^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.|\[::1\]|\[f[cd])/i.test(url.hostname) || !url.hostname.includes('.')) {
+    throw bad('Only public links can be attached.');
+  }
+  let res: Response;
+  try {
+    res = await fetch(url.toString(), { redirect: 'follow', signal: AbortSignal.timeout(20_000), headers: { 'user-agent': 'Taskivities attachment fetcher' } });
+  } catch {
+    throw bad("Couldn't download that link.");
+  }
+  if (!res.ok || !res.body) throw bad(`Couldn't download that link (it answered ${res.status}).`);
+  const claimed = Number(res.headers.get('content-length') || 0);
+  if (claimed > ATTACH_MAX_BYTES) throw bad(`That file is over ${ATTACH_MAX_BYTES / 1024 / 1024} MB.`);
+  // Read it with a running total, so a server that doesn't say (or lies about) the size can't push past the limit.
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  const reader = res.body.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > ATTACH_MAX_BYTES) { await reader.cancel(); throw bad(`That file is over ${ATTACH_MAX_BYTES / 1024 / 1024} MB.`); }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let at = 0;
+  for (const c of chunks) { bytes.set(c, at); at += c.byteLength; }
+  const fromHeader = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(res.headers.get('content-disposition') ?? '')?.[1];
+  const fromPath = decodeURIComponent(url.pathname.split('/').filter(Boolean).pop() ?? '');
+  const finalName = name || (fromHeader ? decodeURIComponent(fromHeader) : '') || fromPath || url.hostname;
+  const finalType = type || (res.headers.get('content-type') ?? '').split(';')[0].trim() || typeFromName(finalName);
+  return addAttachmentBytes(env, v, taskId, bytes, finalName, finalType === 'application/octet-stream' ? typeFromName(finalName) : finalType, via);
+}
+
 // ---------- routes: /api/tasks/:id/attachments ----------
 export const attachmentRoutes = new Hono<AppEnv>();
 
@@ -132,3 +190,60 @@ attachmentRoutes.get('/:id/attachments/:aid', async (c) => {
     },
   });
 });
+
+// ---------- one-time upload links (MCP get_upload_url) ----------
+export const UPLOAD_LINK_MINUTES = 15;
+
+/** Makes a link that accepts one POSTed file for this task, as this person, for 15 minutes. Returns the secret path. */
+export async function createUploadLink(env: Env, v: Viewer, taskId: string, name: string | undefined, via: string | null) {
+  bucket(env);
+  const t = await loadVisibleTask(env.DB, v, taskId);
+  const secret = randomToken(32);
+  const now = new Date();
+  const expires = new Date(now.getTime() + UPLOAD_LINK_MINUTES * 60_000).toISOString();
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO upload_links (id, task_id, user_id, via, name, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(await sha256hex(secret), t.id, v.id, via, name ? cleanName(encodeURIComponent(name)) : null, now.toISOString(), expires),
+    // Tidy up links that expired more than a day ago.
+    env.DB.prepare('DELETE FROM upload_links WHERE expires_at < ?').bind(new Date(now.getTime() - 86_400_000).toISOString()),
+  ]);
+  return { path: `/upload/${secret}`, expiresAt: expires, task: t };
+}
+
+interface LinkRow { id: string; task_id: string; user_id: string; via: string | null; name: string | null; expires_at: string; used_at: string | null }
+
+/** POST /upload/<secret>: the raw file is the body; name from ?name=, x-file-name, or the name given when the link was made. */
+export const uploadRoutes = new Hono<AppEnv>();
+uploadRoutes.post('/:secret', async (c) => {
+  const env = c.env;
+  const id = await sha256hex(c.req.param('secret'));
+  const link = await env.DB.prepare('SELECT * FROM upload_links WHERE id = ?').bind(id).first<LinkRow>();
+  if (!link) return c.json({ ok: false, error: 'Unknown upload link.' }, 404);
+  const now = nowIso();
+  if (link.used_at) return c.json({ ok: false, error: 'This upload link was already used. Ask for a new one.' }, 410);
+  if (link.expires_at < now) return c.json({ ok: false, error: 'This upload link has expired. Ask for a new one.' }, 410);
+  // Claim it first, so two uploads racing on one link can't both get in.
+  const claim = await env.DB.prepare('UPDATE upload_links SET used_at = ? WHERE id = ? AND used_at IS NULL AND expires_at >= ?').bind(now, id, now).run();
+  if (!claim.meta.changes) return c.json({ ok: false, error: 'This upload link was already used. Ask for a new one.' }, 410);
+  try {
+    // Still on the team, and still able to see the task?
+    const v = await loadViewer(env, link.user_id);
+    if (!v) throw forbidden("The person who made this link can't sign in any more.");
+    const size = Number(c.req.header('content-length'));
+    if (!c.req.header('content-length')) throw bad('Send the file as the request body, with a Content-Length.');
+    const name = c.req.query('name') ? encodeURIComponent(c.req.query('name')!) : c.req.header('x-file-name') ?? (link.name ? encodeURIComponent(link.name) : undefined);
+    const type = c.req.header('content-type');
+    const task = await addAttachment(env, v, link.task_id, c.req.raw.body, size, name,
+      !type || type === 'application/x-www-form-urlencoded' ? typeFromName(cleanName(name)) : type, link.via);
+    const added = task.attachments[task.attachments.length - 1];
+    await env.DB.prepare('UPDATE upload_links SET attachment_id = ? WHERE id = ?').bind(added.id, id).run();
+    return c.json({ ok: true, attachment: { id: added.id, name: added.name, type: added.type, size: added.size }, task: { id: task.id, title: task.title } }, 201);
+  } catch (e) {
+    // Didn't work: let the link be used again (until it expires).
+    await env.DB.prepare('UPDATE upload_links SET used_at = NULL WHERE id = ?').bind(id).run();
+    if (e instanceof HttpError) return c.json({ ok: false, error: e.message }, e.status);
+    console.error(e);
+    return c.json({ ok: false, error: "Couldn't store the file." }, 500);
+  }
+});
+uploadRoutes.all('/:secret', (c) => c.json({ ok: false, error: 'POST the file to this address.' }, 405, { allow: 'POST' }));

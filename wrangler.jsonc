@@ -22,6 +22,7 @@
 			"/api/*",
 			"/logo.svg",
 			"/hooks/*",
+			"/upload/*",
 			"/auth/*",
 			"/mcp",
 			"/mcp/*",

@@ -88,7 +88,7 @@ export function ConnectSheet() {
           <div className="lbl" style={{ marginTop: 18 }}>What it can do</div>
           <p className="cn-small">
             List your projects (their descriptions tell it where tasks belong) and tasks; create tasks; change a task's date, priority, title,
-            notes or project; mark tasks done; transfer them to someone on the same project; and summarize what a project finished on a day.
+            notes or project; mark tasks done; transfer them to someone on the same project; comment, update checklists and attach files (including from your computer, with Claude Code); and summarize what a project finished on a day.
           </p>
           <p className="cn-small muted">
             A connection lasts a year, then you approve it again. If you're removed from the team or a project, your assistant loses that access

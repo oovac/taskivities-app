@@ -20,7 +20,7 @@ worker/   index.ts (routes + OAuth provider) · auth.ts (Google + sessions) · a
           mcp.ts (MCP tools) · oauth.ts (/authorize consent page for assistants) · admin.ts (people, projects, settings) · settings.ts (logo) · gmail.ts + invite-mail.ts (invite emails) · webhooks.ts · lib.ts
 shared/   types, date helpers and rules used by both the Worker and the app
 src/      React app: pages/ (Tasks, Projects, Team, Settings, Login), components/, actions.ts (all writes), keyboard.ts, focus.ts
-migrations/ (0001 schema, 0002 time zones, 0003 repeating tasks, 0004 settings, 0005 Gmail tokens, 0006 webhooks, 0007 checklists, 0008 attachments)   seed/dev.sql (local sample data)
+migrations/ (0001 schema, 0002 time zones, 0003 repeating tasks, 0004 settings, 0005 Gmail tokens, 0006 webhooks, 0007 checklists, 0008 attachments, 0009 upload links)   seed/dev.sql (local sample data)
 scripts/tenant.mjs (per-instance deploys)   tenants/ (each instance's Cloudflare IDs; only example.env is committed)
 ```
 
@@ -76,6 +76,8 @@ The Worker serves a remote MCP server at `https://<your-app-host>/mcp`. In Claud
 | `update_task(id, title?, notes?, project?, due_date?, priority?, status?, repeat?, stop_repeating?, skip?)` | Only the fields given change; `status: "open"` reopens. On a repeating task, can change, stop or skip the repeat |
 | `complete_task(id)` | Marks it done today; for a repeating task, returns the new copy as `next_copy` |
 | `list_comments(id)` | The task's comments, oldest first |
+| `attach_file(id, name?, text \| base64 \| url)` | Attaches a file: text it writes, a small base64 file (≤ 2 MB), or a public https link the server downloads (≤ 25 MB; no local addresses) |
+| `get_upload_url(id, name?)` | A one-time link (15 minutes) to POST a file to directly, e.g. `curl --data-binary @report.pdf` from an assistant that can run commands. Only a hash of the link is stored; it works once, as the person who asked, and stops working if they lose access |
 | `read_attachment(id, file)` | Reads a text file attached to a task (up to 200 KB). Tasks list their `attachments` in every result |
 | `update_checklist(id, add?, check?, uncheck?, remove?)` | Changes the task's checklist; items are referred to by id or exact text. Tasks show their `checklist` in every result |
 | `add_comment(id, text)` | Posts a comment as the user, marked "via <assistant>" |

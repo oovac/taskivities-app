@@ -11,6 +11,8 @@ export interface McpProps extends Record<string, unknown> {
   userId: string;
   /** Shown in task history as "via …". From the client's registration (e.g. "Claude"). */
   clientName: string;
+  /** The app's address when the assistant connected (e.g. https://tasks.acme.com), for links like upload URLs. */
+  origin?: string;
 }
 
 export const oauthRoutes = new Hono<AppEnv>();
@@ -120,7 +122,7 @@ oauthRoutes.post('/', async (c) => {
     const approved = await oauth.approveConsent(c.req.raw, handle);
     const client = await oauth.lookupClient(approved.request.clientId);
     const clientName = cleanClientName(client?.clientName);
-    const props: McpProps = { userId: user.id, clientName };
+    const props: McpProps = { userId: user.id, clientName, origin: new URL(c.req.url).origin };
     const { redirectTo } = await oauth.completeAuthorization({
       request: approved.request, // from storage, not from the form
       userId: user.id,

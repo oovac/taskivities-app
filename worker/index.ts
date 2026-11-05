@@ -8,7 +8,7 @@ import { TaskivitiesMCP } from './mcp';
 import { oauthRoutes } from './oauth';
 import { serveLogo } from './settings';
 import { hookRoutes } from './webhooks';
-import { attachmentRoutes } from './attachments';
+import { attachmentRoutes, uploadRoutes } from './attachments';
 
 // The MCP session Durable Object (bound as MCP_OBJECT in wrangler.jsonc).
 export { TaskivitiesMCP };
@@ -26,6 +26,8 @@ app.get('/logo.svg', serveLogo);
 
 // Incoming webhooks from other services (public; the secret is in the URL). See worker/webhooks.ts.
 app.route('/hooks', hookRoutes);
+// One-time upload links for AI assistants (secret in the URL). See worker/attachments.ts.
+app.route('/upload', uploadRoutes);
 
 app.route('/auth', authRoutes);
 // Sign-in + consent page for AI assistants connecting over MCP.

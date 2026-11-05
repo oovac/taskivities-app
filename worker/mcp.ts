@@ -12,7 +12,7 @@ import {
   HttpError, TASK_COLS, bad, canSeeProject, loadViewer, mapProject, mapTask, mapUser, today,
 } from './lib';
 import type { McpProps } from './oauth';
-import { readAttachment } from './attachments';
+import { UPLOAD_LINK_MINUTES, addAttachmentBytes, addAttachmentFromUrl, createUploadLink, readAttachment, typeFromName } from './attachments';
 import { addComment, changeChecklist, createTask, loadVisibleTask, updateTask, updateTaskWithNext, visible } from './tasks';
 
 const PRIORITY_NAMES = ['urgent', 'high', 'normal', 'low'] as const;
@@ -411,6 +411,79 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
           if (a.size > 200 * 1024) return { name: a.name, size: a.size, note: 'Too large to read here (over 200 KB).' };
           const { obj } = await readAttachment(this.env, v, t.id, a.id);
           return { name: a.name, type: a.type, text: await obj.text() };
+        }),
+    );
+
+    this.server.registerTool(
+      'attach_file',
+      {
+        title: 'Attach a file to a task',
+        description:
+          'Attach a file to a task, as you. Give exactly one of: `text` (a file you write, such as notes.md or a CSV), ' +
+          '`base64` (a small binary file, up to 2 MB), or `url` (a public https link the server downloads, up to 25 MB). ' +
+          'Everyone on the project sees it, and the task history records it as attached via this assistant. ' +
+          "Only attach what the user asked for. If attachments aren't set up on this instance, it says so.",
+        inputSchema: {
+          id: z.string().describe('Task id from list_tasks.'),
+          name: z.string().max(180).optional().describe('File name with extension, e.g. "meeting-notes.md". Required for text and base64; for a url it defaults to the file\'s own name.'),
+          text: z.string().max(2_000_000).optional().describe('File contents as text (saved as UTF-8).'),
+          base64: z.string().max(2_800_000).optional().describe('File contents, base64-encoded (up to 2 MB once decoded).'),
+          url: z.string().url().optional().describe('A public https link to download and attach.'),
+          type: z.string().max(100).optional().describe('MIME type, e.g. "text/csv". Usually worked out from the name.'),
+        },
+      },
+      (args) =>
+        this.run(async (v, dir, t0) => {
+          const given = [args.text !== undefined, args.base64 !== undefined, args.url !== undefined].filter(Boolean).length;
+          if (given !== 1) throw bad('Give exactly one of text, base64 or url.');
+          let task: Task;
+          if (args.url) {
+            task = await addAttachmentFromUrl(this.env, v, args.id, args.url, args.name, args.type, this.via);
+          } else {
+            if (!args.name?.trim()) throw bad('Give the file a name, e.g. "notes.md".');
+            let bytes: Uint8Array;
+            if (args.text !== undefined) bytes = new TextEncoder().encode(args.text);
+            else {
+              try { bytes = Uint8Array.from(atob(args.base64!.replace(/\s+/g, '')), (ch) => ch.charCodeAt(0)); } catch { throw bad("That base64 data couldn't be decoded."); }
+              if (bytes.byteLength > 2 * 1024 * 1024) throw bad('Data passed as base64 can be at most 2 MB. Use a url for bigger files.');
+            }
+            task = await addAttachmentBytes(this.env, v, args.id, bytes, args.name, args.type ?? (args.text !== undefined && !/\.[a-z0-9]+$/i.test(args.name) ? 'text/plain' : undefined), this.via);
+          }
+          const added = task.attachments[task.attachments.length - 1];
+          return { attached: { id: added.id, name: added.name, type: added.type, size: added.size }, task: describeTask(task, dir, t0) };
+        }),
+    );
+
+    this.server.registerTool(
+      'get_upload_url',
+      {
+        title: 'Get an upload link',
+        description:
+          `Get a one-time link for attaching a file to a task by POSTing it directly, e.g. a file from the user's computer when you can run commands ` +
+          `(curl --data-binary @path). It works once, for ${UPLOAD_LINK_MINUTES} minutes, up to 25 MB, and the file is attached as the user, ` +
+          'via this assistant. Prefer attach_file for text you write.',
+        inputSchema: {
+          id: z.string().describe('Task id from list_tasks.'),
+          name: z.string().max(180).optional().describe('File name to use, e.g. "report.pdf" (can also be given when uploading, as ?name=).'),
+        },
+      },
+      (args) =>
+        this.run(async (v) => {
+          const link = await createUploadLink(this.env, v, args.id, args.name, this.via);
+          const origin = this.props?.origin;
+          const url = origin ? `${origin}${link.path}` : link.path;
+          const type = args.name ? typeFromName(args.name) : 'application/octet-stream';
+          return {
+            upload_url: url,
+            method: 'POST',
+            expires_at: link.expiresAt,
+            task: link.task.title,
+            how: `curl -sS -X POST --data-binary @'<path to file>' -H 'content-type: ${type}' '${url}${args.name ? '' : '?name=<file name>'}'`,
+            notes: [
+              'Send the file as the raw request body (not a form). One file per link; ask again for another.',
+              ...(origin ? [] : ["This connection is older, so the link is a path: put this app's address (the MCP server's, without /mcp) in front of it."]),
+            ],
+          };
         }),
     );
 
