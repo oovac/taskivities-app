@@ -6,7 +6,7 @@ import { type ThemePref, themePref } from './theme';
 
 export type Page = 'tasks' | 'projects' | 'team' | 'settings';
 export type View = 'today' | 'list' | 'board';
-export type PopType = 'move' | 'assign' | 'prio' | 'proj' | 'person' | 'projpick' | 'urole' | 'uproj' | 'uremove' | 'account' | 'repeat' | 'taskmenu';
+export type PopType = 'move' | 'assign' | 'prio' | 'proj' | 'person' | 'projpick' | 'urole' | 'uproj' | 'uremove' | 'account' | 'repeat' | 'taskmenu' | 'pages';
 
 export interface Pop {
   type: PopType;

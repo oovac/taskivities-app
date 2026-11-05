@@ -5,7 +5,7 @@ import { ConnectSheet } from './components/ConnectSheet';
 import { HelpSheet } from './components/HelpSheet';
 import { WebhookSheet } from './components/WebhookSheet';
 import { Popover } from './components/Popover';
-import { Avatar, I, LogoMark } from './components/ui';
+import { Avatar, I, LogoMark, Wordmark } from './components/ui';
 import { afterRender, focusNav, navEls, onFocusIn } from './focus';
 import { onKeyDown } from './keyboard';
 import { ProjectsPage } from './pages/ProjectsPage';
@@ -59,13 +59,12 @@ export function App() {
     <div className="app">
       <div className="topbar">
         <button className="skip" onClick={() => focusNav(navEls().find((n) => n.tabIndex === 0) || navEls()[0])}>Skip to tasks</button>
-        <div className="logo"><LogoMark version={s.settings.logoVersion} />taskivities</div>
-        <nav className="topnav" aria-label="Main">
-          <button className={s.page === 'tasks' ? 'on' : ''} data-act="page" data-pg="tasks" aria-current={s.page === 'tasks' ? 'page' : undefined} onClick={() => setPage('tasks')}>Tasks</button>
-          <button className={s.page === 'projects' ? 'on' : ''} data-act="page" data-pg="projects" aria-current={s.page === 'projects' ? 'page' : undefined} onClick={() => setPage('projects')}>Projects</button>
-          {admin && <button className={s.page === 'team' ? 'on' : ''} data-act="page" data-pg="team" aria-current={s.page === 'team' ? 'page' : undefined} onClick={() => setPage('team')}>Team</button>}
-          {admin && <button className={s.page === 'settings' ? 'on' : ''} data-act="page" data-pg="settings" aria-current={s.page === 'settings' ? 'page' : undefined} onClick={() => setPage('settings')}>Settings</button>}
-        </nav>
+        {/* The logo goes home (Tasks); the other pages are in the ⋯ menu next to it. */}
+        <button className="logo" data-act="home" aria-label="Taskivities: go to Tasks" title="Tasks  (G T)" onClick={() => setPage('tasks')}>
+          <LogoMark version={s.settings.logoVersion} /><Wordmark />
+        </button>
+        <button className={`icon-btn pages-btn${s.pop?.type === 'pages' ? ' on' : ''}`} data-act="pages" aria-label="Pages" aria-haspopup="menu" title="Projects, Team, Settings"
+          onClick={(e) => openPop({ type: 'pages' }, e.currentTarget)}>{I.dots()}</button>
         <div className="spacer" />
         <button className="ai-btn" data-act="connect" title="MCP: connect Claude or another AI assistant" onClick={openConnect}>{I.bolt(14)}<span>MCP</span></button>
         <button className="icon-btn kb-btn" title="Keyboard shortcuts  (?)" aria-label="Keyboard shortcuts" onClick={openHelp}>{I.kbd()}</button>

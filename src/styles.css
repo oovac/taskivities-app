@@ -51,7 +51,10 @@ b{font-weight:600}
 /* ---------- app ---------- */
 .app{position:relative;height:100vh;height:100dvh;display:flex;flex-direction:column;min-height:0;background:var(--bg);overflow:hidden}
 .topbar{--tb-h:56px;--tb-x:22px;height:calc(var(--tb-h) + env(safe-area-inset-top));flex:none;display:flex;align-items:center;gap:14px;padding:env(safe-area-inset-top) max(var(--tb-x),env(safe-area-inset-right)) 0 max(var(--tb-x),env(safe-area-inset-left));background:var(--panel);border-bottom:1px solid var(--line)}
-.logo{display:flex;align-items:center;gap:9px;font-weight:700;letter-spacing:-.01em;font-size:15.5px}
+.logo{display:flex;align-items:center;gap:9px;padding:4px 6px;margin:0 -6px;border-radius:9px;color:inherit;font-weight:700;letter-spacing:-.01em;font-size:15.5px}
+.logo:hover{background:var(--fill)}
+.wordmark-wrap{display:flex;flex:none;color:var(--text)}
+.wordmark{display:block;height:15px;width:auto;margin-top:-2px} /* the check rises above the letters; lift so the letters sit centred */
 .logo-img{width:26px;height:26px;display:block;flex:none;object-fit:contain}
 .logo-img.big{width:52px;height:52px;margin:0 auto 16px}
 .spacer{flex:1}
@@ -189,10 +192,9 @@ button.peek:hover{border-style:solid;border-color:var(--accent-line);background:
 .peek.quiet{color:var(--faint)}
 
 /* top navigation + projects page */
-.topnav{display:flex;gap:2px;margin-left:18px}
-.topnav button{padding:6px 12px;border-radius:8px;font-size:13.5px;font-weight:500;color:var(--muted)}
-.topnav button:hover{color:var(--text);background:var(--fill)}
-.topnav button.on{color:var(--text);background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+.pages-btn{margin-left:-6px}
+.pages-btn:hover,.pages-btn.on{color:var(--text);background:var(--fill)}
+.opt.on{color:var(--accent-ink);background:var(--accent-soft);font-weight:600}
 .pbadge{--s:40px;width:var(--s);height:var(--s);border-radius:calc(var(--s)*.28);display:inline-grid;place-items:center;color:#fff;font-weight:700;font-size:calc(var(--s)*.36);flex:none;letter-spacing:.02em}
 .pbadge.all{background:var(--fill-strong);color:var(--muted)}
 .pbadge.all svg{width:55%;height:55%}
@@ -482,9 +484,8 @@ kbd{display:inline-grid;place-items:center;min-width:21px;height:21px;padding:0 
   .pdesc{max-width:200px}
   .team .trow.th,.team .tstat,.team .tproj{display:none}
   .inv-grid{grid-template-columns:1fr}
-  .topnav{margin-left:6px}
-  .topnav button{padding:6px 9px}
   .logo{font-size:0;gap:0}
+  .logo .wordmark-wrap{display:none}
   .contrib{margin-bottom:16px}
   .help-b{grid-template-columns:1fr}
   .kb-btn{display:none}
@@ -530,13 +531,9 @@ kbd{display:inline-grid;place-items:center;min-width:21px;height:21px;padding:0 
 .ai-btn{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;font-size:12.5px;font-weight:500;color:var(--purple-ink);background:var(--purple-soft)}
 .ai-btn:hover{background:var(--purple-soft)}
 @media (max-width:640px){ .ai-btn span{display:none} .ai-btn{padding:6px} }
-/* Phones: the tabs scroll sideways instead of pushing the account button off screen; no keyboard, so no shortcuts button. */
+/* Phones: no keyboard, so no shortcuts button. */
 @media (max-width:640px){
   .kb-btn{display:none}
-  .topbar .spacer{display:none}
-  .topnav{flex:1 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none;margin-left:2px}
-  .topnav::-webkit-scrollbar{display:none}
-  .topnav button{padding:6px 8px;white-space:nowrap;flex:none}
   .topbar > .ai-btn,.topbar > .sync,.topbar > .me{flex:none}
 }
 

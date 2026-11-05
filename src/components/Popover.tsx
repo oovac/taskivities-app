@@ -67,6 +67,7 @@ function Content({ p, s }: { p: Pop; s: State }) {
     case 'account': return <AccountPop s={s} />;
     case 'taskmenu': return <TaskMenu p={p} s={s} />;
     case 'repeat': return <RepeatPop p={p} s={s} />;
+    case 'pages': return <PagesPop s={s} />;
   }
 }
 
@@ -498,6 +499,30 @@ function CustomRepeat({ init, base, onBack, onSave }: { init: Repeat; base: stri
 }
 
 /** The ⋯ menu on an open task: actions that shouldn't be one click away. */
+// ---------- pages (the ⋯ next to the logo) ----------
+function PagesPop({ s }: { s: State }) {
+  const admin = isAdmin(s.me!);
+  const pages = [
+    // Tasks only from another page: the logo goes there too.
+    ...(s.page !== 'tasks' ? [{ pg: 'tasks' as const, label: 'Tasks', icon: I.check(14), key: 'G T' }] : []),
+    { pg: 'projects' as const, label: 'Projects', icon: I.folder(15), key: 'G P' },
+    ...(admin ? [
+      { pg: 'team' as const, label: 'Team', icon: I.users(15), key: 'G U' },
+      { pg: 'settings' as const, label: 'Settings', icon: I.gear(15), key: 'G S' },
+    ] : []),
+  ];
+  return (
+    <div role="menu" aria-label="Pages">
+      {pages.map((x) => (
+        <button key={x.pg} role="menuitem" className={`opt${s.page === x.pg ? ' on' : ''}`} data-act="page" data-pg={x.pg}
+          aria-current={s.page === x.pg ? 'page' : undefined} onClick={() => { closePop(false); setPage(x.pg); }}>
+          {x.icon}{x.label}<span className="r">{x.key}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function TaskMenu({ p, s }: { p: Pop; s: State }) {
   const t = s.tasks[p.id!];
   if (!t) return null;

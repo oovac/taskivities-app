@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { PRIORITIES, type Priority, type Project, type User } from '../../shared/types';
 import { logoUrl } from '../brand';
+import { WORDMARK_SVG } from '../wordmark';
 import { displayName } from '../util';
 
 const Svg = ({ s = 16, sw = 1.6, children }: { s?: number; sw?: number; children: ReactNode }) => (
@@ -33,6 +34,9 @@ export const I = {
   phone: (s = 15) => <Svg s={s}><rect x="4.5" y="1.5" width="7" height="13" rx="1.8" /><path d="M7.2 12.2h1.6" /></Svg>,
   mail: (s = 15) => <Svg s={s}><rect x="2" y="3.5" width="12" height="9" rx="1.8" /><path d="M2.5 4.5L8 8.6l5.5-4.1" /></Svg>,
   link: (s = 15) => <Svg s={s}><path d="M6.8 9.2a2.6 2.6 0 0 0 3.7 0l2.2-2.2a2.6 2.6 0 0 0-3.7-3.7l-.9.9M9.2 6.8a2.6 2.6 0 0 0-3.7 0L3.3 9a2.6 2.6 0 0 0 3.7 3.7l.9-.9" /></Svg>,
+  folder: (s = 15) => <Svg s={s}><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h2.8l1.5 1.6h4.7A1.5 1.5 0 0 1 14 6.1v5.4a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5z" /></Svg>,
+  users: (s = 15) => <Svg s={s}><circle cx="6" cy="5.5" r="2.3" /><path d="M1.8 13.2c.4-2.2 2.1-3.5 4.2-3.5s3.8 1.3 4.2 3.5" /><path d="M10.4 3.4a2.2 2.2 0 0 1 0 4.2M12 9.9c1.2.5 2 1.6 2.2 3.3" /></Svg>,
+  gear: (s = 15) => <Svg s={s}><circle cx="8" cy="8" r="2.1" /><path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M3.6 12.4l1.1-1.1M11.3 4.7l1.1-1.1" /></Svg>,
   trash: (s = 15) => <Svg s={s}><path d="M2.8 4.3h10.4M6.3 4.3V2.8h3.4v1.5M4.3 4.3l.6 9h6.2l.6-9" /></Svg>,
 };
 
@@ -40,6 +44,11 @@ export const I = {
 /** The team's logo (uploaded on the Settings page, or the built-in one). Outside the app (sign-in page) pass no version. */
 export function LogoMark({ big = false, version }: { big?: boolean; version?: string }) {
   return <img className={`logo-img${big ? ' big' : ''}`} src={logoUrl(version)} alt="" />;
+}
+
+/** The TASKIVITIES wordmark (letters follow the text colour; the K is a green check). */
+export function Wordmark() {
+  return <span className="wordmark-wrap" dangerouslySetInnerHTML={{ __html: WORDMARK_SVG }} />;
 }
 
 export function Avatar({ user, size = 22 }: { user: User | undefined; size?: number }) {

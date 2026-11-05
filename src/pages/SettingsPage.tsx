@@ -4,7 +4,7 @@ import { connectGmail, createHook, disconnectGmail, loadHooks, openHook, resetIc
 import { ICON_SIZES } from '../../shared/types';
 import { hookStatus } from '../components/WebhookSheet';
 import { logoUrl } from '../brand';
-import { I, LogoMark } from '../components/ui';
+import { I, LogoMark, Wordmark } from '../components/ui';
 import { useStore } from '../store';
 
 const MAX_KB = 256;
@@ -64,7 +64,7 @@ export function SettingsPage() {
         <div className="sec-h"><h2>Logo</h2><span className="cnt">{customLogo ? 'Custom' : 'Built-in'}</span></div>
         <div className="card set-card">
           <div className="set-prev" aria-label="Preview">
-            <div className="sp-head"><LogoMark version={logoVersion} />taskivities</div>
+            <div className="sp-head"><LogoMark version={logoVersion} /><Wordmark /></div>
             <div className="sp-tab"><img src={logoUrl(logoVersion)} alt="" />Taskivities<span className="x">×</span></div>
           </div>
           <div className="set-body">
