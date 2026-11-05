@@ -21,6 +21,7 @@
 		"run_worker_first": [
 			"/api/*",
 			"/logo.svg",
+			"/hooks/*",
 			"/auth/*",
 			"/mcp",
 			"/mcp/*",

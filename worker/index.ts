@@ -7,6 +7,7 @@ import { type AppEnv, type Env, HttpError } from './lib';
 import { TaskivitiesMCP } from './mcp';
 import { oauthRoutes } from './oauth';
 import { serveLogo } from './settings';
+import { hookRoutes } from './webhooks';
 
 // The MCP session Durable Object (bound as MCP_OBJECT in wrangler.jsonc).
 export { TaskivitiesMCP };
@@ -21,6 +22,9 @@ app.onError((err, c) => {
 
 // The logo (header, sign-in page, browser tab icon). Public, so the sign-in page can show it.
 app.get('/logo.svg', serveLogo);
+
+// Incoming webhooks from other services (public; the secret is in the URL). See worker/webhooks.ts.
+app.route('/hooks', hookRoutes);
 
 app.route('/auth', authRoutes);
 // Sign-in + consent page for AI assistants connecting over MCP.

@@ -4,6 +4,7 @@ import { EMAIL_RE } from '../shared/rules';
 import { DESCRIPTION_MAX, PROJECT_COLORS, USER_COLORS, type Role } from '../shared/types';
 import { disconnect, sendInvites, type SendResult } from './gmail';
 import { checkSvg, saveLogo } from './settings';
+import { webhookAdmin } from './webhooks';
 import {
   type AppEnv, type Ctx, type ProjectRow, type UserRow, CURRENT_VERSION, auditStmt, bad, bumpDirectory, bumpVersion, conflict, eventStmt,
   forbidden, getUser, memberProjects, notFound, nowIso, uid,
@@ -15,6 +16,8 @@ admin.use('*', async (c, next) => {
   if (c.get('viewer').role !== 'admin') throw forbidden('Only admins can do that.');
   await next();
 });
+
+admin.route('/webhooks', webhookAdmin);
 
 const activeAdmins = async (db: D1Database) =>
   (await db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND status != 'removed'").first<{ n: number }>())!.n;

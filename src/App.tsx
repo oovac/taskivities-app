@@ -3,6 +3,7 @@ import { boot, closePop, openConnect, openHelp, openPop, setPage, sync } from '.
 import { Drawer } from './components/Drawer';
 import { ConnectSheet } from './components/ConnectSheet';
 import { HelpSheet } from './components/HelpSheet';
+import { WebhookSheet } from './components/WebhookSheet';
 import { Popover } from './components/Popover';
 import { Avatar, I, LogoMark } from './components/ui';
 import { afterRender, focusNav, navEls, onFocusIn } from './focus';
@@ -82,6 +83,7 @@ export function App() {
       <Drawer />
       {s.help && <HelpSheet />}
       {s.connect && <ConnectSheet />}
+      {s.hookEdit && <WebhookSheet key={s.hookEdit} />}
       {s.toast && (
         <div className={`toast ${s.toast.error ? 'err' : ''}`} role="status" key={s.toast.id}>
           <span>{s.toast.text}</span>

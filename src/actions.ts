@@ -2,7 +2,7 @@
 import { addDays, rel, weekStart } from '../shared/dates';
 import { type Repeat, describe } from '../shared/repeat';
 import { onProject } from '../shared/rules';
-import type { AppSettings, Bootstrap, InviteEmailResult, Priority, Project, Role, SyncResponse, Task, TaskEvent, User } from '../shared/types';
+import type { AppSettings, Bootstrap, InviteEmailResult, WebhookInfo, WebhookRequestInfo, Priority, Project, Role, SyncResponse, Task, TaskEvent, User } from '../shared/types';
 import { PRIORITIES } from '../shared/types';
 import { api, ApiError } from './api';
 import { applyFavicon } from './brand';
@@ -509,4 +509,71 @@ export async function resetLogo() {
   } catch (e) {
     toastError(e);
   }
+}
+
+// ---------- webhooks (admins) ----------
+export async function loadHooks() {
+  try {
+    const r = await api.get<{ webhooks: WebhookInfo[] }>('/api/admin/webhooks');
+    set({ hooks: r.webhooks });
+  } catch (e) {
+    toastError(e);
+  }
+}
+const putHook = (h: WebhookInfo) => set((s) => ({ hooks: (s.hooks ?? []).some((x) => x.id === h.id) ? s.hooks!.map((x) => (x.id === h.id ? h : x)) : [...(s.hooks ?? []), h] }));
+
+let hookReturn: string | null = null;
+export function openHook(id: string) {
+  hookReturn = activeSelector();
+  set({ hookEdit: id, pop: null });
+}
+export function closeHook() {
+  set({ hookEdit: null });
+  void loadHooks(); // last-request times and status may have changed while it was open
+  focusLater(hookReturn || '[data-act="hook-new"]');
+}
+export async function createHook(name: string) {
+  const r = await api.post<{ webhook: WebhookInfo }>('/api/admin/webhooks', { name });
+  putHook(r.webhook);
+  openHook(r.webhook.id);
+}
+/** Rename, pause/resume, or set the mapping (null = back to capturing). Throws with the server's message. */
+export async function saveHook(id: string, patch: { name?: string; active?: boolean; mapping?: unknown }) {
+  const r = await api.patch<{ webhook: WebhookInfo }>(`/api/admin/webhooks/${id}`, patch);
+  putHook(r.webhook);
+  return r.webhook;
+}
+export async function rotateHook(id: string) {
+  try {
+    const r = await api.post<{ webhook: WebhookInfo }>(`/api/admin/webhooks/${id}/rotate`);
+    putHook(r.webhook);
+    toast('New address created. The old one no longer works: update it in the other service.');
+  } catch (e) {
+    toastError(e);
+  }
+}
+export async function deleteHook(id: string) {
+  try {
+    await api.del(`/api/admin/webhooks/${id}`);
+    set((s) => ({ hooks: (s.hooks ?? []).filter((h) => h.id !== id), hookEdit: null }));
+    toast('Webhook deleted');
+    focusLater('[data-act="hook-new"]');
+  } catch (e) {
+    toastError(e);
+  }
+}
+export const hookRequests = (id: string) => api.get<{ requests: WebhookRequestInfo[] }>(`/api/admin/webhooks/${id}/requests`).then((r) => r.requests);
+export async function replayHookRequest(id: string, rid: string) {
+  try {
+    const r = await api.post<{ result: WebhookRequestInfo['result']; detail?: string; taskId?: string }>(`/api/admin/webhooks/${id}/requests/${rid}/replay`);
+    if (r.result === 'created') {
+      toast(r.detail ? `Task created. ${r.detail}` : 'Task created', undefined, false, { label: 'Open', run: () => { closeHook(); void openCreated(r.taskId!); } });
+    } else toast(r.detail || `Not created (${r.result})`, undefined, r.result === 'error');
+  } catch (e) {
+    toastError(e);
+  }
+}
+async function openCreated(taskId: string) {
+  await sync();
+  if (S().tasks[taskId]) openDrawer(taskId);
 }

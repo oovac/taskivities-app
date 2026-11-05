@@ -103,6 +103,34 @@ export interface Bootstrap {
   gmail: { email: string } | null;
 }
 
+/** A webhook as admins see it (Settings → Webhooks; worker/webhooks.ts). */
+export interface WebhookInfo {
+  id: string;
+  name: string;
+  /** The secret address other services POST to. */
+  url: string;
+  /** Paused webhooks log requests but make no tasks. */
+  active: boolean;
+  /** null = capturing samples (no tasks yet). */
+  mapping: import('./webhook').Mapping | null;
+  /** Tasks are made as this admin (whoever last saved the mapping). */
+  createdBy: string;
+  createdAt: string;
+  lastReceivedAt: string | null;
+}
+
+export interface WebhookRequestInfo {
+  id: string;
+  receivedAt: string;
+  method: string;
+  contentType: string | null;
+  request: import('./webhook').HookRequestView;
+  size: number;
+  result: 'captured' | 'created' | 'skipped' | 'duplicate' | 'error' | 'paused';
+  detail: string | null;
+  taskId: string | null;
+}
+
 /** What happened to the invite emails when people were added (worker/gmail.ts). */
 export interface InviteEmailResult {
   status: 'sent' | 'not_connected' | 'failed';

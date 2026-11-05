@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AppSettings, Priority, Project, Role, Task, TaskEvent, User } from '../shared/types';
+import type { AppSettings, Priority, Project, Role, Task, TaskEvent, User, WebhookInfo } from '../shared/types';
 import { NORMAL } from '../shared/types';
 import type { Repeat } from '../shared/repeat';
 
@@ -41,6 +41,9 @@ export interface State {
   settings: AppSettings;
   /** Admins: Gmail address invites are emailed from (null = not connected). */
   gmail: { email: string } | null;
+  /** Admins: webhooks (loaded on the Settings page), and the one open in the editor. */
+  hooks: WebhookInfo[] | null;
+  hookEdit: string | null;
   range: { from: string; to: string } | null;
   lastSync: number;
   offline: boolean;
@@ -92,6 +95,8 @@ export const useStore = create<State>()(() => ({
   dirVersion: 0,
   settings: { customLogo: false, logoVersion: '0' },
   gmail: null,
+  hooks: null,
+  hookEdit: null,
   range: null,
   lastSync: Date.now(),
   offline: false,

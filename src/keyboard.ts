@@ -3,8 +3,7 @@ import { addDays } from '../shared/dates';
 import { isAdmin } from '../shared/rules';
 import type { Priority } from '../shared/types';
 import {
-  closeConnect, closeDrawer, closeHelp, closePop, moveTasks, openDrawer, openHelp, openPop, setPage, setPriority, setView, skipTask, toast, toggleDone,
-} from './actions';
+  closeConnect, closeDrawer, closeHelp, closePop, moveTasks, openDrawer, openHelp, openPop, setPage, setPriority, setView, skipTask, toast, toggleDone, closeHook } from './actions';
 import { openMove } from './components/rows';
 import { curNav, focusNav, navEls, trapTab } from './focus';
 import { S, set } from './store';
@@ -86,6 +85,7 @@ export function onKeyDown(e: KeyboardEvent) {
   const isQuestion = k === '?' || (k === '/' && e.shiftKey);
 
   if (s.projEdit) { if (k === 'Tab') trapTab(e, document.querySelector('.sheet')); return; } // the editor handles Esc / Enter itself
+  if (s.hookEdit) { if (k === 'Escape') { e.preventDefault(); closeHook(); } else if (k === 'Tab') trapTab(e, document.querySelector('.sheet')); return; }
   if (s.connect) { if (k === 'Escape') { e.preventDefault(); closeConnect(); } else if (k === 'Tab') trapTab(e, document.querySelector('.sheet')); return; }
   if (s.help) { if (k === 'Escape' || isQuestion) { e.preventDefault(); closeHelp(); } else if (k === 'Tab') trapTab(e, document.querySelector('.help')); return; }
   if (s.pop) { popKeys(e); return; }

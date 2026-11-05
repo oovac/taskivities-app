@@ -96,7 +96,7 @@ export function Drawer() {
                   <div>
                     <div className="tx">
                       <b>{firstName(s.users[e.actorId])}</b>
-                      {e.via && <> <span className="via" title={`Made by an AI assistant acting as ${displayName(s.users[e.actorId])}`}>via {e.via}</span></>}{' '}
+                      {e.via && <> <span className="via" title={e.via.endsWith(' webhook') ? `Created automatically by a webhook set up by ${displayName(s.users[e.actorId])}` : `Made by an AI assistant acting as ${displayName(s.users[e.actorId])}`}>via {e.via}</span></>}{' '}
                       <EventText e={e} s={s} />
                       {e.note && <span className="note">“{e.note}”</span>}
                     </div>

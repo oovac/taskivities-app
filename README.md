@@ -17,10 +17,10 @@ The design reference is [`docs/wireframes.html`](docs/wireframes.html). Open it 
 
 ```
 worker/   index.ts (routes + OAuth provider) · auth.ts (Google + sessions) · api.ts (REST: tasks, sync) · tasks.ts (task rules shared by REST and MCP)
-          mcp.ts (MCP tools) · oauth.ts (/authorize consent page for assistants) · admin.ts (people, projects, settings) · settings.ts (logo) · gmail.ts + invite-mail.ts (invite emails) · lib.ts
+          mcp.ts (MCP tools) · oauth.ts (/authorize consent page for assistants) · admin.ts (people, projects, settings) · settings.ts (logo) · gmail.ts + invite-mail.ts (invite emails) · webhooks.ts · lib.ts
 shared/   types, date helpers and rules used by both the Worker and the app
 src/      React app: pages/ (Tasks, Projects, Team, Settings, Login), components/, actions.ts (all writes), keyboard.ts, focus.ts
-migrations/ (0001 schema, 0002 time zones, 0003 repeating tasks, 0004 settings, 0005 Gmail tokens)   seed/dev.sql (local sample data)
+migrations/ (0001 schema, 0002 time zones, 0003 repeating tasks, 0004 settings, 0005 Gmail tokens, 0006 webhooks)   seed/dev.sql (local sample data)
 scripts/tenant.mjs (per-instance deploys)   tenants/ (each instance's Cloudflare IDs; only example.env is committed)
 ```
 
@@ -45,6 +45,12 @@ scripts/tenant.mjs (per-instance deploys)   tenants/ (each instance's Cloudflare
 - **Settings** (admins only, the **Settings** page, stored in the `settings` table):
   - **Logo:** SVG only, up to 256 KB. Used in the top bar, on the sign-in page and as the browser tab icon; "Use the built-in logo" goes back to the default. Every change is in the audit log, and everyone's app picks it up on its next poll.
   - Uploads are checked in the browser and again on the server: no scripts, event handlers, embedded HTML, DOCTYPEs or links to outside files. `/logo.svg` is also served with a locked-down `Content-Security-Policy` (`sandbox`, no scripts), so even opening it directly can't run anything.
+- **Webhooks** (Settings → Webhooks; `worker/webhooks.ts`, mapping rules in `shared/webhook.ts`):
+  - Each webhook has a secret address, `POST /hooks/<token>` (JSON, form data, or GitHub/Slack-style `payload=` forms; up to 64 KB). "New address" replaces the token, and the old one stops working.
+  - **A new webhook only collects samples.** Requests are stored (the last 15 per webhook), and the editor shows each one's fields as `body.…`, `headers.…` and `query.…`. Clicking a field puts `{{body.issue.title}}` into the title or notes, or picks it for the assignee, due date, priority, "only when" or "skip repeats" options. A live preview shows the task the selected request would create.
+  - **Saving the mapping makes it live:** each request then creates a task, made by the admin who saved it and marked "via <name> webhook" in the history. The assignee can come from an email or name in the request (falling back to a chosen person on the project); the due date from a field (past or missing dates become today), a number of days, or today; the priority from words like `high`, `P1` or `2`.
+  - Requests that don't match "only when" are **skipped**; a repeat of the same "skip repeats" value is a **duplicate**; a title field that's missing is an **error** (no half-empty tasks). Every request is logged with its result, and the sender gets a matching status code (201 created, 202 sample stored, 200 skipped, 422 error).
+  - Credentials and IP addresses in headers (`authorization`, cookies, `x-forwarded-*`, Cloudflare's client IP headers) are never stored. Pause keeps logging without creating tasks; "Stop & edit samples" goes back to collecting.
 - **Invite emails** (optional, per admin; `worker/gmail.ts`):
   - An admin connects their Gmail on the **Settings** page. Google is asked for **`gmail.send` only**: the app can send mail as them, never read it. After that, adding people (and the resend button on the Team page) emails each one an invite from the admin's own address, with a sign-in button.
   - The refresh token is stored encrypted (AES-GCM) in `google_tokens`, with a key derived from `GOOGLE_CLIENT_SECRET` (or the optional `TOKEN_KEY` secret). Disconnecting deletes it and revokes it at Google; removing the person deletes it too.

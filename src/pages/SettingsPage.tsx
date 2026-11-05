@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { isAdmin } from '../../shared/rules';
-import { connectGmail, disconnectGmail, resetLogo, uploadLogo } from '../actions';
+import { connectGmail, createHook, disconnectGmail, loadHooks, openHook, resetLogo, uploadLogo } from '../actions';
+import { hookStatus } from '../components/WebhookSheet';
 import { logoUrl } from '../brand';
 import { I, LogoMark } from '../components/ui';
 import { useStore } from '../store';
@@ -79,6 +80,7 @@ export function SettingsPage() {
           </div>
         </div>
       </section>
+      <Webhooks />
       <section className="sec">
         <div className="sec-h"><h2>Invite emails</h2><span className="cnt">{s.gmail ? 'On' : 'Off'} · just for you</span></div>
         <div className="card set-card">
@@ -100,5 +102,42 @@ export function SettingsPage() {
         </div>
       </section>
     </>
+  );
+}
+
+function Webhooks() {
+  const s = useStore();
+  const [name, setName] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { void loadHooks(); }, []);
+  const add = async () => {
+    if (!name.trim()) { setErr('Give it a name, like "GitHub issues".'); return; }
+    try { await createHook(name.trim()); setName(''); setErr(null); } catch (e) { setErr(e instanceof Error ? e.message : 'Could not create it.'); }
+  };
+  return (
+    <section className="sec">
+      <div className="sec-h"><h2>Webhooks</h2><span className="cnt">Create tasks from other services</span></div>
+      <div className="card hk-card">
+        <p className="hk-intro">Give another service (GitHub, a form, Zapier, your own app…) an address to send requests to. A new webhook first collects a few
+          sample requests; you click their fields to decide what each task says, then it goes live and every request becomes a task.</p>
+        {s.hooks?.map((h) => {
+          const [label, cls] = hookStatus(h);
+          return (
+            <div key={h.id} className="hk-item">
+              <b>{h.name}</b>
+              <span className={`hk-st ${cls}`}>{label}</span>
+              <span className="muted-s">{h.lastReceivedAt ? `Last request ${new Date(h.lastReceivedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : 'No requests yet'}</span>
+              <button className="btn-ghost sm" data-act="hook-open" onClick={() => openHook(h.id)}>Open</button>
+            </div>
+          );
+        })}
+        <div className="hk-new">
+          <input className="pin" placeholder='New webhook name, e.g. "GitHub issues"' aria-label="New webhook name" value={name} maxLength={80}
+            onChange={(e) => { setName(e.target.value); setErr(null); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void add(); } }} />
+          <button className="btn-primary" data-act="hook-new" onClick={() => void add()}>{I.plus(14)} New webhook</button>
+        </div>
+        {err && <div className="set-err" role="alert">{err}</div>}
+      </div>
+    </section>
   );
 }
