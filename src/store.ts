@@ -2,12 +2,13 @@ import { create } from 'zustand';
 import type { AppSettings, ArchivedProject, NotifyPrefs, Priority, Project, Role, Task, TaskEvent, User, WebhookInfo } from '../shared/types';
 import { NORMAL, NOTIFY_DEFAULTS } from '../shared/types';
 import type { PushState } from './push';
+import type { Release } from './updates';
 import type { Repeat } from '../shared/repeat';
 import { type ThemePref, themePref } from './theme';
 
 export type Page = 'tasks' | 'projects' | 'team' | 'settings';
 export type View = 'today' | 'list' | 'board';
-export type PopType = 'move' | 'assign' | 'prio' | 'proj' | 'person' | 'projpick' | 'urole' | 'uproj' | 'udisable' | 'uenable' | 'notify' | 'account' | 'repeat' | 'taskmenu' | 'pages';
+export type PopType = 'move' | 'assign' | 'prio' | 'proj' | 'person' | 'projpick' | 'urole' | 'uproj' | 'udisable' | 'uenable' | 'notify' | 'update' | 'account' | 'repeat' | 'taskmenu' | 'pages';
 
 export interface Pop {
   type: PopType;
@@ -79,6 +80,13 @@ export interface State {
   pushKey: string | null;
   pushState: PushState;
   notify: NotifyPrefs;
+  /** Admins: where releases are announced, the latest one, and a newer one than this build (null: up to date). */
+  updateRepo: string | null;
+  latestRelease: Release | null;
+  update: Release | null;
+  updateCheckedAt: number | null;
+  updateChecking: boolean;
+  updateSeenTick: number;
   pop: Pop | null;
   toast: Toast | null;
   help: boolean;
@@ -148,6 +156,12 @@ export const useStore = create<State>()(() => ({
   pushKey: null,
   pushState: 'unknown',
   notify: NOTIFY_DEFAULTS,
+  updateRepo: null,
+  latestRelease: null,
+  update: null,
+  updateCheckedAt: null,
+  updateChecking: false,
+  updateSeenTick: 0,
   pop: null,
   toast: null,
   help: false,

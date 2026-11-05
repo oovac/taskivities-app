@@ -18,6 +18,13 @@ async function getMeta(db: D1Database) {
   return { version: m.version ?? 0, directoryVersion: m.directory_version ?? 0 };
 }
 
+/** Where new releases are announced (UPDATE_REPO: "owner/repo", or "off"). Only admins are told: only they deploy. */
+const updateRepo = (raw: string | undefined) => {
+  const r = (raw ?? '').trim();
+  if (/^(off|false|no|0)$/i.test(r)) return null;
+  return { repo: /^[\w.-]+\/[\w.-]+$/.test(r) ? r : 'taskivities/taskivities-app' };
+};
+
 // ---------- bootstrap: me, people, projects ----------
 api.get('/bootstrap', async (c) => {
   const v = c.get('viewer');
@@ -46,6 +53,7 @@ api.get('/bootstrap', async (c) => {
   const body: Bootstrap = {
     me, users: list, projects: visibleProjects.map(mapProject), today: today(v), tz: v.tz, ...meta, settings, gmail, attachments: !!c.env.FILES,
     push: keys ? { publicKey: keys.publicKey } : null, notify: prefsOf(users.results.find((u) => u.id === v.id)?.notify),
+    updates: v.role === 'admin' ? updateRepo(c.env.UPDATE_REPO) : null,
   };
   return c.json(body);
 });

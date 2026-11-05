@@ -10,6 +10,7 @@ import { applyBrand } from './brand';
 import { activeSelector, focusLater, selFor } from './focus';
 import { type Page, type Pop, type PopType, type State, S, emptyDraft, set } from './store';
 import { syncPush } from './push';
+import { checkForUpdate } from './updates';
 import { displayName, draftEffective, firstName, myProjects, sharesWith } from './util';
 
 const pending = new Set<string>(); // tasks with an edit in flight (ignore sync for them)
@@ -53,7 +54,7 @@ function applyDirectory(b: Bootstrap): Partial<State> {
   applyBrand(b.settings);
   return {
     me: b.me, users, projects, today: b.today, tz: b.tz, dirVersion: b.directoryVersion, settings: b.settings, gmail: b.gmail, attachmentsOn: b.attachments, viewUser, page,
-    pushKey: b.push?.publicKey ?? null, notify: b.notify,
+    pushKey: b.push?.publicKey ?? null, notify: b.notify, updateRepo: b.updates?.repo ?? null,
     projSel: s.projSel === 'all' || projects[s.projSel] ? s.projSel : 'all',
     projDay: s.projDay || b.today,
   };
@@ -68,6 +69,7 @@ export async function boot() {
     set((s) => ({ draft: { ...s.draft, projectId: last && myProjects(s).some((p) => p.id === last) ? last : myProjects(s)[0]?.id ?? null } }));
     gmailReturn();
     void syncPush();
+    void checkForUpdate();
     // Opened from a notification (a new window): /?task=<id>.
     const q = new URLSearchParams(location.search);
     const task = q.get('task');

@@ -186,6 +186,20 @@ Nothing else changes: WorkOS only proves the email address. The address still ha
 
 One WorkOS environment can serve several instances: add each one's redirect URI.
 
+### Updates
+
+Each build knows its version (`package.json`) and commit. Admins see **Update available** in the account menu (and a dot on their avatar) when a newer release is published on GitHub; the panel links to the release notes and shows the commands to update:
+
+```bash
+git pull
+npm install
+npm run deploy -- <instance>
+```
+
+The admin's browser checks [the releases](https://github.com/taskivities/taskivities-app/releases) at most every 6 hours (`src/updates.ts`): the Worker can't, because Workers share outgoing addresses and GitHub limits unauthenticated requests per address. Nothing about the team is sent. Members never see it. To follow your own fork's releases instead, set `UPDATE_REPO=owner/repo` in `tenants/<instance>.env`; `UPDATE_REPO=off` turns the notice off (the demo has it off).
+
+**Publishing a release** (maintainers): `npm version minor` (or `patch`/`major`) bumps the version, commits and tags it; `git push --follow-tags` pushes both, and the Release workflow (`.github/workflows/release.yml`) publishes the GitHub release with notes generated from the commits. Instances show the notice within 6 hours (as soon as an admin opens the app after that).
+
 ### Day to day
 
 | Command | Does |

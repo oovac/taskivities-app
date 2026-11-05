@@ -138,7 +138,7 @@ function generate(name, t) {
         : d,
     ),
     kv_namespaces: base.kv_namespaces.map((k) => (k.binding === 'OAUTH_KV' ? { ...k, id: t.OAUTH_KV_ID } : k)),
-    vars: { ...base.vars, ...(t.TEAM_TZ ? { TEAM_TZ: t.TEAM_TZ } : {}) },
+    vars: { ...base.vars, ...(t.TEAM_TZ ? { TEAM_TZ: t.TEAM_TZ } : {}), ...(t.UPDATE_REPO ? { UPDATE_REPO: t.UPDATE_REPO } : {}) },
   };
   // Attachments: this instance's bucket, or none (the app then hides "Attach").
   if (t.R2_BUCKET) cfg.r2_buckets = (base.r2_buckets ?? []).map((b) => (b.binding === 'FILES' ? { ...b, bucket_name: t.R2_BUCKET } : b));

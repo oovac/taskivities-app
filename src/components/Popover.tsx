@@ -11,6 +11,7 @@ import { focusLater } from '../focus';
 import { type ThemePref, setThemePref } from '../theme';
 import { installApp, isInstalled, isIOS } from '../install';
 import { setNotifyPrefs, testPush, turnOffPush, turnOnPush } from '../push';
+import { APP_COMMIT, APP_VERSION, checkForUpdate, markUpdateSeen } from '../updates';
 import { S, set, useStore, type Pop, type State } from '../store';
 import { displayName, draftEffective, firstName, isLate, myProjects, shownOn } from '../util';
 import { projectDayData } from '../pages/ProjectsPage';
@@ -68,6 +69,7 @@ function Content({ p, s }: { p: Pop; s: State }) {
     case 'udisable': return <DisablePop p={p} s={s} />;
     case 'uenable': return <EnablePop p={p} s={s} />;
     case 'notify': return <NotifyPop s={s} />;
+    case 'update': return <UpdatePop s={s} />;
     case 'account': return <AccountPop s={s} />;
     case 'taskmenu': return <TaskMenu p={p} s={s} />;
     case 'repeat': return <RepeatPop p={p} s={s} />;
@@ -449,12 +451,54 @@ function AccountPop({ s }: { s: State }) {
         </button>
       )}
       <button className="opt" onClick={() => { closePop(false); openConnect(); }}>{I.bolt(15)}Connect an AI assistant</button>
+      {isAdmin(me) && s.updateRepo && (
+        <button className={`opt ${s.update ? 'opt-update' : ''}`} data-act="update"
+          onClick={() => { const a = document.querySelector<HTMLElement>('[data-act="account"]'); if (a) openPop({ type: 'update', returnSel: '[data-act="account"]' }, a); }}>
+          {s.update ? <>{I.arrowUp(15)}Update available<span className="r">{s.update.version}</span></> : <>{I.info(15)}Version {APP_VERSION}<span className="r">{s.latestRelease ? 'Up to date' : ''}</span></>}
+        </button>
+      )}
       {!isInstalled() && (s.canInstall ? (
         <button className="opt" data-act="install" onClick={() => { closePop(false); void installApp(); }}>{I.phone(15)}Install app</button>
       ) : isIOS() ? (
         <div className="opt-hint">{I.phone(15)}<span>To install: tap <b>Share</b>, then <b>Add to Home Screen</b>.</span></div>
       ) : null)}
       <button className="opt" onClick={() => void signOut()}>Sign out</button>
+    </>
+  );
+}
+
+/** For admins: is there a newer release than the one this instance runs, and how to deploy it. */
+function UpdatePop({ s }: { s: State }) {
+  const u = s.update;
+  const [copied, setCopied] = useState(false);
+  useEffect(() => { if (u) markUpdateSeen(u.version); }, [u]);
+  const cmds = 'git pull\nnpm install\nnpm run deploy -- <instance>';
+  const when = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : '');
+  const checked = s.updateCheckedAt ? new Date(s.updateCheckedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null;
+  const copy = async () => { try { await navigator.clipboard.writeText(cmds); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* select it by hand */ } };
+  return (
+    <>
+      <div className="pop-h">{u ? 'Update available' : 'Version'}</div>
+      <div className="pop-body update-body">
+        {u ? (
+          <>
+            <p><b>{u.version}</b> was released{u.publishedAt ? ` on ${when(u.publishedAt)}` : ''}. This instance runs <b>v{APP_VERSION}</b>{APP_COMMIT && <span className="muted"> ({APP_COMMIT})</span>}.</p>
+            <a className="update-link" href={u.url} target="_blank" rel="noopener noreferrer">What's new {I.arrowR(13)}</a>
+            <p>To update, in your copy of the app:</p>
+            <pre className="update-cmds">{cmds}</pre>
+            <div className="update-acts">
+              <button className="btn-ghost sm" data-act="update-copy" onClick={() => void copy()}>{copied ? 'Copied' : 'Copy commands'}</button>
+              <span className="muted-s">Deploying applies any database changes first.</span>
+            </div>
+          </>
+        ) : (
+          <p>This instance runs <b>v{APP_VERSION}</b>{APP_COMMIT && <span className="muted"> ({APP_COMMIT})</span>}. {s.latestRelease ? "It's the latest release." : 'No releases have been published yet.'}</p>
+        )}
+      </div>
+      <div className="pop-foot">
+        Only admins see this. {checked ? `Checked ${checked}` : 'Not checked yet'} on <a href={`https://github.com/${s.updateRepo}/releases`} target="_blank" rel="noopener noreferrer">{s.updateRepo}</a>.{' '}
+        <button className="linkish" data-act="update-check" disabled={s.updateChecking} onClick={() => void checkForUpdate(true)}>{s.updateChecking ? 'Checking…' : 'Check now'}</button>
+      </div>
     </>
   );
 }

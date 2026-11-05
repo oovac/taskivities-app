@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
 import { boot, closePop, openConnect, openHelp, openPop, openTask, setPage, sync } from './actions';
 import { updateBadge } from './push';
+import { checkForUpdate, updateSeen } from './updates';
 import { appName } from '../shared/types';
 import { Drawer } from './components/Drawer';
 import { ConnectSheet } from './components/ConnectSheet';
@@ -45,7 +46,7 @@ export function App() {
       void sync();
     };
     navigator.serviceWorker?.addEventListener('message', onMessage);
-    const onVisible = () => !document.hidden && void sync();
+    const onVisible = () => { if (!document.hidden) { void sync(); void checkForUpdate(); } };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', onVisible);
     return () => {
@@ -84,8 +85,10 @@ export function App() {
         <button className="ai-btn" data-act="connect" title="MCP: connect Claude or another AI assistant" onClick={openConnect}>{I.bolt(14)}<span>MCP</span></button>
         <button className="icon-btn kb-btn" title="Keyboard shortcuts  (?)" aria-label="Keyboard shortcuts" onClick={openHelp}>{I.kbd()}</button>
         <SyncPill />
-        <button className="me" data-act="account" title={`${s.me.name} · ${admin ? 'Admin' : 'Member'}`} onClick={(e) => openPop({ type: 'account' }, e.currentTarget)}>
+        <button className="me" data-act="account" title={`${s.me.name} · ${admin ? 'Admin' : 'Member'}${s.update ? ' · Update available' : ''}`}
+          onClick={(e) => openPop({ type: 'account' }, e.currentTarget)}>
           <Avatar user={s.me} size={30} />
+          {s.update && !updateSeen(s.update.version) && <span className="me-dot" aria-label="Update available" />}
         </button>
       </div>
       <div className="app-scroll">

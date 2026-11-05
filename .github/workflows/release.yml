@@ -1,0 +1,24 @@
+# Publishes a GitHub release when a version tag is pushed. Instances compare their own version with the latest
+# release and show their admins "Update available" (src/updates.ts).
+#
+#   npm version minor          # or patch / major: bumps package.json, commits, and tags v0.x.y
+#   git push --follow-tags     # pushes the commit and the tag; this workflow publishes the release
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the tag matches package.json
+        run: |
+          v="v$(node -p "require('./package.json').version")"
+          if [ "$v" != "$GITHUB_REF_NAME" ]; then echo "Tag $GITHUB_REF_NAME doesn't match package.json ($v)"; exit 1; fi
+      - name: Publish the release (notes from the commits and pull requests since the last one)
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
+        env:
+          GH_TOKEN: ${{ github.token }}

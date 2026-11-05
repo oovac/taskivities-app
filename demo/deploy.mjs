@@ -69,7 +69,8 @@ function config(name, t) {
           database_id: t.D1_DATABASE_ID || '00000000-0000-0000-0000-00000000de00', migrations_dir: join(up, d.migrations_dir) }
       : d)),
     kv_namespaces: base.kv_namespaces.map((k) => (k.binding === 'OAUTH_KV' ? { ...k, id: t.OAUTH_KV_ID || '000000000000000000000000000de000' } : k)),
-    vars: { ...base.vars, ...(t.TEAM_TZ ? { TEAM_TZ: t.TEAM_TZ } : {}) },
+    // No "Update available" notice in the demo: visitors don't deploy anything.
+    vars: { ...base.vars, ...(t.TEAM_TZ ? { TEAM_TZ: t.TEAM_TZ } : {}), UPDATE_REPO: 'off' },
     triggers: { crons: [t.DEMO_RESET_CRON || '0 * * * *'] },
   };
   delete cfg.r2_buckets; // uploads are kept as samples (demo/files.ts)

@@ -170,6 +170,8 @@ export interface Bootstrap {
   /** Notifications: the key devices subscribe with (null when the instance has no push keys), and my choices. */
   push: { publicKey: string } | null;
   notify: NotifyPrefs;
+  /** Admins: the GitHub repository whose releases tell them an update is available (null: not shown, or turned off). */
+  updates: { repo: string } | null;
 }
 
 /** A webhook as admins see it (Settings → Webhooks; worker/webhooks.ts). */
