@@ -9,6 +9,8 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+## v0.2.0 (2026-11-05)
+
 The first published release: everything Taskivities does so far.
 
 ### Added
