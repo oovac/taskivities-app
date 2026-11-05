@@ -1,0 +1,1929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Taskivities — wireframes</title>
+<style>
+:root{
+  --bg:#F7F7F9; --panel:#fff; --line:#E6E6EB; --line2:#F0F0F3;
+  --text:#16161D; --muted:#6B6B78; --faint:#A0A0AB;
+  --accent:#4F46E5; --accent-ink:#3730A3; --accent-soft:#EEF0FF;
+  --late:#D92D20; --late-soft:#FEF1F0;
+  --carry:#FFF8F1; --carry-line:#FBD9B5; --carry-ink:#B54708;
+  --ok:#12B76A; --r:12px;
+  --shadow:0 1px 2px rgba(16,16,29,.04),0 8px 24px rgba(16,16,29,.08);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font:14px/1.45 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--text);background:#E8E8EE;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+input,textarea{font:inherit;color:inherit}
+b{font-weight:600}
+
+/* ---------- wireframe shell ---------- */
+#shell{display:flex;flex-direction:column;height:100vh}
+#wfbar{display:flex;align-items:center;gap:18px;height:52px;padding:0 16px;background:#121218;color:#E9E9F0;flex:none}
+.wf-brand{display:flex;align-items:center;gap:8px;font-weight:600;white-space:nowrap}
+.wf-sub{font-weight:400;color:#8A8A98;font-size:12px}
+#tabs{display:flex;gap:2px;overflow:auto;flex:1}
+#tabs button{padding:7px 9px;border-radius:8px;color:#A9A9B8;white-space:nowrap;font-size:13px}
+#tabs button:hover{color:#fff;background:#1F1F28}
+#tabs button.on{color:#fff;background:#2A2A36}
+#tabs button span{color:#6E6E7E;margin-right:5px;font-variant-numeric:tabular-nums}
+#notesBtn{font-size:13px;padding:6px 12px;border-radius:8px;border:1px solid #33333F;color:#C9C9D6}
+#notesBtn.on{background:#2A2A36;color:#fff}
+#stage{flex:1;display:flex;min-height:0}
+#canvas{flex:1;overflow:auto;padding:24px;min-width:0}
+#notes{width:310px;flex:none;background:#fff;border-left:1px solid var(--line);overflow:auto;padding:20px 20px 40px}
+#notes.hide{display:none}
+#notes h3{margin:0 0 4px;font-size:15px}
+#notes .ns{color:var(--muted);font-size:12.5px;margin:0 0 16px}
+#notes ol,#notes ul{margin:0;padding-left:18px}
+#notes li{margin:0 0 10px;color:#33333D;font-size:13px}
+#notes h4{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin:20px 0 8px}
+#notes .kbd{display:inline-block;min-width:20px;text-align:center;padding:0 5px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;font-size:11.5px;background:#FAFAFB}
+.sim-btn{display:flex;align-items:center;gap:8px;width:100%;padding:10px 12px;border-radius:10px;background:var(--accent-soft);color:var(--accent-ink);font-weight:600;font-size:13px;margin-top:6px}
+.sim-btn:hover{background:#E2E5FF}
+
+/* ---------- browser frame ---------- */
+.browser{max-width:1200px;margin:0 auto;height:100%;min-height:640px;background:#fff;border-radius:14px;box-shadow:0 2px 6px rgba(0,0,0,.06),0 24px 60px rgba(20,20,40,.14);display:flex;flex-direction:column;overflow:hidden}
+.bbar{height:40px;flex:none;display:flex;align-items:center;gap:7px;padding:0 14px;background:#F3F3F6;border-bottom:1px solid var(--line)}
+.bbar i{width:11px;height:11px;border-radius:50%;background:#DADAE0}
+.bbar .url{margin:0 auto;transform:translateX(-24px);background:#fff;border:1px solid var(--line);border-radius:7px;padding:3px 14px;font-size:12px;color:var(--muted);min-width:280px;text-align:center}
+
+/* ---------- app ---------- */
+.app{position:relative;flex:1;display:flex;flex-direction:column;min-height:0;background:var(--bg);overflow:hidden}
+.topbar{height:56px;flex:none;display:flex;align-items:center;gap:14px;padding:0 22px;background:#fff;border-bottom:1px solid var(--line)}
+.logo{display:flex;align-items:center;gap:9px;font-weight:700;letter-spacing:-.01em;font-size:15.5px}
+.logo-mark{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,#6366F1,#4338CA);display:grid;place-items:center;color:#fff;box-shadow:inset 0 -2px 0 rgba(0,0,0,.15)}
+.logo-mark.sm{width:20px;height:20px;border-radius:6px;font-size:12px}
+.spacer{flex:1}
+.sync{display:flex;align-items:center;gap:7px;white-space:nowrap;font-size:12.5px;color:var(--muted);padding:5px 10px;border-radius:999px;background:#F6F6F8}
+.sync .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 rgba(18,183,106,.5);animation:pulse 2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(18,183,106,.45)}70%{box-shadow:0 0 0 6px rgba(18,183,106,0)}100%{box-shadow:0 0 0 0 rgba(18,183,106,0)}}
+.app-scroll{flex:1;overflow:auto}
+.page{max-width:860px;margin:0 auto;padding:26px 28px 120px}
+
+.av{--s:22px;width:var(--s);height:var(--s);border-radius:50%;display:inline-grid;place-items:center;color:#fff;font-size:calc(var(--s)*.42);font-weight:600;flex:none;letter-spacing:.02em}
+
+.viewing{display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:18px;border-radius:10px;background:var(--accent-soft);color:var(--accent-ink);font-size:13px}
+.viewing .grow{flex:1}
+.viewing button{font-weight:600;padding:4px 10px;border-radius:7px;background:#fff;border:1px solid #D8DCFF}
+
+.phead{display:flex;align-items:flex-start;gap:16px;margin-bottom:18px;flex-wrap:wrap}
+.who{display:flex;align-items:center;gap:12px;text-align:left;border-radius:12px;padding:4px 8px 4px 4px;margin-left:-4px}
+.who:hover{background:#EFEFF3}
+.who .h1{font-size:24px;font-weight:700;letter-spacing:-.02em;display:flex;align-items:center;gap:4px}
+.who .h1 svg{color:var(--faint)}
+.who .sub{font-size:12.5px;color:var(--muted);margin-top:1px}
+.who .sub .lt{color:var(--late);font-weight:600}
+.weeknav{margin-left:auto;display:flex;align-items:center;gap:6px;padding-top:6px}
+.wk{min-width:150px;text-align:center;line-height:1.2}
+.wk b{display:block;font-size:13.5px}
+.wk span{font-size:12px;color:var(--muted)}
+.icon-btn{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--muted)}
+.icon-btn:hover{background:#EBEBF0;color:var(--text)}
+.btn-ghost{padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:#fff;font-weight:500;font-size:13px}
+.btn-ghost:hover{border-color:#D3D3DB}
+.btn-ghost:disabled{opacity:.45;cursor:default}
+
+/* quick add */
+.qa{display:block;background:#fff;border:1px solid var(--line);border-radius:12px;padding:6px 6px 6px 12px;box-shadow:0 1px 2px rgba(0,0,0,.03);margin-bottom:28px;transition:border-color .15s,box-shadow .15s}
+.qa:focus-within{border-color:#C7CBFF;box-shadow:0 0 0 4px rgba(79,70,229,.08)}
+.qa .plus{color:var(--accent);display:grid}
+.qa-top{display:flex;align-items:center;gap:8px}
+.qa-more{display:none;padding:0 0 2px 28px}
+.qa.open .qa-more{display:block;animation:fade .15s}
+.qa.open .qa-go-c{display:none}
+.qa.open .qa-top input{font-weight:600;font-size:15px}
+.qa textarea{display:block;width:100%;border:0;outline:0;resize:none;background:none;padding:2px 2px 10px;font-size:13.5px;line-height:1.5;color:#3A3A45;min-height:44px}
+.qa textarea::placeholder{color:var(--faint)}
+.qa-foot{display:flex;align-items:center;gap:8px;border-top:1px solid var(--line2);padding-top:8px;margin-right:2px}
+.qa-foot .chips{flex:none;flex-wrap:nowrap}
+.qa-hint{flex:1;min-width:0;text-align:right;font-size:11.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-right:4px}
+.qa-hint kbd{min-width:16px;height:17px;font-size:10px;padding:0 4px;margin:0 1px}
+.qa input{flex:1;border:0;outline:0;background:none;padding:8px 2px;font-size:14.5px;min-width:120px}
+.qa input::placeholder{color:var(--faint)}
+.chips{display:flex;gap:4px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;font-size:12.5px;color:#44444F;background:#F5F5F8;white-space:nowrap}
+.chip:hover{background:#ECECF2}
+.chip i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.qa .go{padding:7px 12px;border-radius:8px;background:var(--accent);color:#fff;font-weight:600;font-size:13px}
+.qa .go:hover{background:#4338CA}
+.shake{animation:shake .3s}
+@keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+
+/* sections */
+.sec{margin-bottom:34px}
+.sec-h{display:flex;align-items:baseline;gap:10px;margin:0 0 12px}
+.sec-h h2{margin:0;font-size:16px;font-weight:650;letter-spacing:-.01em}
+.sec-h .cnt{font-size:12.5px;color:var(--muted)}
+.day{margin-bottom:14px}
+.day-h{display:flex;align-items:center;gap:8px;padding:0 4px 6px;font-size:13px}
+.day-h .dn{font-weight:600}
+.day-h .dd{color:var(--muted)}
+.day-h .dc{margin-left:auto;color:var(--faint);font-size:12px}
+.day-h.today .dn{color:var(--accent)}
+.today-tag{font-size:11px;font-weight:600;color:#fff;background:var(--accent);padding:1px 7px;border-radius:999px}
+.card{background:#fff;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.empty-day{padding:11px 14px;color:var(--faint);font-size:13px;background:transparent;border:1px dashed #DEDEE5;border-radius:var(--r)}
+.collapsed{display:flex;align-items:center;gap:10px;width:100%;padding:10px 14px;border:1px solid var(--line);border-radius:var(--r);background:#FBFBFC;color:var(--muted);font-size:13px;text-align:left}
+.collapsed:hover{background:#fff}
+.collapsed .dn{color:var(--text);font-weight:600}
+.collapsed .sum{margin-left:auto;display:flex;gap:10px;align-items:center}
+.collapsed .sum .c{color:var(--carry-ink)}
+.collapsed svg{color:var(--faint)}
+
+/* carried */
+.carried{border:1px solid var(--carry-line);background:var(--carry);border-radius:var(--r);margin-bottom:10px;overflow:hidden}
+.carried-h{display:flex;align-items:center;gap:10px;padding:9px 12px 9px 14px;font-size:12.5px;color:var(--carry-ink)}
+.carried-h b{font-weight:650}
+.carried-h .grow{flex:1}
+.carried-h button{display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:7px;background:#fff;border:1px solid var(--carry-line);font-weight:600;color:var(--carry-ink);font-size:12.5px}
+.carried-h button:hover{border-color:#F5B57A}
+.carried .row{background:#fff}
+.carried .rows{border-top:1px solid var(--carry-line)}
+
+/* rows */
+.row{position:relative;display:flex;align-items:center;gap:12px;min-height:46px;padding:6px 10px 6px 14px;border-top:1px solid var(--line2)}
+.row:first-child{border-top:0}
+.row:hover{background:#FAFAFC}
+.chk{width:19px;height:19px;border-radius:50%;border:1.6px solid #C8C8D2;display:grid;place-items:center;color:transparent;flex:none;transition:all .15s}
+.chk:hover{border-color:var(--accent);color:#C7CBFF}
+.row.done .chk{background:var(--accent);border-color:var(--accent);color:#fff}
+.row-main{flex:1;min-width:0;text-align:left;padding:4px 0;cursor:pointer;display:flex;align-items:center;gap:8px}
+.prio{display:inline-grid;place-items:center;flex:none}
+.tc-title .prio{display:inline-block;vertical-align:-2px;margin-right:5px}
+.row-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}
+.row.done .row-title{color:var(--faint);text-decoration:line-through;text-decoration-color:#C9C9D2}
+.meta{display:flex;align-items:center;gap:8px;flex:none;font-size:12px;color:var(--muted)}
+.proj{display:inline-flex;align-items:center;gap:6px;padding:2px 8px 2px 7px;border-radius:999px;background:#F4F4F7;color:#55555F;font-size:12px;white-space:nowrap}
+.proj i{width:7px;height:7px;border-radius:50%}
+.from{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.late{color:var(--late);background:var(--late-soft);font-weight:600;padding:2px 7px;border-radius:999px;white-space:nowrap}
+.due{color:var(--muted);white-space:nowrap}
+.datep{white-space:nowrap;color:#44444F}
+.acts{display:flex;gap:2px;opacity:0;transition:opacity .12s;flex:none}
+.row:hover .acts,.row:focus-within .acts{opacity:1}
+.acts .icon-btn{width:28px;height:28px}
+.row.ghost{opacity:.62}
+.row.ghost .chk{border-style:dashed}
+.ghost-tag{font-size:12px;color:var(--carry-ink);white-space:nowrap}
+.row.flash{animation:flash 2.6s ease-out}
+@keyframes flash{0%,35%{background:#E4E7FF}100%{background:transparent}}
+.carried .row.flash{animation:flash 2.6s ease-out}
+.grp-h{display:flex;align-items:center;gap:9px;padding:10px 12px 8px 14px;border-top:1px solid var(--line);background:#FCFCFD;font-size:13px}
+.grp-h:first-child{border-top:0}
+.grp-h b{font-weight:600}
+.grp-h .n{color:var(--faint);font-size:12px}
+.grp-h .link{margin-left:auto;font-size:12px;color:var(--accent);cursor:pointer;font-weight:500}
+.grp-h .link:hover{text-decoration:underline}
+.empty-sec{padding:26px;text-align:center;color:var(--muted);font-size:13px;border:1px dashed #DEDEE5;border-radius:var(--r)}
+
+/* today peek */
+.peek{display:flex;align-items:center;gap:12px;width:100%;margin-top:12px;padding:11px 14px;border:1px dashed #D6D6DE;border-radius:var(--r);background:transparent;color:var(--muted);font-size:13px;text-align:left}
+button.peek:hover{border-style:solid;border-color:#C7CBFF;background:#fff;color:var(--text)}
+.peek b{color:var(--text);font-weight:600}
+.peek .pk-d{color:var(--faint)}
+.peek .pk-go{margin-left:auto;display:inline-flex;align-items:center;gap:5px;color:var(--accent);font-weight:600;white-space:nowrap}
+.peek.quiet{color:var(--faint)}
+
+/* top navigation + projects page */
+.topnav{display:flex;gap:2px;margin-left:18px}
+.topnav button{padding:6px 12px;border-radius:8px;font-size:13.5px;font-weight:500;color:var(--muted)}
+.topnav button:hover{color:var(--text);background:#F3F3F7}
+.topnav button.on{color:var(--text);background:#EEF0FF;color:var(--accent-ink);font-weight:600}
+.pbadge{--s:40px;width:var(--s);height:var(--s);border-radius:calc(var(--s)*.28);display:inline-grid;place-items:center;color:#fff;font-weight:700;font-size:calc(var(--s)*.36);flex:none;letter-spacing:.02em}
+.pbadge.all{background:#EDEDF2;color:var(--muted)}
+.pbadge.all svg{width:55%;height:55%}
+.gdot{width:9px;height:9px;border-radius:50%;display:inline-block}
+.contrib{display:flex;flex-wrap:wrap;gap:8px;margin:-4px 0 22px}
+.ct{display:inline-flex;align-items:center;gap:7px;padding:4px 10px 4px 4px;border-radius:999px;background:#fff;border:1px solid var(--line);font-size:12.5px;color:#44444F}
+.ct b{color:var(--accent-ink);font-weight:700;font-variant-numeric:tabular-nums}
+.row.report .row-title{color:var(--text);text-decoration:none}
+.row.report .chk{background:var(--ok)!important;border-color:var(--ok)!important}
+.datep.tm{color:var(--faint);font-variant-numeric:tabular-nums;min-width:58px;text-align:right}
+
+/* roles + team page */
+.wf-as{display:flex;align-items:center;gap:8px;font-size:12px;color:#8A8A98;white-space:nowrap}
+.wf-as select{font:inherit;font-size:12.5px;color:#E9E9F0;background:#1F1F28;border:1px solid #33333F;border-radius:7px;padding:4px 8px}
+.me{position:relative;display:inline-flex}
+.role-dot{position:absolute;right:-6px;bottom:-6px;font-size:9px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:1px 5px;border-radius:999px;background:#fff;border:1px solid var(--line);color:var(--muted)}
+.role-dot.admin{color:var(--accent-ink);border-color:#D8DCFF;background:#EEF0FF}
+.viewing .vh{display:block;color:#5B5BD6;font-size:12px;margin-top:2px}
+.pop-foot{padding:8px 10px 4px;font-size:11.5px;color:var(--faint);border-top:1px solid var(--line2);margin-top:4px}
+.pop-empty{padding:10px;color:var(--faint);font-size:13px}
+.pop-body{padding:2px 10px 10px;font-size:13px;color:#44444F}
+.opt:disabled{opacity:.5;cursor:not-allowed}
+.opt:disabled:hover{background:none}
+.opt.check .cb{width:16px;height:16px;border-radius:5px;border:1.5px solid #C8C8D2;display:grid;place-items:center;color:#fff;flex:none}
+.opt.check.on .cb{background:var(--accent);border-color:var(--accent)}
+.btn-primary{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:9px;background:var(--accent);color:#fff;font-weight:600;font-size:13px}
+.btn-primary:hover{background:#4338CA}
+.btn-danger{width:100%;padding:8px 12px;border-radius:9px;background:#FEF3F2;color:#B42318;font-weight:600;font-size:13px;border:1px solid #FECDCA}
+.btn-danger:hover{background:#FEE4E2}
+.team-h{font-size:24px;font-weight:700;letter-spacing:-.02em}
+.team .trow{display:grid;grid-template-columns:minmax(200px,1.5fr) 110px minmax(180px,2fr) 120px 40px;align-items:center;gap:12px;padding:10px 12px 10px 14px;border-top:1px solid var(--line2);font-size:13px}
+.team .trow:first-child{border-top:0}
+.team .trow.th{font-size:11px;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;padding-top:9px;padding-bottom:9px;background:#FCFCFD}
+.team .trow.flash{animation:flash 2.6s ease-out}
+.tp{display:flex;align-items:center;gap:10px;min-width:0}
+.tp b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tp span{display:block;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tp .you{display:inline;color:var(--faint);font-weight:400}
+.team .chip:disabled{opacity:.8;cursor:default}
+.tproj .proj{margin:2px 4px 2px 0}
+.pbtn{display:flex;flex-wrap:wrap;align-items:center;text-align:left;padding:3px 4px;margin:-3px -4px;border-radius:8px}
+.pbtn:hover{background:#F5F5F8}
+.pedit{color:var(--faint);display:inline-grid}
+.allp{font-size:12.5px;color:var(--muted)}
+.st{font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px}
+.st.ok{color:#067647;background:#ECFDF3}
+.st.inv{color:#B54708;background:#FFFAEB}
+.tact .icon-btn:hover{color:#B42318;background:#FEF3F2}
+.fine{font-size:12.5px;color:var(--faint);margin:10px 2px 0}
+.prow{display:flex;align-items:center;gap:10px;padding:11px 14px;border-top:1px solid var(--line2);font-size:13px}
+.prow:first-child{border-top:0}
+.prow i{width:9px;height:9px;border-radius:50%}
+.prow b{font-weight:600;min-width:150px}
+.prow .avs{display:flex}
+.prow .avs .av{margin-left:-6px;box-shadow:0 0 0 2px #fff}
+.prow .avs .av:first-child{margin-left:0}
+.prow .n{color:var(--faint);font-size:12px;margin-left:8px}
+.invite{padding:18px 18px 14px;margin-bottom:24px}
+.inv-in{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;outline:0;font-size:14px;margin-bottom:14px}
+.inv-in:focus{border-color:#C7CBFF;box-shadow:0 0 0 3px rgba(79,70,229,.08)}
+.inv-err{margin:-8px 0 12px;color:#B42318;font-size:12.5px}
+.inv-grid{display:grid;grid-template-columns:auto 1fr;gap:24px;margin-bottom:14px}
+.pchips{display:flex;flex-wrap:wrap;gap:6px}
+.pchip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid var(--line);font-size:12.5px;color:#44444F;background:#fff}
+.pchip i{width:8px;height:8px;border-radius:50%}
+.pchip.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+.muted-s{font-size:12.5px;color:var(--faint)}
+.inv-foot{display:flex;align-items:center;gap:8px;border-top:1px solid var(--line2);padding-top:12px}
+.inv-foot .muted-s{margin-right:auto}
+
+/* project editor + descriptions */
+.sheet{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(560px,94%);max-height:90%;display:flex;flex-direction:column;background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(16,16,29,.25);z-index:7;animation:popin .16s ease-out}
+.sheet-b{padding:8px 24px 6px;overflow:auto}
+.sheet-f{padding:12px 24px 16px;margin:0}
+.swatches{display:flex;gap:8px;margin-bottom:16px}
+.sw{width:26px;height:26px;border-radius:50%;background:var(--c);box-shadow:inset 0 0 0 2px rgba(255,255,255,.0)}
+.sw.on{box-shadow:0 0 0 2px #fff,0 0 0 4px var(--c)}
+.pe-desc{width:100%;min-height:110px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;resize:vertical;outline:0;font-size:13.5px;line-height:1.5}
+.pe-desc:focus{border-color:#C7CBFF;box-shadow:0 0 0 3px rgba(79,70,229,.08)}
+.pe-help{display:flex;gap:12px;align-items:flex-start;font-size:12px;color:var(--muted);margin:6px 0 16px}
+.pe-help span:first-child{display:flex;gap:6px;align-items:flex-start}
+.pe-help svg{flex:none;color:var(--accent);margin-top:1px}
+.pe-count{margin-left:auto;color:var(--faint);font-variant-numeric:tabular-nums;white-space:nowrap}
+.pchip .av{margin-left:-4px}
+.pchip:disabled{opacity:.55;cursor:not-allowed}
+.kbd-i{font-size:11px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 4px;background:#FAFAFB;color:#3A3A45}
+.pname{display:flex;flex-direction:column;min-width:0;flex:1}
+.pname b{min-width:0!important}
+.pdesc{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:420px}
+.pdesc em{color:var(--faint)}
+.btn-ghost.sm{padding:4px 10px;font-size:12px}
+.via{display:inline-block;font-size:10.5px;font-weight:600;padding:0 6px;border-radius:999px;background:#F4EBFF;color:#6941C6;vertical-align:1px}
+
+/* view toggle */
+.seg{display:inline-flex;padding:3px;background:#EDEDF2;border-radius:10px;gap:2px;margin-right:8px}
+.seg button{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:7px;font-size:12.5px;font-weight:500;color:var(--muted)}
+.seg button:hover{color:var(--text)}
+.seg button.on{background:#fff;color:var(--text);box-shadow:0 1px 2px rgba(16,16,29,.08)}
+.seg button span{font-size:11.5px;color:var(--faint);font-variant-numeric:tabular-nums}
+.seg.sm{margin:0}
+
+/* board */
+.page.wide{max-width:none;padding-left:22px;padding-right:22px}
+.page.wide .qa{max-width:860px}
+.board-bar{display:flex;align-items:center;gap:14px;margin:-8px 0 12px;flex-wrap:wrap}
+.board-bar .hint{font-size:12.5px;color:var(--faint)}
+.board{display:grid;grid-template-columns:repeat(5,minmax(140px,1fr)) repeat(2,minmax(96px,.55fr));gap:10px;align-items:start}
+.col{background:#EFEFF3;border-radius:14px;padding:6px;min-height:420px;border:1.5px solid transparent;transition:background .12s,border-color .12s}
+.col-h{display:flex;align-items:baseline;gap:6px;padding:6px 8px 9px;font-size:13px}
+.col-h .dn{font-weight:650}
+.col-h .dd{color:var(--muted);font-size:12px}
+.col-h .n{margin-left:auto;font-size:11.5px;color:var(--faint);font-variant-numeric:tabular-nums}
+.col.today{background:#E9EBFF}
+.col.today .col-h .dn{color:var(--accent)}
+.col.past{background:#F4F4F7}
+.col.past .col-h{opacity:.7}
+.col.we{background:#F3F3F6}
+.board.is-dragging .col[data-drop]{border-color:#D5D8FF;border-style:dashed}
+.board.is-dragging .col.past{opacity:.5}
+.col.over{background:#DDE1FF!important;border-color:var(--accent)!important;border-style:solid!important}
+.col-b{display:flex;flex-direction:column;gap:6px}
+.tcard{position:relative;display:flex;gap:8px;align-items:flex-start;background:#fff;border:1px solid #E4E4EA;border-radius:10px;padding:9px 9px 8px;box-shadow:0 1px 2px rgba(16,16,29,.04);cursor:grab;transition:box-shadow .12s,transform .12s}
+.tcard:hover{box-shadow:0 4px 14px rgba(16,16,29,.09);border-color:#D9D9E2}
+.tcard:active{cursor:grabbing}
+.tcard.dragging{opacity:.35;transform:scale(.98)}
+.tcard .chk{width:16px;height:16px;margin-top:1px}
+.tcard.done{background:#FAFAFB;box-shadow:none;cursor:default}
+.tcard.done .chk{background:var(--accent);border-color:var(--accent);color:#fff}
+.tcard.done .tc-title{color:var(--faint);text-decoration:line-through;text-decoration-color:#C9C9D2}
+.tcard.is-late{border-left:3px solid var(--late);padding-left:7px}
+.tcard.flash{animation:flash 2.6s ease-out}
+.tc-body{flex:1;min-width:0;cursor:pointer}
+.tc-title{font-size:13px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.tc-meta{display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;margin-top:6px;font-size:11.5px;color:var(--muted);min-width:0}
+.tc-proj{display:inline-flex;align-items:center;gap:5px;min-width:0;flex:1 1 70px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.tc-proj i{width:7px;height:7px;border-radius:50%;flex:none}
+.tc-meta .late{font-size:10.5px;padding:1px 6px}
+.col-carry{background:var(--carry);border:1px solid var(--carry-line);border-radius:11px;padding:6px;display:flex;flex-direction:column;gap:6px;margin-bottom:2px}
+.cc-h{display:flex;align-items:center;gap:6px;white-space:nowrap;padding:1px 2px 0 4px;font-size:11.5px;font-weight:650;color:var(--carry-ink)}
+.cc-h span{flex:1}
+.cc-h button{font-size:11.5px;font-weight:600;color:var(--carry-ink);padding:2px 7px;border-radius:6px;background:#fff;border:1px solid var(--carry-line)}
+.col-add{display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:9px;font-size:12.5px;color:var(--faint);text-align:left}
+.col-add:hover{background:rgba(255,255,255,.7);color:var(--accent)}
+.col-note{padding:6px 8px;font-size:12px;color:var(--faint)}
+
+/* keyboard + focus */
+:focus{outline:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#tabs button:focus-visible,#notesBtn:focus-visible{outline-color:#A5B4FC}
+.row:focus-visible{outline:none;background:#F4F5FF;box-shadow:inset 3px 0 0 var(--accent)}
+.row:focus-visible .acts{opacity:1}
+.tcard:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.drawer:focus-visible,.dr-title:focus-visible{outline:none}
+.collapsed:focus-visible,.peek:focus-visible,.col-add:focus-visible{outline-offset:1px}
+.skip{position:absolute;left:14px;top:-48px;z-index:9;padding:8px 14px;border-radius:9px;background:var(--accent);color:#fff;font-weight:600;font-size:13px;transition:top .15s}
+.skip:focus{top:10px}
+.kb-btn{color:var(--faint)}
+kbd{display:inline-grid;place-items:center;min-width:21px;height:21px;padding:0 5px;border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;font:600 11px/1 -apple-system,BlinkMacSystemFont,"Inter",sans-serif;background:#FAFAFB;color:#3A3A45;margin-left:3px}
+.help{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(760px,94%);max-height:88%;overflow:auto;background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(16,16,29,.25);z-index:7;animation:popin .16s ease-out}
+.help-h{display:flex;align-items:center;gap:10px;padding:16px 16px 6px 24px}
+.help-h b{font-size:16px}
+.help-h .muted{color:var(--faint);font-size:12.5px;margin-right:auto}
+.help-b{display:grid;grid-template-columns:1fr 1fr;gap:4px 32px;padding:4px 24px 24px}
+.hk-g h4{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin:16px 0 4px}
+.hk-r{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--line2);font-size:13px;color:#33333D}
+.hk-k{display:flex;align-items:center;white-space:nowrap}
+.hk-k i{font-style:normal;font-size:11px;color:var(--faint);margin:0 2px 0 6px}
+.board-bar .hint kbd{min-width:18px;height:18px;font-size:10px}
+
+/* drawer */
+.backdrop{position:absolute;inset:0;background:rgba(18,18,30,.16);animation:fade .18s}
+@keyframes fade{from{opacity:0}}
+.drawer{position:absolute;top:0;right:0;bottom:0;width:450px;max-width:100%;background:#fff;box-shadow:-12px 0 40px rgba(16,16,29,.12);display:flex;flex-direction:column;animation:slide .22s cubic-bezier(.2,.8,.2,1)}
+@keyframes slide{from{transform:translateX(30px);opacity:0}}
+.dr-top{display:flex;align-items:center;gap:8px;padding:12px 14px 12px 22px;border-bottom:1px solid var(--line2)}
+.dr-body{flex:1;overflow:auto;padding:20px 22px 40px}
+.dr-title{font-size:20px;font-weight:650;letter-spacing:-.015em;line-height:1.3;outline:0;border-radius:6px;padding:2px 4px;margin:0 -4px 14px}
+.dr-title:hover{background:#F6F6F9}
+.dr-title:focus{background:#F6F6F9;box-shadow:0 0 0 2px #C7CBFF}
+.done-btn{display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:9px;border:1px solid var(--line);font-weight:600;font-size:13px;margin-bottom:18px}
+.done-btn .chk{width:17px;height:17px}
+.done-btn.on{background:#ECFDF3;border-color:#ABEFC6;color:#067647}
+.done-btn.on .chk{background:var(--ok);border-color:var(--ok);color:#fff}
+.fields{display:grid;grid-template-columns:96px 1fr;gap:4px 8px;margin:0 0 22px;align-items:center}
+.fields dt{color:var(--muted);font-size:13px}
+.fields dd{margin:0}
+.field{display:inline-flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;font-size:13.5px;margin-left:-8px;max-width:100%;white-space:nowrap}
+.field:hover{background:#F3F3F7}
+.field svg.c{color:var(--faint)}
+.plain{display:flex;align-items:center;gap:8px;font-size:13.5px;padding:6px 0}
+.lbl{display:flex;align-items:baseline;gap:6px;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:0 0 8px}
+.lbl .muted{text-transform:none;letter-spacing:0;font-weight:400;color:var(--faint)}
+.dr-body textarea{width:100%;min-height:76px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;resize:vertical;outline:0;margin-bottom:24px;font-size:13.5px}
+.dr-body textarea:focus{border-color:#C7CBFF;box-shadow:0 0 0 3px rgba(79,70,229,.08)}
+.trail{list-style:none;margin:0;padding:0;position:relative}
+.trail:before{content:"";position:absolute;left:10px;top:8px;bottom:8px;width:1.5px;background:var(--line)}
+.trail li{position:relative;display:flex;gap:12px;padding:0 0 16px}
+.trail li .av{position:relative;z-index:1;box-shadow:0 0 0 3px #fff}
+.trail .tx{font-size:13px;color:#3A3A45;line-height:1.45}
+.trail .tm{font-size:11.5px;color:var(--faint);margin-top:2px}
+.trail .note{display:block;margin-top:4px;padding:6px 10px;background:#F6F6F9;border-radius:8px;color:#4A4A55}
+.trail li.sys .av{background:#fff!important;border:1.5px dashed #D0D0D8;color:var(--faint)}
+
+/* popover */
+#pop{position:fixed;inset:0;pointer-events:none;z-index:50}
+.pop{position:fixed;pointer-events:auto;width:276px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 40px rgba(16,16,29,.16),0 2px 6px rgba(16,16,29,.06);padding:6px;animation:popin .14s ease-out}
+@keyframes popin{from{opacity:0;transform:translateY(-4px)}}
+.pop-h{padding:8px 10px 6px;font-size:12px;font-weight:600;color:var(--muted)}
+.opt{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border-radius:8px;font-size:13.5px;text-align:left}
+.opt:hover{background:#F3F3F8}
+.opt .r{margin-left:auto;color:var(--faint);font-size:12px}
+.opt.cur{color:var(--faint);cursor:default}
+.opt.cur:hover{background:none}
+.opt i{width:9px;height:9px;border-radius:50%}
+.pop-sep{height:1px;background:var(--line2);margin:6px 4px}
+.pop input.pin{width:100%;border:1px solid var(--line);border-radius:8px;padding:7px 10px;outline:0;font-size:13px;margin:2px 0 6px}
+.pop input.pin:focus{border-color:#C7CBFF}
+.cal{padding:4px 6px 6px}
+.cal-h{display:flex;align-items:center;padding:2px 0 6px}
+.cal-h b{flex:1;font-size:13px;text-align:center}
+.cal-g{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cal-g .dw{font-size:10.5px;color:var(--faint);text-align:center;padding:4px 0}
+.cal-g button{height:30px;border-radius:7px;font-size:12.5px}
+.cal-g button:hover{background:#EEF0FF}
+.cal-g button.om{color:#C8C8D0}
+.cal-g button.td{color:var(--accent);font-weight:700}
+.cal-g button.sel{background:var(--accent);color:#fff}
+.cal-g button:disabled{color:#D9D9E0;cursor:default;background:none}
+
+/* toast */
+.toast{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);display:flex;align-items:center;gap:14px;background:#18181F;color:#fff;padding:10px 12px 10px 16px;border-radius:12px;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.25);animation:toastin .2s ease-out;white-space:nowrap;z-index:5;max-width:92%}
+.toast span{overflow:hidden;text-overflow:ellipsis}
+.toast button{color:#A5B4FC;font-weight:600;padding:3px 8px;border-radius:6px}
+.toast button:hover{background:#2A2A35}
+@keyframes toastin{from{opacity:0;transform:translate(-50%,8px)}}
+
+/* sign in */
+.signin{flex:1;display:grid;place-items:center;background:radial-gradient(1200px 500px at 50% -10%,#EEF0FF,transparent 70%),var(--bg)}
+.si-card{width:380px;background:#fff;border:1px solid var(--line);border-radius:18px;padding:36px 34px 28px;box-shadow:var(--shadow);text-align:center}
+.si-card .logo-mark{width:44px;height:44px;border-radius:13px;margin:0 auto 18px}
+.si-card h1{font-size:22px;margin:0 0 6px;letter-spacing:-.02em}
+.si-card p{margin:0 0 26px;color:var(--muted)}
+.gbtn{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;padding:11px;border:1px solid #DADCE0;border-radius:10px;font-weight:600;background:#fff}
+.gbtn:hover{background:#F8F9FA;border-color:#C6C9CE}
+.si-foot{margin-top:18px;font-size:12px;color:var(--faint)}
+.si-err{margin-top:14px;font-size:12px;color:var(--muted);background:#F6F6F9;border-radius:8px;padding:8px 10px;text-align:left}
+
+/* mobile frames */
+.phones{display:flex;gap:48px;justify-content:center;flex-wrap:wrap;padding:6px 0 30px}
+.phone-wrap{text-align:center}
+.phone{width:390px;height:800px;border-radius:52px;background:#0E0E12;padding:12px;box-shadow:0 30px 70px rgba(20,20,40,.25)}
+.phone iframe{width:100%;height:100%;border:0;border-radius:40px;background:#fff;display:block}
+.phone-cap{margin-top:14px;font-size:13px;color:var(--muted)}
+
+/* tech doc */
+.doc{max-width:1040px;margin:0 auto;background:#fff;border-radius:14px;box-shadow:0 2px 6px rgba(0,0,0,.05),0 24px 60px rgba(20,20,40,.1);padding:44px 52px 60px}
+.doc h1{font-size:28px;letter-spacing:-.02em;margin:0 0 6px}
+.doc .lead{color:var(--muted);font-size:15px;margin:0 0 30px;max-width:720px}
+.doc h2{font-size:18px;margin:40px 0 14px;letter-spacing:-.01em}
+.doc p{color:#3A3A45;max-width:760px}
+.stacks{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.stack{border:1px solid var(--line);border-radius:14px;padding:22px 22px 18px}
+.stack.rec{border-color:#C7CBFF;background:linear-gradient(#FAFAFF,#fff)}
+.badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:3px 8px;border-radius:6px;background:#F1F1F5;color:var(--muted);margin-bottom:10px}
+.stack.rec .badge{background:var(--accent);color:#fff}
+.stack h3{margin:0 0 14px;font-size:17px}
+.stack dl{display:grid;grid-template-columns:92px 1fr;gap:9px 12px;margin:0 0 16px;font-size:13.5px}
+.stack dt{color:var(--muted)}
+.stack dd{margin:0}
+.pc{display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px;border-top:1px solid var(--line2);padding-top:14px}
+.pc ul{margin:4px 0 0;padding-left:16px;color:#3A3A45}
+.pc li{margin-bottom:4px}
+.pc .t{font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+.pc .pro .t{color:#067647}.pc .con .t{color:#B42318}
+.flow{display:flex;align-items:stretch;gap:0;margin:8px 0 6px}
+.node{flex:1;border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-width:0;background:#FCFCFD}
+.node b{display:block;font-size:13.5px}
+.node span{font-size:12px;color:var(--muted)}
+.node.cf{border-color:#FCD9BD;background:#FFF9F4}
+.arrow{display:grid;place-items:center;padding:0 8px;color:var(--faint);font-size:11.5px;text-align:center;min-width:72px;flex:none}
+.arrow div{border-top:1.5px solid #D0D0D8;width:100%;margin:4px 0;position:relative}
+.arrow div:after{content:"";position:absolute;right:-1px;top:-4.5px;border:4px solid transparent;border-left:6px solid #D0D0D8}
+.rules{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.rule{border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.rule h4{margin:0 0 6px;font-size:14px}
+.rule p{margin:0;font-size:13.5px;color:#454550}
+pre{background:#14141B;color:#E4E4EE;border-radius:12px;padding:18px 20px;font:12.5px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;overflow:auto;margin:0}
+pre .c{color:#7C7C8F}pre .k{color:#A5B4FC}
+table.api{width:100%;border-collapse:collapse;font-size:13px}
+table.api td{padding:9px 10px;border-top:1px solid var(--line2);vertical-align:top}
+table.api td:first-child{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;white-space:nowrap;width:300px}
+table.api .m{display:inline-block;width:46px;font-weight:700;color:var(--accent)}
+.qs{counter-reset:q;list-style:none;padding:0;margin:0;display:grid;gap:10px}
+.qs li{counter-increment:q;display:flex;gap:12px;border:1px solid var(--line);border-radius:12px;padding:12px 16px;font-size:13.5px}
+.qs li:before{content:counter(q);flex:none;width:22px;height:22px;border-radius:50%;background:var(--accent-soft);color:var(--accent-ink);font-weight:700;font-size:12px;display:grid;place-items:center}
+.qs li i{color:var(--muted);font-style:normal;display:block;margin-top:2px;font-size:12.5px}
+
+/* embed (inside phone) */
+body.embed{background:#fff}
+body.embed #wfbar,body.embed #notes{display:none}
+body.embed #canvas{padding:0;overflow:hidden;display:flex}
+body.embed .app{height:100vh}
+
+@media (max-width:640px){
+  .topbar{padding:0 16px;height:52px}
+  .page{padding:16px 14px 110px}
+  .sync .lbl-t{display:none}
+  .who .h1{font-size:21px}
+  .phead{gap:8px;margin-bottom:14px}
+  .weeknav{margin-left:0;width:100%;justify-content:space-between;padding-top:0;background:#fff;border:1px solid var(--line);border-radius:10px;padding:3px}
+  .weeknav .btn-ghost{display:none}
+  .qa{padding:6px 6px 8px 12px}
+  .qa-more{padding-left:0}
+  .qa-foot{flex-wrap:wrap}
+  .qa-foot .chips{flex:1 1 100%;overflow-x:auto}
+  .qa-foot .btn-ghost{margin-left:auto}
+  .qa-hint{display:none}
+  .meta .proj{padding:0;background:none;font-size:0;gap:0}
+  .meta .proj i{width:8px;height:8px}
+  .from .ft{display:none}
+  .acts{display:none}
+  .due{display:none}
+  .drawer{width:100%}
+  .row{padding-left:12px}
+  .viewing{font-size:12px}
+  .qa .plus{display:none}
+  .qa .chips{scrollbar-width:none}
+  .seg{margin-right:0}
+  .seg .sl{display:none}
+  .seg button{padding:5px 9px}
+  .wk{min-width:0}
+  .board{grid-template-columns:repeat(7,78%);overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:6px}
+  .col{scroll-snap-align:start;min-height:300px}
+  .board-bar .hint{display:none}
+  .team .trow{grid-template-columns:1fr auto;}
+  .prow .avs,.prow .n{display:none}
+  .pdesc{max-width:200px}
+  .team .trow.th,.team .tstat,.team .tproj{display:none}
+  .inv-grid{grid-template-columns:1fr}
+  .topnav{margin-left:6px}
+  .topnav button{padding:6px 9px}
+  .logo{font-size:0;gap:0}
+  .contrib{margin-bottom:16px}
+  .help-b{grid-template-columns:1fr}
+  .kb-btn{display:none}
+  .peek{flex-wrap:wrap;gap:4px 10px}
+  .peek .pk-d{order:3;width:100%}
+  .carried-h .grow span,.carried-h .old{display:none}
+  .field{white-space:normal;flex-wrap:wrap;row-gap:2px}
+}
+@media (max-width:980px){ .stacks,.rules{grid-template-columns:1fr} #notes{width:270px} }
+</style>
+</head>
+<body>
+<div id="shell">
+  <header id="wfbar">
+    <div class="wf-brand"><span class="logo-mark sm">✓</span> Taskivities <span class="wf-sub">wireframes v1</span></div>
+    <nav id="tabs"></nav>
+    <label class="wf-as" title="Wireframe only: see the app as a different person">As
+      <select id="asUser" data-act-change="as"></select></label>
+    <button id="notesBtn" class="on" data-act="notes">Design notes</button>
+  </header>
+  <div id="stage">
+    <main id="canvas"></main>
+    <aside id="notes"></aside>
+  </div>
+</div>
+<div id="pop"></div>
+
+<script>
+/* =========================================================
+   Data + helpers
+   ========================================================= */
+const params = new URLSearchParams(location.search);
+const EMBED = params.has('embed');
+if (EMBED) document.body.classList.add('embed');
+
+const TODAY = '2026-11-04';
+const MONS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const P = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+const S = dt => dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+const addDays = (s,n) => { const d = P(s); d.setDate(d.getDate()+n); return S(d); };
+const diff = (a,b) => Math.round((P(a)-P(b))/86400000);
+const weekStart = s => { const d = P(s); d.setDate(d.getDate()-((d.getDay()+6)%7)); return S(d); };
+const fmt = s => { const d = P(s); return DOW[d.getDay()]+', '+MONS[d.getMonth()]+' '+d.getDate(); };
+const rel = s => s===TODAY ? 'Today' : s===addDays(TODAY,1) ? 'Tomorrow' : s===addDays(TODAY,-1) ? 'Yesterday' : fmt(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtTime = at => { const [d,t] = at.split('T'); const [h,m] = t.split(':').map(Number);
+  const dd = P(d); return (d===TODAY?'Today':MONS[dd.getMonth()]+' '+dd.getDate())+' · '+((h%12)||12)+':'+String(m).padStart(2,'0')+(h<12?' AM':' PM'); };
+const now = () => { const d = new Date(); return TODAY+'T'+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); };
+
+let ME = 'jl';                       // the signed-in user (switchable in the wireframe bar)
+// role: admin (every project, manages people) | member (only their projects)
+const USERS = {
+  jl:{name:'Jordan Lee',  color:'#4F46E5', email:'jordan@yourcompany.com', role:'admin',  projects:[],                   status:'active', added:'2026-09-01'},
+  tb:{name:'Tom Becker',  color:'#2E90FA', email:'tom@yourcompany.com',    role:'admin',  projects:[],                   status:'active', added:'2026-09-01'},
+  ps:{name:'Priya Shah',  color:'#DB2777', email:'priya@yourcompany.com',  role:'member', projects:['web','app','acme'], status:'active', added:'2026-09-03'},
+  am:{name:'Arjun Mehta', color:'#0E9384', email:'arjun@yourcompany.com',  role:'member', projects:['app','web','acme'], status:'active', added:'2026-09-03'},
+  sl:{name:'Sara Lopez',  color:'#E8590C', email:'sara@yourcompany.com',   role:'member', projects:['mkt','web','acme'], status:'active', added:'2026-09-10'},
+  kn:{name:'Kenji Noda',  color:'#7A5AF8', email:'kenji@yourcompany.com',  role:'member', projects:['app','ops'],        status:'active', added:'2026-10-14'},
+  mc:{name:'maya.chen',   color:'#9E77ED', email:'maya.chen@yourcompany.com', role:'member', projects:['mkt'],          status:'invited', added:'2026-11-03'},
+  lw:{name:'lena',        color:'#15B79E', email:'lena@acmecorp.com',      role:'member', projects:['acme'],             status:'invited', added:'2026-11-04'},
+};
+Object.values(USERS).forEach(u => u.first = u.name.split(' ')[0]);
+/* ---------- access rules ---------- */
+const isAdmin   = u => USERS[u].role==='admin';
+const onProject = (u, p) => isAdmin(u) || USERS[u].projects.includes(p);          // admins are on every project
+const myProjects = () => Object.keys(PROJECTS).filter(p => onProject(ME, p));
+const canSee    = t => onProject(ME, t.project);                                   // members only see their projects
+const vis       = () => tasks.filter(canSee);
+const people    = () => Object.keys(USERS).filter(u => USERS[u].status!=='removed');
+const shares    = u => myProjects().some(p => onProject(u, p));                    // someone I can see work with
+const qaEff = () => {                                                             // quick-add defaults that respect access
+  const proj = myProjects().includes(state.qa.project) ? state.qa.project : myProjects()[0];
+  let who = state.qa.assignee || state.viewUser; if (!onProject(who, proj)) who = ME;
+  return {proj, who};
+};
+const first = u => USERS[u].first;
+const PROJECTS = {
+  // desc: written mainly for AI assistants (MCP clients) so they file tasks in the right project
+  web: {name:'Website Redesign', color:'#2E90FA', desc:'Redesign of the public marketing site (yourcompany.com): page layouts, copy, imagery, SEO and accessibility. Not the mobile app or the blog. Task titles usually start with the page, e.g. "Pricing: update FAQ".'},
+  app: {name:'Mobile App',       color:'#7A5AF8', desc:'The iOS and Android app: features, bugs, releases (TestFlight / Play), and the API work the app depends on. Crash reports and app-store tasks belong here.'},
+  mkt: {name:'Q4 Marketing',     color:'#F79009', desc:'Campaigns running October–December: newsletter, social calendar, ad spend and the launch event. Ongoing brand work goes to Website Redesign.'},
+  ops: {name:'Operations',       color:'#12B76A', desc:'Internal running of the company: office, equipment, vendors, contracts, hiring logistics and the team offsite. Nothing customer-facing.'},
+  acme:{name:'Acme Corp',        color:'#06AED4', desc:'Client engagement with Acme Corp: estimates, SOWs, deliverables and calls. Lena (lena@acmecorp.com) is the client contact. Anything billable to Acme belongs here.'},
+};
+
+// t: [id, title, project, assignee, createdBy, assignedBy, due, done]
+const SEED = [
+  ['t1','Send revised estimate to Acme','acme','jl','ps','am','2026-11-02',false],
+  ['t2','Fix login redirect loop on Safari','app','jl','jl','jl','2026-11-03',false],
+  ['t3','Book venue for team offsite','ops','jl','tb','tb','2026-10-29',false],
+  ['t4','Review homepage hero copy','web','jl','sl','sl','2026-11-04',false],
+  ['t5','Write standup notes','ops','jl','jl','jl','2026-11-04',true],
+  ['t6','Prepare sprint demo','app','jl','jl','jl','2026-11-05',false],
+  ['t7','1:1 with Arjun — growth plan','ops','jl','jl','jl','2026-11-05',false],
+  ['t8','Publish November newsletter','mkt','jl','sl','sl','2026-11-06',false],
+  ['t9','Draft Q4 campaign brief','mkt','jl','jl','jl','2026-11-02',true],
+  ['t10','Update pricing page','web','jl','jl','jl','2026-11-03',true],
+  ['t11','Plan December release','app','jl','jl','jl','2026-11-10',false],
+  ['t12','Checkout flow wireframes','web','ps','jl','jl','2026-11-05',false],
+  ['t13','Push notification spec','app','ps','jl','jl','2026-11-06',false],
+  ['t14','Migrate sessions table','app','am','jl','jl','2026-11-03',false],
+  ['t15','API rate limiting','app','am','jl','jl','2026-11-05',false],
+  ['t16','December social calendar','mkt','sl','jl','jl','2026-11-04',true],
+  ['t17','Customer interview synthesis','web','ps','ps','ps','2026-11-04',false],
+  ['t18','Design QA for onboarding','app','ps','am','am','2026-11-03',false],
+  ['t19','Brand color audit','web','ps','ps','ps','2026-11-06',false],
+  ['t20','Logo exports for Acme','acme','sl','ps','ps','2026-11-05',false],
+  ['t21','Weekly design sync notes','web','ps','ps','ps','2026-11-02',true],
+  ['t22','Load test checkout API','app','am','am','am','2026-11-04',false],
+  ['t23','Ad spend report','mkt','sl','sl','sl','2026-11-05',false],
+  ['t24','Laptop refresh orders','ops','tb','tb','tb','2026-11-06',false],
+  ['t25','Vendor contract renewal','ops','tb','tb','tb','2026-11-02',false],
+  ['t26','Onboarding checklist for new hire','ops','kn','kn','kn','2026-11-05',false],
+  ['t27','Hero image variants','web','sl','sl','sl','2026-11-04',true],
+  ['t28','Accessibility audit of main nav','web','ps','jl','jl','2026-11-04',true],
+  ['t29','Staging deploy for design review','web','am','ps','ps','2026-11-04',true],
+  ['t30','Fix broken footer links','web','tb','tb','tb','2026-11-03',true],
+  ['t31','Crash fix on Android 14','app','am','am','am','2026-11-04',true],
+  ['t32','TestFlight build 1.8','app','kn','kn','kn','2026-11-03',true],
+  ['t33','Acme kickoff call notes','acme','ps','ps','ps','2026-11-03',true],
+  ['t34','Weekly metrics email','mkt','sl','sl','sl','2026-11-03',true],
+  ['t35','Office Wi-Fi upgrade','ops','tb','tb','tb','2026-11-04',true],
+  ['t36','SOW redlines for Acme','acme','jl','ps','ps','2026-11-02',true],
+  ['t37','Copy review for pricing FAQ','web','am','sl','sl','2026-11-04',true],
+];
+let tasks = SEED.map(([id,title,project,assignee,createdBy,assignedBy,due,done]) => {
+  const t = {id,title,project,assignee,createdBy,assignedBy,due,done,doneOn:done?due:null,notes:'',events:[]};
+  const c = addDays(due,-3)+'T09:'+String(10+Number(id.slice(1))).padStart(2,'0');
+  t.events.push({at:c, actor:createdBy, html:`created this task${(assignedBy===createdBy && assignee!==createdBy)?` for <b>${first(assignee)}</b>`:''} · due ${fmt(due)}`});
+  if (assignedBy!==createdBy && id!=='t1') t.events.push({at:addDays(due,-2)+'T14:05', actor:assignedBy, html:`transferred to <b>${first(assignee)}</b>`});
+  if (done){ const n = Number(id.slice(1));
+    t.doneAt = due+'T'+String(9+n%8).padStart(2,'0')+':'+String((n*13)%60).padStart(2,'0'); t.doneBy = assignee;
+    t.events.push({at:t.doneAt, actor:assignee, html:'marked this done'}); }
+  return t;
+});
+// priority: 1 Urgent · 2 High · 3 Normal (default) · 4 Low — always set
+const NORMAL = 3;
+const PRIOS = {1:{name:'Urgent', hint:'Drop everything', color:'#D92D20'}, 2:{name:'High', hint:'Do these first', color:'#DC6803'}, 3:{name:'Normal', hint:'The default', color:'#6B6B78'}, 4:{name:'Low', hint:'When there\'s time', color:'#A0A0AB'}};
+const PRIO_SEED = {t1:1,t14:1,t29:1,t31:1, t3:2,t6:2,t12:2,t18:2,t25:2,t20:2,t28:2,t35:2, t7:4,t8:4,t11:4,t17:4,t24:4,t37:4,t5:4};
+tasks.forEach(t => t.priority = PRIO_SEED[t.id] || NORMAL);
+// finished late: shown on the day it was finished
+[['t27','2026-11-03','12:51'],['t28','2026-11-02','13:04']].forEach(([id,due,hm]) => { const t = tasks.find(x=>x.id===id);
+  t.events[0].html = `created this task · due ${fmt(due)}`; t.due = due; t.doneOn = TODAY; t.doneAt = TODAY+'T'+hm; t.events.find(e=>e.html==='marked this done').at = t.doneAt; });
+// a change made by an AI assistant over MCP, on Jordan's behalf
+tasks.find(t=>t.id==='t6').events[0] = {at:'2026-11-02T08:47', actor:'jl', via:'Claude', html:'created this task · due Thu, Nov 5'};
+tasks.find(t=>t.id==='t6').events.push({at:'2026-11-03T17:20', actor:'jl', via:'Claude', html:'changed priority <b>Normal</b> → <b>High</b>'});
+// a task finished two days late (shows up on the day it was finished)
+Object.assign(tasks.find(t=>t.id==='t36'), {doneOn:'2026-11-04', doneAt:'2026-11-04T11:05'});
+tasks.find(t=>t.id==='t36').events.find(e=>e.html==='marked this done').at = '2026-11-04T11:05';
+// richer history for t1 (the demo task)
+Object.assign(tasks.find(t=>t.id==='t1'), {
+  notes:'Use the v3 rate card. Acme asked to split discovery into its own line item.',
+  events:[
+    {at:'2026-10-28T10:05', actor:'ps', html:'created this task for <b>Arjun</b> · due Fri, Oct 30'},
+    {at:'2026-10-29T11:20', actor:'am', html:'edited notes'},
+    {at:'2026-10-30T16:12', actor:'am', html:'transferred to <b>Jordan</b>', note:'Out Friday — Jordan has the latest numbers.'},
+    {at:'2026-10-30T16:13', actor:'am', html:'moved date <b>Fri, Oct 30</b> → <b>Mon, Nov 2</b>'},
+  ]});
+let seq = 100;
+const T = id => tasks.find(t => t.id===id);
+const isLate = t => !t.done && t.due < TODAY;
+const lateDays = t => diff(TODAY, t.due);
+const eff = t => t.done ? ((t.doneOn && t.doneOn > t.due) ? t.doneOn : t.due) : (t.due < TODAY ? TODAY : t.due);
+
+/* =========================================================
+   State
+   ========================================================= */
+const state = {
+  screen: 'app', viewUser: ME, weekOffset: 0, view: ['board','today'].includes(params.get('view')) ? params.get('view') : 'list', boardSide: 'to', dragId: null,
+  drawer: params.get('drawer') || null, pop: null,
+  expanded: new Set(), flash: new Set(), toast: null, help: false, projEdit: null, cursor: null, focusSel: null, page: 'tasks', proj: 'web', projDay: TODAY, projOpen: false,
+  notes: true, lastSync: Date.now(), simDone: false,
+  qa: {title:'', notes:'', open:false, project:'web', date:null, assignee:null, priority:NORMAL},
+};
+let undoSnap = null, toastTimer = null;
+
+/* =========================================================
+   Icons
+   ========================================================= */
+const svg = (d, s=16, extra='') => `<svg viewBox="0 0 16 16" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" ${extra}>${d}</svg>`;
+const I = {
+  check: svg('<path d="M3.6 8.4l2.9 2.9 5.9-6.6"/>',12,'stroke-width="2.2"'),
+  cal:   svg('<rect x="2.5" y="3.5" width="11" height="10" rx="2"/><path d="M2.5 6.8h11M5.5 2v3M10.5 2v3"/>',15),
+  swap:  svg('<circle cx="6" cy="5.2" r="2.4"/><path d="M1.8 13.4c.5-2.3 2.2-3.5 4.2-3.5 1 0 1.9.3 2.6.8"/><path d="M10.5 11.5h4.5M13 9.5l2 2-2 2"/>',15),
+  chev:  svg('<path d="M4.5 6.3L8 9.8l3.5-3.5"/>',14),
+  left:  svg('<path d="M9.8 3.5L5.3 8l4.5 4.5"/>',16),
+  right: svg('<path d="M6.2 3.5L10.7 8l-4.5 4.5"/>',16),
+  x:     svg('<path d="M4 4l8 8M12 4l-8 8"/>',16),
+  plus:  svg('<path d="M8 3v10M3 8h10"/>',18,'stroke-width="2"'),
+  eye:   svg('<path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/>',16),
+  arrowR:svg('<path d="M3 8h10M9.5 4.5L13 8l-3.5 3.5"/>',14),
+  bolt:  svg('<path d="M9 1.8L3.5 9H8l-1 5.2L12.5 7H8z"/>',15),
+  kbd:   svg('<rect x="1.5" y="4" width="13" height="8.5" rx="1.8"/><path d="M4 6.6h.01M6.7 6.6h.01M9.3 6.6h.01M12 6.6h.01M4.5 9.9h7"/>',17),
+  trash: svg('<path d="M2.8 4.3h10.4M6.3 4.3V2.8h3.4v1.5M4.3 4.3l.6 9h6.2l.6-9"/>',15),
+  sun:   svg('<circle cx="8" cy="8" r="2.8"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1"/>',14),
+  list:  svg('<path d="M5.5 4h8M5.5 8h8M5.5 12h8"/><circle cx="2.6" cy="4" r=".6" fill="currentColor"/><circle cx="2.6" cy="8" r=".6" fill="currentColor"/><circle cx="2.6" cy="12" r=".6" fill="currentColor"/>',14),
+  board: svg('<rect x="1.8" y="2.5" width="3.4" height="11" rx="1"/><rect x="6.3" y="2.5" width="3.4" height="7.5" rx="1"/><rect x="10.8" y="2.5" width="3.4" height="9.5" rx="1"/>',14),
+  refresh:svg('<path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3"/>',13),
+};
+const av = (u,s=22) => { const x = USERS[u]; const ini = x.name.split(' ').map(p=>p[0]).join(''); return `<span class="av" style="--s:${s}px;background:${x.color}" title="${esc(x.name)}">${ini}</span>`; };
+const proj = p => `<span class="proj"><i style="background:${PROJECTS[p].color}"></i>${PROJECTS[p].name}</span>`;
+const prioSvg = (p, s=14) => { const c = PRIOS[p].color;
+  if (p===1) return `<svg viewBox="0 0 16 16" width="${s}" height="${s}" aria-hidden="true"><rect x="1.5" y="1.5" width="13" height="13" rx="3.5" fill="${c}"/><path d="M8 4.6v4.2" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="8" cy="11.4" r="1.15" fill="#fff"/></svg>`;
+  const on = 5-p;
+  return `<svg viewBox="0 0 16 16" width="${s}" height="${s}" aria-hidden="true"><rect x="2" y="9" width="3" height="5" rx="1" fill="${on>=1?c:'#DCDCE3'}"/><rect x="6.5" y="6" width="3" height="8" rx="1" fill="${on>=2?c:'#DCDCE3'}"/><rect x="11" y="3" width="3" height="11" rx="1" fill="${on>=3?c:'#DCDCE3'}"/></svg>`; };
+const prioTag = t => t.priority===NORMAL ? '' : `<span class="prio p${t.priority}" title="${PRIOS[t.priority].name} priority">${prioSvg(t.priority)}</span>`;
+const lateB = t => `<span class="late">${lateDays(t)}d late</span>`;
+
+/* =========================================================
+   Screen definitions (wireframe shell)
+   ========================================================= */
+const TABS = [
+  ['login','Sign in'],['today','My day'],['week','My week'],['board','Board'],['teammate',"Teammate"],
+  ['detail','Task detail'],['project','Project day'],['team','Team'],['member','Member view'],['keys','Keys'],['mobile','Mobile'],['tech','Tech plan'],
+];
+function activeTab(){
+  if (state.screen!=='app') return state.screen;
+  if (state.help) return 'keys';
+  if (state.drawer) return 'detail';
+  if (state.page==='team') return 'team';
+  if (ME!=='jl') return 'member';
+  if (state.page==='projects') return 'project';
+  return state.viewUser===ME ? ({today:'today', board:'board'}[state.view] || 'week') : 'teammate';
+}
+function signInAs(u){
+  ME = u; state.viewUser = u; state.cursor = null; state.drawer = null; state.pop = null; state.invite = null;
+  state.qa = {title:'', notes:'', open:false, project: myProjects()[0], date:null, assignee:null, priority:NORMAL};
+  if (state.proj!=='all' && !onProject(u, state.proj)) state.proj = 'all';
+  if (state.page==='team' && !isAdmin(u)) state.page = 'tasks';
+}
+document.addEventListener('change', e => { if (e.target.id==='asUser'){ signInAs(e.target.value); state.screen = 'app'; render(); renderPop(); } });
+function goTab(id){
+  state.pop=null; state.toast=null; state.help=false; state.projEdit=null; state.cursor=null;
+  if (id==='login'||id==='mobile'||id==='tech'){ state.screen=id; }
+  else { state.screen='app'; state.weekOffset=0;
+    signInAs(id==='member' ? 'sl' : 'jl');
+    state.viewUser = id==='teammate' ? 'ps' : ME;
+    state.drawer = id==='detail' ? 't1' : null;
+    state.view = id==='board' ? 'board' : id==='today' ? 'today' : 'list';
+    if (id==='keys'){ state.help = true; state.focusSel = '.help-close'; } if (id==='board') state.boardSide = 'to';
+    state.page = id==='project' ? 'projects' : id==='team' ? 'team' : 'tasks'; if (id==='project'){ state.proj = 'web'; state.projDay = TODAY; state.projOpen = false; } }
+  render(); renderPop();
+  if (state.screen==='app') maybeAutoSim();
+}
+
+const NOTES = {
+  login:`<h3>Sign in</h3><p class="ns">One button. No sign-up, no workspace picker.</p>
+   <ol><li><b>Google only, by invitation.</b> After Google sign-in, the email must match someone an admin has added. Any Google account works, including a client's, but only those exact addresses get in.</li>
+   <li><b>First sign-in creates the member</b> with their Google name and photo. Nothing to fill in.</li>
+   <li>An address that hasn't been added sees a plain message (shown below the button) instead of an error page.</li>
+   <li>Sessions last 30 days, so people rarely see this screen.</li></ol>
+   <h4>Try it</h4><ul><li>Click <b>Continue with Google</b> to go to My week.</li></ul>`,
+  week:`<h3>My week</h3><p class="ns">One screen does most of the work. Top to bottom: what's late, what's today, the rest of the week, then what I've handed to others.</p>
+   <ol><li><b>Carried over.</b> Open tasks with a past date roll into <i>Today</i> by themselves. They pile up in an amber block with a growing <span class="late" style="font-size:11px">3d late</span> badge until someone finishes or moves them. <b>Move all</b> reschedules the whole block at once.</li>
+   <li><b>Past days fold into one line</b> ("2 done · 1 carried") so they don't get in the way. Click to open.</li>
+   <li><b>Hover a row</b> to get the two common actions: <b>Move date</b> and <b>Transfer</b>. Click anywhere else on the row for details and history.</li>
+   <li><b>Assigned by me</b> is grouped by person. Overdue items there turn red too, so you can follow up.</li>
+   <li><b>Quick add</b> is a single line until you click into it (or press <span class="kbd">N</span>). Then it expands into a <b>title</b> and a <b>notes</b> box, with the project, date, priority and person chips underneath, and collapses again if you leave it empty. <span class="kbd">Enter</span> adds from the title, <span class="kbd">Tab</span> moves to notes, and <span class="kbd">⌘</span><span class="kbd">Enter</span> adds from notes. After adding, it stays open for the next task. It fills in today, your last project and you. The chips change the project, date, priority or person. Starting the title with <span class="kbd">!</span> makes it High, and <span class="kbd">!!</span> makes it Urgent. <b>Every task always has a project, a date, an assignee and a priority</b>, so none can be left blank: there's no "no project", "no date" or "unassigned" option anywhere.</li>
+   <li><b>Priority</b> has four levels. Urgent shows a red <b>!</b> badge, High shows orange bars and Low shows one grey bar. Normal, the default, shows nothing so most rows stay clean. Within each day, open tasks are sorted Urgent → High → Normal → Low, and carried-over tasks are sorted by priority, then by age.</li>
+   <li><b>Live</b> indicator: the page checks for changes every 10s. New or changed rows briefly glow.</li></ol>
+   <button class="sim-btn" data-act="sim">${I.bolt} Simulate a teammate assigning me a task</button>
+   <h4>Keyboard</h4><ul><li>Everything works without a mouse. Press <span class="kbd">?</span> for all shortcuts, or see the Keyboard tab.</li></ul>`,
+  project:`<h3>Project day</h3><p class="ns">What got finished in a project on a given day, for anyone on the team. Open it from <b>Projects</b> in the top bar.</p>
+   <ol><li><b>Pick a project</b> (or <i>All projects</i>) from the title, and a day with the arrows. You can go back as far as you like, but not into the future.</li>
+   <li><b>One list of finished tasks</b>, not grouped by person: sorted by priority (Urgent first), then by due date, then by finish time. Each row shows who did it, its due date and the time it was ticked off. In <i>All projects</i> each row also shows its project.</li>
+   <li>Extra notes appear only when they matter: a <span class="late" style="font-size:11px">2d late</span> badge, or <i>ticked by Jordan</i> when someone other than the assignee marked it done.</li>
+   <li><b>Not finished</b> sits folded at the bottom as one line. Open it to see what was planned for that day but isn't done; carried-over tasks count too.</li>
+   <li><b>Copy summary</b> puts a plain-text list on the clipboard for a standup message or a client update.</li>
+   <li>The rows are ordinary tasks, so clicking or <span class="kbd">Enter</span> opens the detail panel and every shortcut works. <span class="kbd">[</span> <span class="kbd">]</span> change the day, <span class="kbd">P</span> picks the project, and <span class="kbd">G</span> <span class="kbd">P</span> / <span class="kbd">G</span> <span class="kbd">T</span> jump between Projects and Tasks.</li></ol>`,
+  team:`<h3>Team (admin)</h3><p class="ns">Only admins see this page. Members don't get the <b>Team</b> link at all.</p>
+   <ol><li><b>Add people by email.</b> Paste one or more addresses, pick <b>Member</b> or <b>Admin</b>, and for members choose their projects. Anyone with a Google account can be added, a client contact too. Only the exact addresses added here can sign in.</li>
+   <li>New people show as <b>Invited</b> until their first sign-in, which fills in their Google name and photo. They can be assigned tasks straight away.</li>
+   <li><b>Role</b> and <b>Projects</b> can be changed from their row. Admins automatically have every project.</li>
+   <li><b>Guardrails</b> so no task is ever left without an owner or out of sight:
+     <ul><li>You can't take someone off a project while they still have open tasks there.</li>
+     <li>Removing a person first asks who gets their open tasks. Only people on all of those projects are offered, and each transfer is logged.</li>
+     <li>You can't remove or demote the last admin, or change your own role.</li></ul></li>
+   <li><b>Projects</b> (bottom of the page): each has a name, a color, members and a <b>description</b>. The description is written mainly for AI assistants connected over MCP, so it says what belongs in the project, what doesn't, and how tasks are named. People only see it as a tooltip, so it adds no clutter. <b>Edit</b> or <b>+ New project</b> opens the editor; <span class="kbd">⌘</span><span class="kbd">Enter</span> saves.</li>
+   <li>Use <b>As</b> in the dark wireframe bar to try the app as a member.</li></ol>`,
+  member:`<h3>Member view</h3><p class="ns">Signed in as <b>Sara</b>, a member of Q4 Marketing, Website Redesign and Acme Corp.</p>
+   <ol><li><b>Only her projects exist for her.</b> Tasks in Mobile App or Operations never appear: not in her week, not on a teammate's week, not on the Projects page.</li>
+   <li><b>The person switcher</b> lists only people who share at least one of her projects. Kenji (Mobile App, Operations) isn't there.</li>
+   <li>On a teammate's week, a note says that only shared projects are shown, so a half-empty week isn't mistaken for an idle one.</li>
+   <li><b>She works across all her projects</b>: she can create tasks in any of them, move a task between them, and assign or transfer to anyone on that task's project. The menus list only those people and say so.</li>
+   <li>A task's project can't be changed to one the assignee isn't on. That option is shown disabled with the reason.</li>
+   <li>No <b>Team</b> link; adding or removing people is admin-only. The small badge on the avatar shows the role.</li></ol>`,
+  keys:`<h3>Keyboard</h3><p class="ns">The whole app works without a mouse. Close this sheet (<span class="kbd">Esc</span>) and try it.</p>
+   <ol><li><b>One Tab stop for the task list.</b> Tab lands on the list, then <span class="kbd">↑</span> <span class="kbd">↓</span> (or <span class="kbd">J</span> <span class="kbd">K</span>) move between tasks, so 40 tasks don't mean 120 Tab presses. The selected task gets a blue bar.</li>
+   <li><b>Single keys act on the selected task:</b> <span class="kbd">X</span> done, <span class="kbd">D</span> date, <span class="kbd">T</span> transfer, <span class="kbd">1</span>–<span class="kbd">4</span> priority, <span class="kbd">E</span> rename, <span class="kbd">Enter</span> open.</li>
+   <li><b>Keyboard drag:</b> <span class="kbd">⇧</span><span class="kbd">←</span> / <span class="kbd">⇧</span><span class="kbd">→</span> moves a task one day, in both the list and the board. Same rules as dragging: never into the past, always logged, with Undo.</li>
+   <li><b>Board:</b> <span class="kbd">←</span> <span class="kbd">→</span> jump between day columns. Empty columns are reachable through their <i>+ Add</i> button.</li>
+   <li><b>Menus</b> open with focus inside. Arrows choose, <span class="kbd">Enter</span> picks, the calendar moves by day and week, and <span class="kbd">Esc</span> returns you to where you were.</li>
+   <li><b>Detail panel</b> keeps focus inside until closed. <span class="kbd">J</span>/<span class="kbd">K</span> step to the next or previous task without closing it.</li>
+   <li><b>Anywhere:</b> <span class="kbd">N</span> new task, <span class="kbd">V</span> cycle Today/Week/Board, <span class="kbd">P</span> switch person, <span class="kbd">[</span> <span class="kbd">]</span> weeks, <span class="kbd">⌘Z</span> undo.</li>
+   <li><b>Accessibility:</b> focus rings appear only for keyboard users. There's a "Skip to tasks" link on the first Tab, each task has a full spoken label (title, priority, lateness, date), and the panels are marked up as dialogs.</li></ol>`,
+  today:`<h3>My day</h3><p class="ns">The week list narrowed to today only, for when you just want to get through the day.</p>
+   <ol><li>Switch with <b>Today / Week / Board</b> next to the date. The real app would remember your choice.</li>
+   <li>Shows only <b>carried-over tasks and today's tasks</b>, plus what you've assigned to others that's due today or overdue. No other day headers, folded past days or week arrows.</li>
+   <li>A single dashed line at the bottom ("Later this week: 4 tasks · Tomorrow 2 · Fri 1") is a reminder of what's hidden. Click it to open the full week.</li>
+   <li>Everything else works the same: hover a task to move or transfer it, click to open it, use quick add (it defaults to today).</li>
+   <li>When the list is empty it says so plainly instead of leaving a blank page.</li></ol>`,
+  board:`<h3>Week board</h3><p class="ns">The same week shown as seven columns. Switch with <b>Today / Week / Board</b> next to the week arrows; it stays as you change weeks or people.</p>
+   <ol><li><b>Drag a card to another day</b> to reschedule it. The drop is a normal date move: it's written to the task's history with your name, and Undo is offered.</li>
+   <li><b>Only today and future days accept drops.</b> While dragging, droppable columns get a dashed outline and past days fade.</li>
+   <li><b>Carried-over cards</b> sit at the top of Today with a red edge. Drag one out to a future day, or use <b>Move all</b>.</li>
+   <li>The <b>Assigned to / Assigned by</b> switch shows the tasks you've handed to others on the same board. Each card shows the assignee's avatar, and dragging it reschedules their task.</li>
+   <li><b>+ Add</b> at the bottom of a column puts that day into the quick-add bar.</li>
+   <li>Weekend columns are narrower, since they're usually light.</li>
+   <li><b>Keyboard:</b> select a card and press <span class="kbd">⇧</span><span class="kbd">←</span> / <span class="kbd">⇧</span><span class="kbd">→</span> to move it a day. <span class="kbd">←</span> <span class="kbd">→</span> switch columns.</li>
+   <li>On phones the board becomes swipeable columns. Dragging is replaced by the Date field in the task sheet.</li></ol>
+   <h4>Accessibility</h4><ul><li>Dragging is a shortcut, not the only way: every card opens the detail panel, where the date can be changed.</li></ul>`,
+  teammate:`<h3>A teammate's week</h3><p class="ns">The same layout, pointed at someone else. Click the name to switch.</p>
+   <ol><li>The blue banner makes it clear you're on someone else's week, and that <b>your edits are logged under your name</b>.</li>
+   <li><b>Anyone can transfer any task.</b> Hover a row and pick a new person. The task leaves this list and shows up on theirs.</li>
+   <li>Quick add sets the assignee to the person you're viewing ("Add a task for Priya…").</li>
+   <li>The switcher shows each person's open-task count for the week, so you can see who's overloaded.</li>
+   <li>On the <i>Assigned by</i> groups, <b>View week →</b> jumps to that person.</li></ol>`,
+  detail:`<h3>Task detail & history</h3><p class="ns">A side panel, so the week stays visible behind it.</p>
+   <ol><li><b>Every field can be edited in place</b>: title, assignee, date, priority, project, notes. Project, assignee, date and priority can be <i>changed</i> but never cleared. Priority changes are recorded in the history too.</li>
+   <li><b>History is append-only.</b> Every transfer, date change, completion and edit is saved with who did it and when. Nobody can edit or delete these entries.</li>
+   <li>A transfer can include an optional note ("Out Friday…"). It shows in the history.</li>
+   <li>Changes made by an AI assistant over MCP are marked <span class="via">via Claude</span> next to the person it acted for. Open "Prepare sprint demo" to see one.</li>
+   <li>Rolling over isn't logged, because it's a display rule and not an edit. The panel shows the original due date and how many days late it is.</li></ol>`,
+  mobile:`<h3>Mobile</h3><p class="ns">Same structure, one column. These phones run the live prototype.</p>
+   <ol><li>Project names shrink to color dots and the "from" names are dropped.</li>
+   <li>There's no hover on a phone, so tapping a row opens the detail sheet, where Move and Transfer are one tap away.</li>
+   <li>The week bar sits full-width under the title, sized for thumbs.</li></ol>`,
+  tech:`<h3>Tech plan</h3><p class="ns">The recommended Cloudflare setup, an alternative, and the rules behind the screens.</p>
+   <ol><li>The two rules everything depends on: <b>rollover is computed when you view, not stored</b>, and <b>every write and its history entry are saved together in one batch</b>.</li>
+   <li>The open questions at the bottom are decisions for you before the build starts.</li></ol>`,
+};
+
+/* =========================================================
+   Render: shell
+   ========================================================= */
+const canvas = document.getElementById('canvas');
+const notesEl = document.getElementById('notes');
+function renderShell(){
+  if (EMBED) return;
+  const sel = document.getElementById('asUser');
+  sel.innerHTML = people().filter(u=>USERS[u].status==='active').map(u=>`<option value="${u}" ${u===ME?'selected':''}>${USERS[u].name} · ${isAdmin(u)?'Admin':'Member'}</option>`).join('');
+  const a = activeTab();
+  document.getElementById('tabs').innerHTML = TABS.map(([id,l],i) =>
+    `<button class="${a===id?'on':''}" data-act="tab" data-t="${id}"><span>${i+1}</span>${l}</button>`).join('');
+  notesEl.innerHTML = NOTES[a] || '';
+  notesEl.classList.toggle('hide', !state.notes);
+  document.getElementById('notesBtn').classList.toggle('on', state.notes);
+}
+
+function activeSelector(){
+  const a = document.activeElement; if (!a || a===document.body || !canvas.contains(a)) return null;
+  const nav = a.closest('[data-nav]'); if (nav) return `[data-nav="${nav.dataset.nav}"]`;
+  if (a.classList.contains('drawer')) return '.drawer';
+  if (a.id) return '#'+a.id;
+  if (a.dataset.act){ const sc = a.closest('.drawer') ? '.drawer ' : '';
+    return sc + `[data-act="${a.dataset.act}"]` + ['m','dir','s','u','k','d','t','pg','p','c'].map(x=>a.dataset[x]!=null?`[data-${x}="${a.dataset[x]}"]`:'').join(''); }
+  return null;
+}
+function render(){
+  const prevSel = activeSelector();
+  const prevIdx = prevSel && prevSel.startsWith('[data-nav') ? [...canvas.querySelectorAll('[data-nav]')].indexOf(canvas.querySelector(prevSel)) : -1;
+  renderShell();
+  const sc = canvas.querySelector('.app-scroll'); const top = sc ? sc.scrollTop : 0;
+  const ob = canvas.querySelector('.board'); const boardLeft = ob ? ob.scrollLeft : null;
+  if (state.screen==='login') canvas.innerHTML = frame(loginHTML());
+  else if (state.screen==='mobile') canvas.innerHTML = mobileHTML();
+  else if (state.screen==='tech') canvas.innerHTML = techHTML();
+  else canvas.innerHTML = EMBED ? appHTML() : frame(appHTML());
+  const sc2 = canvas.querySelector('.app-scroll'); if (sc2) sc2.scrollTop = top;
+  const bd = canvas.querySelector('.board');
+  if (bd && bd.scrollWidth > bd.clientWidth){ const tc = bd.querySelector('.col.today');
+    bd.scrollLeft = (boardLeft!=null) ? boardLeft : (tc ? tc.getBoundingClientRect().left - bd.getBoundingClientRect().left : 0); }
+  const qi = canvas.querySelector('#qa-input'); if (qi) qi.value = state.qa.title;
+  const qn = canvas.querySelector('#qa-notes'); if (qn){ qn.value = state.qa.notes; growNotes(qn); }
+  // roving tabindex: exactly one task list item is in the Tab order
+  const navs = [...canvas.querySelectorAll('[data-nav]')];
+  const cur = (state.cursor && canvas.querySelector(`[data-nav="${state.cursor}"]`)) || navs[0];
+  if (cur) cur.tabIndex = 0;
+  canvas.querySelectorAll('.collapsed[data-nav]').forEach(b=>b.setAttribute('aria-expanded','false'));
+  // put focus back where it was (or where an action asked for)
+  const want = state.focusSel || prevSel; state.focusSel = null;
+  if (want){
+    let el = canvas.querySelector(want);
+    if (!el && want.startsWith('[data-nav')) el = (prevIdx>=0 && navs[Math.min(prevIdx, navs.length-1)]) || cur;   // item left the view → its neighbour
+    if (el){ el.focus({preventScroll:true}); if (el.matches('[data-nav]')) el.scrollIntoView({block:'nearest', inline:'nearest'});
+      if (el.classList.contains('dr-title')){ const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); } }
+  }
+  tickSync();
+}
+const frame = inner => `<div class="browser"><div class="bbar"><i></i><i></i><i></i><div class="url">🔒 tasks.yourcompany.com</div></div>${inner}</div>`;
+
+/* =========================================================
+   Sign in
+   ========================================================= */
+const GLOGO = `<svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>`;
+function loginHTML(){
+  return `<div class="app"><div class="signin"><div class="si-card">
+    <div class="logo-mark">${I.check.replace('width="12" height="12"','width="22" height="22"')}</div>
+    <h1>Taskivities</h1>
+    <p>Your team's week, at a glance.</p>
+    <button class="gbtn" data-act="signin">${GLOGO} Continue with Google</button>
+    <div class="si-foot">Only people an admin has added can sign in.</div>
+    <div class="si-err"><b style="color:var(--text)">If the Google account hasn't been added:</b><br>“jordan.lee@gmail.com doesn't have access to Taskivities. Ask an admin to add this address, or sign in with the one they added.”</div>
+  </div></div></div>`;
+}
+
+/* =========================================================
+   App (week view)
+   ========================================================= */
+function weekInfo(){
+  const ws = addDays(weekStart(TODAY), state.weekOffset*7);
+  const days = [...Array(7)].map((_,i)=>addDays(ws,i));
+  const we = days[6]; const a = P(ws), b = P(we);
+  const range = a.getMonth()===b.getMonth() ? `${MONS[a.getMonth()]} ${a.getDate()} – ${b.getDate()}, ${b.getFullYear()}` : `${MONS[a.getMonth()]} ${a.getDate()} – ${MONS[b.getMonth()]} ${b.getDate()}`;
+  const o = state.weekOffset;
+  const label = o===0?'This week':o===1?'Next week':o===-1?'Last week':o>0?`In ${o} weeks`:`${-o} weeks ago`;
+  return {ws, we, days, range, label};
+}
+const inWeek = (d,w) => d>=w.ws && d<=w.we;
+const sortRows = arr => arr.sort((a,b)=> (a.done-b.done) || (a.priority-b.priority) || (a.id.localeCompare(b.id,undefined,{numeric:true})));
+const byPrioThenOldest = (a,b) => (a.priority-b.priority) || a.due.localeCompare(b.due);
+
+function appHTML(){
+  const u = state.viewUser, isMe = u===ME, w = weekInfo();
+  const mine = vis().filter(t=>t.assignee===u);
+  const carried = mine.filter(isLate).sort(byPrioThenOldest);
+  const TD = state.view==='today';                       // "Today only" list
+  const inScope = d => TD ? d===TODAY : inWeek(d,w);
+  const byTasks = vis().filter(t=>(t.createdBy===u||t.assignedBy===u) && t.assignee!==u && inScope(eff(t)));
+  const openWeek = mine.filter(t=>!t.done && inScope(eff(t))).length;
+  const scopeWord = TD ? 'today' : 'this week';
+
+  let sub = `${openWeek} open${TD?' today':''}`;
+  if (state.weekOffset===0 && carried.length) sub += ` · <span class="lt">${carried.length} carried over</span>`;
+  sub += ` · ${byTasks.filter(t=>!t.done).length} assigned to others`;
+
+  // what's hidden in Today mode, as a one-line peek
+  let peek = '';
+  if (TD){
+    const later = mine.filter(t=>!t.done && t.due>TODAY && inWeek(t.due,w));
+    const per = {}; later.forEach(t=>per[t.due]=(per[t.due]||0)+1);
+    const parts = Object.keys(per).sort().map(d=>`${d===addDays(TODAY,1)?'Tomorrow':DOW[P(d).getDay()]} ${per[d]}`);
+    peek = later.length
+      ? `<button class="peek" data-act="view-mode" data-m="list" data-nav="peek" tabindex="-1"><span>Later this week: <b>${later.length} task${later.length>1?'s':''}</b></span><span class="pk-d">${parts.join(' · ')}</span><span class="pk-go">Show week ${I.arrowR}</span></button>`
+      : `<div class="peek quiet">Nothing else planned this week.</div>`;
+  }
+
+  const hiddenN = tasks.filter(t=>t.assignee===u && !canSee(t) && !t.done).length;
+  const banner = isMe ? '' : `<div class="viewing">${I.eye}<span class="grow">You're viewing <b>${USERS[u].name}'s</b> week. Your changes are recorded in each task's history under your name.${hiddenN?` <span class="vh">Only projects you share are shown.</span>`:''}</span><button data-act="view" data-u="${ME}">Back to my week</button></div>`;
+
+  // ---- assigned to
+  const dayBlocks = (TD ? [TODAY] : w.days).map(d => {
+    const dd = P(d), dn = d===TODAY ? 'Today' : DOW[dd.getDay()], dl = `${MONS[dd.getMonth()]} ${dd.getDate()}`;
+    if (d < TODAY){
+      const done = mine.filter(t=>t.done && eff(t)===d);
+      const ghosts = mine.filter(t=>isLate(t) && t.due===d);
+      const key = u+':'+d;
+      const open = state.expanded.has(key) || state.weekOffset<0;
+      const sum = [done.length?`${done.length} done`:'', ghosts.length?`<span class="c">${ghosts.length} carried to today</span>`:''].filter(Boolean).join(' · ') || 'Nothing recorded';
+      if (!open) return `<div class="day"><button class="collapsed" data-act="expand" data-k="${key}" data-nav="day:${key}" tabindex="-1" aria-expanded="false"><span class="dn">${DOW[dd.getDay()]}</span> ${dl}<span class="sum">${sum} ${I.chev}</span></button></div>`;
+      const rows = [...sortRows(done).map(t=>rowHTML(t,'to')), ...ghosts.map(t=>rowHTML(t,'ghost'))];
+      return `<div class="day"><div class="day-h"><span class="dn">${DOW[dd.getDay()]}</span><span class="dd">${dl}</span>${state.weekOffset===0?`<button class="dc" data-act="expand" data-k="${key}" style="color:var(--accent)">Collapse</button>`:`<span class="dc">${sum.replace(/<[^>]+>/g,'')}</span>`}</div>
+        ${rows.length?`<div class="card">${rows.join('')}</div>`:`<div class="empty-day">Nothing recorded</div>`}</div>`;
+    }
+    const list = sortRows(mine.filter(t=>eff(t)===d && !(d===TODAY && isLate(t))));
+    const isT = d===TODAY;
+    const carriedBlock = isT && carried.length ? `<div class="carried" data-carry>
+        <div class="carried-h"><b>Carried over · ${carried.length}</b><span class="grow"><span class="old">oldest is ${Math.max(...carried.map(lateDays))} days late</span></span><button data-act="move-all">${I.cal} Move all</button></div>
+        <div class="rows">${carried.map(t=>rowHTML(t,'carried')).join('')}</div></div>` : '';
+    const openN = list.filter(t=>!t.done).length + (isT?carried.length:0);
+    return `<div class="day">${TD ? '' : `<div class="day-h ${isT?'today':''}"><span class="dn">${dn}</span><span class="dd">${isT?DOW[dd.getDay()]+', ':''}${dl}</span><span class="dc">${openN?openN+' open':''}</span></div>`}
+      ${carriedBlock}${list.length?`<div class="card">${list.map(t=>rowHTML(t,'to')).join('')}</div>`:(carriedBlock?'':`<div class="empty-day">${TD?'Nothing left for today. Nice.':'Nothing planned'}</div>`)}</div>`;
+  }).join('');
+
+  // ---- assigned by
+  const groups = {};
+  byTasks.sort((a,b)=>eff(a).localeCompare(eff(b))||(a.done-b.done)||(a.priority-b.priority)).forEach(t => (groups[t.assignee] ||= []).push(t));
+  const byHTML = Object.keys(groups).length ? `<div class="card">${Object.entries(groups).map(([a,list]) =>
+     `<div class="grp-h">${av(a,22)}<b>${USERS[a].name}</b><span class="n">${list.filter(t=>!t.done).length} open</span><button class="link" data-act="view" data-u="${a}">View week →</button></div>${list.map(t=>rowHTML(t,'by')).join('')}`).join('')}</div>`
+     : `<div class="empty-sec">${isMe?"You haven't":first(u)+" hasn't"} assigned anything to others ${scopeWord}.</div>`;
+
+  const {proj: qaProj, who: qaWho} = qaEff();
+  const qaDate = state.qa.date || (inWeek(TODAY,w) ? TODAY : (w.ws > TODAY ? w.ws : TODAY));
+  const qaOpen = state.qa.open || !!state.qa.title || !!state.qa.notes;
+  const qaPh = qaOpen ? 'Task title' : qaWho===ME ? 'Add a task…' : `Add a task for ${first(qaWho)}…`;
+
+  return `<div class="app">
+    <div class="topbar">
+      <button class="skip" data-act="skip">Skip to tasks</button>
+      <div class="logo"><span class="logo-mark">${I.check}</span>taskivities</div>
+      <nav class="topnav" aria-label="Main">
+        <button class="${state.page==='tasks'?'on':''}" data-act="page" data-pg="tasks" ${state.page==='tasks'?'aria-current="page"':''}>Tasks</button>
+        <button class="${state.page==='projects'?'on':''}" data-act="page" data-pg="projects" ${state.page==='projects'?'aria-current="page"':''}>Projects</button>
+        ${isAdmin(ME) ? `<button class="${state.page==='team'?'on':''}" data-act="page" data-pg="team" ${state.page==='team'?'aria-current="page"':''}>Team</button>` : ''}
+      </nav>
+      <div class="spacer"></div>
+      <button class="icon-btn kb-btn" data-act="help" title="Keyboard shortcuts  (?)" aria-label="Keyboard shortcuts">${I.kbd}</button>
+      <div class="sync" title="Checks for changes every 10 seconds"><span class="dot"></span><span class="lbl-t">Live · </span><span class="sync-ago">just now</span></div>
+      <span class="me" title="${USERS[ME].name} · ${isAdmin(ME)?'Admin':'Member'}">${av(ME,30)}<span class="role-dot ${isAdmin(ME)?'admin':''}">${isAdmin(ME)?'Admin':'Member'}</span></span>
+    </div>
+    <div class="app-scroll"><div class="page ${state.page==='tasks' && state.view==='board'?'wide':''}">
+      ${state.page==='team' ? teamHTML() : state.page==='projects' ? projectDayHTML() : `
+      ${banner}
+      <div class="phead">
+        <button class="who" data-act="person">${av(u,40)}<span><span class="h1">${isMe?(TD?'My day':'My week'):first(u)+(TD?"'s day":"'s week")} ${I.chev}</span><span class="sub">${sub}</span></span></button>
+        <div class="weeknav">
+          <div class="seg" role="tablist" title="Today, week list or board">
+            <button class="${TD?'on':''}" data-act="view-mode" data-m="today">${I.sun}<span class="sl">Today</span></button>
+            <button class="${state.view==='list'?'on':''}" data-act="view-mode" data-m="list">${I.list}<span class="sl">Week</span></button>
+            <button class="${state.view==='board'?'on':''}" data-act="view-mode" data-m="board">${I.board}<span class="sl">Board</span></button>
+          </div>
+          ${TD ? `<div class="wk"><b>Today</b><span>${fmt(TODAY)}</span></div>` : `
+          <button class="icon-btn" data-act="week" data-dir="-1" title="Previous week  [">${I.left}</button>
+          <div class="wk"><b>${w.label}</b><span>${w.range}</span></div>
+          <button class="icon-btn" data-act="week" data-dir="1" title="Next week  ]">${I.right}</button>
+          <button class="btn-ghost" data-act="week" data-dir="0" ${state.weekOffset===0?'disabled':''}>This week</button>`}
+        </div>
+      </div>
+      <div class="qa ${qaOpen?'open':''}" id="qa">
+        <div class="qa-top">
+          <span class="plus">${I.plus}</span>
+          <input id="qa-input" placeholder="${qaPh}" autocomplete="off" aria-label="Task title">
+          <button class="go qa-go-c" data-act="add">Add</button>
+        </div>
+        <div class="qa-more">
+        <textarea id="qa-notes" rows="2" placeholder="Notes (optional): details, links, context" aria-label="Notes"></textarea>
+        <div class="qa-foot">
+        <div class="chips">
+          <button class="chip" data-act="qa-proj"><i style="background:${PROJECTS[qaProj].color}"></i>${PROJECTS[qaProj].name}</button>
+          <button class="chip" data-act="qa-date">${I.cal}${rel(qaDate)}</button>
+          <button class="chip" data-act="qa-prio" title="Priority (start the title with ! for High, !! for Urgent)">${prioSvg(state.qa.priority,14)}${PRIOS[state.qa.priority].name}</button>
+          <button class="chip" data-act="qa-who">${av(qaWho,18)}${qaWho===ME?'Me':first(qaWho)}</button>
+        </div>
+        <span class="qa-hint"><kbd>Tab</kbd> notes · <kbd>⌘</kbd><kbd>Enter</kbd> add</span>
+        <button class="btn-ghost sm" data-act="qa-cancel">Cancel</button>
+        <button class="go" data-act="add">Add task</button>
+        </div>
+        </div>
+      </div>
+      ${state.view==='board' ? boardHTML(u, w) : `
+      <section class="sec"><div class="sec-h"><h2>Assigned to ${isMe?'me':first(u)}</h2><span class="cnt">${openWeek} open ${scopeWord}</span></div>${dayBlocks}${peek}</section>
+      <section class="sec"><div class="sec-h"><h2>Assigned by ${isMe?'me':first(u)}</h2><span class="cnt">to others, ${scopeWord}</span></div>${byHTML}</section>`}
+`}
+    </div></div>
+    ${state.drawer ? drawerHTML(T(state.drawer)) : ''}
+    ${state.help ? helpHTML() : ''}
+    ${state.projEdit ? projEditHTML() : ''}
+    ${state.toast ? `<div class="toast" role="status"><span>${state.toast.text}</span>${state.toast.undo?'<button data-act="undo">Undo</button>':''}</div>` : ''}
+  </div>`;
+}
+
+/* ---------- Team page (admins): people, roles, project access ---------- */
+const PALETTE = ['#4F46E5','#DB2777','#0E9384','#E8590C','#2E90FA','#7A5AF8','#9E77ED','#15B79E','#F79009','#D92D20'];
+const openIn = (u, p) => tasks.filter(t=>t.assignee===u && !t.done && (!p || t.project===p)).length;
+function teamHTML(){
+  if (!isAdmin(ME)) return `<div class="empty-sec">Only admins can manage the team.</div>`;
+  const list = people().sort((a,b)=> USERS[a].status.localeCompare(USERS[b].status) || (isAdmin(b)-isAdmin(a)) || USERS[a].name.localeCompare(USERS[b].name));
+  const admins = list.filter(isAdmin).length, invited = list.filter(u=>USERS[u].status==='invited').length;
+  const inv = state.invite;
+  const form = inv ? `<div class="invite card" role="group" aria-label="Add people">
+      <label class="lbl" for="inv-emails">Email addresses</label>
+      <input id="inv-emails" class="inv-in" placeholder="name@yourcompany.com, someone@client.com" value="${esc(inv.emails||'')}" autocomplete="off">
+      ${inv.err ? `<div class="inv-err" role="alert">${inv.err}</div>` : ''}
+      <div class="inv-grid">
+        <div><div class="lbl">Role</div>
+          <div class="seg sm"><button class="${inv.role==='member'?'on':''}" data-act="inv-role" data-m="member">Member</button><button class="${inv.role==='admin'?'on':''}" data-act="inv-role" data-m="admin">Admin</button></div></div>
+        <div><div class="lbl">Projects</div>
+          ${inv.role==='admin' ? `<div class="muted-s">Admins can see every project and manage the team.</div>`
+            : `<div class="pchips">${Object.entries(PROJECTS).map(([k,v])=>`<button class="pchip ${inv.projects.includes(k)?'on':''}" data-act="inv-proj" data-p="${k}" aria-pressed="${inv.projects.includes(k)}"><i style="background:${v.color}"></i>${v.name}</button>`).join('')}</div>`}</div>
+      </div>
+      <div class="inv-foot"><span class="muted-s">They sign in with Google using exactly this address. No one else can get in.</span>
+        <button class="btn-ghost" data-act="inv-cancel">Cancel</button><button class="btn-primary" data-act="inv-add">Add</button></div>
+    </div>` : '';
+  const rows = list.map(u => { const x = USERS[u], me = u===ME;
+    return `<div class="trow ${state.flash.has('u:'+u)?'flash':''}">
+      <div class="tp">${av(u,32)}<div><b>${esc(x.status==='invited'?x.email:x.name)}${me?' <span class="you">(you)</span>':''}</b><span>${x.status==='invited'?'Not signed in yet':esc(x.email)}</span></div></div>
+      <div><button class="chip" data-act="urole" data-u="${u}" ${me?'disabled title="You can\'t change your own role"':''}>${x.role==='admin'?'Admin':'Member'} ${me?'':I.chev}</button></div>
+      <div class="tproj">${x.role==='admin' ? `<span class="allp">All projects</span>`
+          : `<button class="pbtn" data-act="uproj" data-u="${u}" aria-label="Projects for ${esc(x.name)}">${x.projects.map(k=>`<span class="proj"><i style="background:${PROJECTS[k].color}"></i>${PROJECTS[k].name}</span>`).join('')}<span class="pedit">${I.chev}</span></button>`}</div>
+      <div class="tstat">${x.status==='invited' ? `<span class="st inv">Invited · ${fmt(x.added).split(', ')[1]}</span>` : `<span class="st ok">Active</span>`}</div>
+      <div class="tact">${me ? '' : `<button class="icon-btn" data-act="uremove" data-u="${u}" title="Remove from team" aria-label="Remove ${esc(x.name)}">${I.trash}</button>`}</div>
+    </div>`; }).join('');
+  const projRows = Object.entries(PROJECTS).map(([k,v]) => { const ppl = people().filter(u=>USERS[u].status==='active' && !isAdmin(u) && USERS[u].projects.includes(k));
+    return `<div class="prow"><i style="background:${v.color}"></i><div class="pname"><b>${esc(v.name)}</b><span class="pdesc" title="${esc(v.desc||'')}">${v.desc ? esc(v.desc) : '<em>No description yet. AI assistants will guess what belongs here.</em>'}</span></div><span class="avs">${ppl.map(u=>av(u,22)).join('')}</span><span class="n">${ppl.length} member${ppl.length===1?'':'s'} + admins</span><span class="n">${tasks.filter(t=>t.project===k&&!t.done).length} open</span><button class="btn-ghost sm" data-act="pe-open" data-p="${k}" aria-label="Edit ${esc(v.name)}">Edit</button></div>`; }).join('');
+  return `<div class="phead"><div><div class="h1 team-h">Team</div><div class="sub">${list.length} people · ${admins} admin${admins===1?'':'s'}${invited?` · ${invited} invited`:''}</div></div>
+      <div class="weeknav">${inv?'':`<button class="btn-primary" data-act="inv-open">${I.plus.replace(/18/g,'14')} Add people</button>`}</div></div>
+    ${form}
+    <section class="sec"><div class="card team">
+      <div class="trow th"><div>Person</div><div>Role</div><div>Projects</div><div>Status</div><div></div></div>${rows}
+    </div>
+    <p class="fine">Admins see every project and manage people. Members see and work on tasks only in their projects, and can only assign tasks to people on the same project.</p></section>
+    <section class="sec"><div class="sec-h"><h2>Projects</h2><span class="cnt">who's on each one</span><button class="link" style="margin-left:auto" data-act="pe-open">+ New project</button></div><div class="card">${projRows}</div></section>`;
+}
+function addPeople(){
+  const inv = state.invite; const raw = (canvas.querySelector('#inv-emails')?.value||'').trim(); inv.emails = raw;
+  const emails = [...new Set(raw.split(/[\s,;]+/).filter(Boolean).map(e=>e.toLowerCase()))];
+  const bad = emails.filter(e=>!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e));
+  if (!emails.length){ inv.err = 'Enter at least one email address.'; state.focusSel = '#inv-emails'; return render(); }
+  if (bad.length){ inv.err = `Not a valid email: ${esc(bad.join(', '))}`; state.focusSel = '#inv-emails'; return render(); }
+  if (inv.role==='member' && !inv.projects.length){ inv.err = 'Pick at least one project for a member.'; return render(); }
+  const existing = emails.filter(e=>Object.values(USERS).some(u=>u.email===e && u.status!=='removed'));
+  const fresh = emails.filter(e=>!existing.includes(e));
+  fresh.forEach((e,i) => { const id = 'u'+(++seq); const local = e.split('@')[0];
+    USERS[id] = {name:local, first:local, color:PALETTE[(seq+i)%PALETTE.length], email:e, role:inv.role, projects:inv.role==='admin'?[]:[...inv.projects], status:'invited', added:TODAY};
+    flash('u:'+id); });
+  state.invite = null;
+  toast(fresh.length ? `Added ${fresh.length} ${fresh.length>1?'people':'person'}${existing.length?` · ${existing.length} already on the team`:''}` : 'Everyone there is already on the team', false);
+  state.focusSel = '[data-act="inv-open"]'; render();
+}
+function removeUser(u, to){
+  const x = USERS[u]; const open = tasks.filter(t=>t.assignee===u && !t.done);
+  open.forEach(t => { t.assignee = to; t.assignedBy = ME; log(t, `transferred from <b>${x.first}</b> to <b>${first(to)}</b>`, `${x.name} was removed from the team`); });
+  x.status = 'removed';
+  toast(`Removed ${esc(x.status==='invited'?x.email:x.name)}${open.length?` · ${open.length} task${open.length>1?'s':''} moved to ${first(to)}`:''}`, false);
+}
+
+/* ---------- Project editor (admins) ---------- */
+const PCOLORS = ['#2E90FA','#7A5AF8','#F79009','#12B76A','#06AED4','#DB2777','#D92D20','#667085'];
+const DESC_MAX = 600;
+function openProjEdit(id){
+  const v = id ? PROJECTS[id] : null;
+  state.projEdit = {id, name: v?.name || '', color: v?.color || PCOLORS[Object.keys(PROJECTS).length % PCOLORS.length], desc: v?.desc || '',
+    members: id ? people().filter(u=>!isAdmin(u) && USERS[u].projects.includes(id)) : [], err:null, ret: activeSelector()};
+  state.focusSel = '#pe-name'; render();
+}
+function closeProjEdit(){ const r = state.projEdit?.ret; state.projEdit = null; state.focusSel = r; render(); }
+function peSync(){ const pe = state.projEdit; if (!pe) return; const n = canvas.querySelector('#pe-name'), d = canvas.querySelector('#pe-desc'); if (n) pe.name = n.value; if (d) pe.desc = d.value; }
+function saveProjEdit(){
+  peSync(); const pe = state.projEdit; const name = pe.name.trim();
+  if (!name){ pe.err = 'Give the project a name.'; state.focusSel = '#pe-name'; return render(); }
+  if (Object.entries(PROJECTS).some(([k,v]) => k!==pe.id && v.name.toLowerCase()===name.toLowerCase())){ pe.err = 'Another project already has that name.'; state.focusSel = '#pe-name'; return render(); }
+  const id = pe.id || ('p'+(++seq));
+  PROJECTS[id] = {...(PROJECTS[id]||{}), name, color: pe.color, desc: pe.desc.trim().slice(0, DESC_MAX)};
+  people().filter(u=>!isAdmin(u)).forEach(u => { const x = USERS[u], want = pe.members.includes(u), has = x.projects.includes(id);
+    if (want && !has) x.projects.push(id);
+    if (!want && has && openIn(u,id)===0 && x.projects.length>1) x.projects = x.projects.filter(k=>k!==id); });
+  toast(pe.id ? `Saved ${esc(name)}` : `Created ${esc(name)}`, false);
+  state.projEdit = null; state.focusSel = `[data-act="pe-open"][data-p="${id}"]`; render();
+}
+function projEditHTML(){
+  const pe = state.projEdit, isNew = !pe.id;
+  const mems = people().filter(u=>!isAdmin(u));
+  return `<div class="backdrop" data-act="pe-cancel"></div>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="pe-title">
+    <div class="help-h"><b id="pe-title">${isNew?'New project':'Edit project'}</b><span class="muted"></span><button class="icon-btn" data-act="pe-cancel" aria-label="Close">${I.x}</button></div>
+    <div class="sheet-b">
+      <label class="lbl" for="pe-name">Name</label>
+      <input id="pe-name" class="inv-in" value="${esc(pe.name)}" placeholder="e.g. Website Redesign" autocomplete="off">
+      ${pe.err ? `<div class="inv-err" role="alert">${pe.err}</div>` : ''}
+      <div class="lbl">Color</div>
+      <div class="swatches" role="radiogroup" aria-label="Color">${PCOLORS.map(c=>`<button class="sw ${c===pe.color?'on':''}" style="--c:${c}" data-act="pe-color" data-c="${c}" role="radio" aria-checked="${c===pe.color}" aria-label="Color ${c}"></button>`).join('')}</div>
+      <label class="lbl" for="pe-desc">Description <span class="muted">· read mainly by AI assistants</span></label>
+      <textarea id="pe-desc" class="pe-desc" maxlength="${DESC_MAX}" placeholder="What work belongs here, what doesn't, and how tasks are usually named. For example: Redesign of the marketing site: pages, copy, imagery, SEO. Not the app or blog. Titles start with the page, e.g. &quot;Pricing: update FAQ&quot;.">${esc(pe.desc)}</textarea>
+      <div class="pe-help"><span>${I.bolt} Assistants connected over MCP (like Claude) read this to decide which project a new task belongs in and what a project is about. People see it as a tooltip.</span><span class="pe-count" id="pe-count">${pe.desc.length}/${DESC_MAX}</span></div>
+      <div class="lbl">Members <span class="muted">· admins are on every project</span></div>
+      <div class="pchips">${mems.map(u=>{ const on = pe.members.includes(u), lock = on && pe.id && (openIn(u,pe.id)>0 || USERS[u].projects.length===1);
+        return `<button class="pchip ${on?'on':''}" data-act="pe-member" data-u="${u}" aria-pressed="${on}" ${lock?`disabled title="${openIn(u,pe.id)>0?'Has open tasks here':'Needs at least one project'}"`:''}>${av(u,18)}${esc(USERS[u].status==='invited'?USERS[u].email:USERS[u].name)}</button>`; }).join('')}</div>
+    </div>
+    <div class="inv-foot sheet-f"><span class="muted-s"><span class="kbd-i">⌘ Enter</span> to save</span><button class="btn-ghost" data-act="pe-cancel">Cancel</button><button class="btn-primary" data-act="pe-save">${isNew?'Create project':'Save'}</button></div>
+  </div>`;
+}
+
+/* ---------- Projects page: everything finished in a project on one day ---------- */
+const hm = at => { if (!at) return ''; const [h,m] = at.split('T')[1].split(':').map(Number); return ((h%12)||12)+':'+String(m).padStart(2,'0')+(h<12?' AM':' PM'); };
+const projBadge = (pid, s=40) => pid==='all'
+  ? `<span class="pbadge all" style="--s:${s}px">${I.board}</span>`
+  : `<span class="pbadge" style="--s:${s}px;background:${PROJECTS[pid].color}">${PROJECTS[pid].name.split(' ').map(w=>w[0]).join('').slice(0,2)}</span>`;
+function projectDay(pid, day){
+  const inP = t => pid==='all' || t.project===pid;
+  const done = vis().filter(t=>inP(t) && t.done && t.doneOn===day)
+    .sort((a,b)=> (a.priority-b.priority) || a.due.localeCompare(b.due) || (a.doneAt||'').localeCompare(b.doneAt||''));
+  const open = vis().filter(t=>inP(t) && !t.done && (day===TODAY ? eff(t)===TODAY : t.due===day)).sort(byPrioThenOldest);
+  return {done, open};
+}
+function projectDayHTML(){
+  const pid = state.proj, day = state.projDay, all = pid==='all';
+  const {done, open} = projectDay(pid, day);
+  const name = all ? 'All projects' : PROJECTS[pid].name;
+  const doneHTML = done.length ? `<div class="card">${done.map(t=>rowHTML(t, all?'pdone-all':'pdone')).join('')}</div>`
+    : `<div class="empty-sec">Nothing was finished in ${esc(name)} ${day===TODAY?'yet today':'on '+fmt(day)}.</div>`;
+  const openHTML = open.length ? `<section class="sec">
+      <button class="collapsed" data-act="proj-open" data-nav="popen" tabindex="-1" aria-expanded="${state.projOpen}"><span class="dn">Not finished</span> ${day===TODAY?'planned for today':'planned for this day'}<span class="sum">${open.length} task${open.length>1?'s':''} ${state.projOpen?'':I.chev}</span></button>
+      ${state.projOpen ? `<div class="card" style="margin-top:8px">${open.map(t=>rowHTML(t,'popen')).join('')}</div>` : ''}
+    </section>` : '';
+  return `<div class="phead">
+      <button class="who" data-act="proj-pick" ${all?'':`title="${esc(PROJECTS[pid].desc||'')}"`}>${projBadge(pid)}<span><span class="h1">${esc(name)} ${I.chev}</span>
+        <span class="sub">${done.length} done${open.length?` · ${open.length} not finished`:''}</span></span></button>
+      <div class="weeknav">
+        <button class="icon-btn" data-act="pday" data-dir="-1" title="Previous day  [" aria-label="Previous day">${I.left}</button>
+        <div class="wk"><b>${day===TODAY?'Today':day===addDays(TODAY,-1)?'Yesterday':DOW[P(day).getDay()]}</b><span>${fmt(day)}</span></div>
+        <button class="icon-btn" data-act="pday" data-dir="1" title="Next day  ]" aria-label="Next day" ${day>=TODAY?'disabled':''}>${I.right}</button>
+        <button class="btn-ghost" data-act="pday" data-dir="0" ${day===TODAY?'disabled':''}>Today</button>
+        <button class="btn-ghost" data-act="copy-day" ${done.length?'':'disabled'} title="Copy a plain-text summary for chat or email">Copy summary</button>
+      </div>
+    </div>
+    <section class="sec"><div class="sec-h"><h2>Done</h2><span class="cnt">by priority, then due date</span></div>${doneHTML}</section>
+    ${openHTML}`;
+}
+function copyDaySummary(){
+  const pid = state.proj, day = state.projDay, {done} = projectDay(pid, day);
+  const name = pid==='all' ? 'All projects' : PROJECTS[pid].name;
+  const lines = [`${name}: done on ${fmt(day)} (${done.length})`, ...done.map(t=>`• ${t.priority!==NORMAL?'['+PRIOS[t.priority].name+'] ':''}${t.title}: ${USERS[t.assignee].name}${pid==='all'?' ('+PROJECTS[t.project].name+')':''}`)];
+  const text = lines.join('\n');
+  (navigator.clipboard?.writeText(text) || Promise.reject()).then(()=>toast(`Copied ${done.length} tasks as text`, false), ()=>toast('Copy failed. Select and copy manually.', false)).finally(render);
+}
+
+function boardHTML(u, w){
+  const side = state.boardSide, isMe = u===ME;
+  const pool = side==='to' ? vis().filter(t=>t.assignee===u)
+                           : vis().filter(t=>(t.createdBy===u||t.assignedBy===u) && t.assignee!==u);
+  const nTo = vis().filter(t=>t.assignee===u && !t.done && inWeek(eff(t),w)).length;
+  const nBy = vis().filter(t=>(t.createdBy===u||t.assignedBy===u) && t.assignee!==u && !t.done && inWeek(eff(t),w)).length;
+  const cols = w.days.map(d => {
+    const dd = P(d), past = d < TODAY, isT = d===TODAY, we = dd.getDay()%6===0;
+    const carried = isT ? pool.filter(isLate).sort(byPrioThenOldest) : [];
+    const list = past ? sortRows(pool.filter(t=>t.done && eff(t)===d))
+                      : sortRows(pool.filter(t=>eff(t)===d && !(isT && isLate(t))));
+    const ghosts = past ? pool.filter(t=>isLate(t) && t.due===d).length : 0;
+    const open = list.filter(t=>!t.done).length + carried.length;
+    return `<div class="col ${past?'past':''} ${isT?'today':''} ${we?'we':''}" data-day="${d}" ${past?'':'data-drop'}>
+      <div class="col-h"><span class="dn">${isT?'Today':DOW[dd.getDay()]}</span><span class="dd">${MONS[dd.getMonth()]} ${dd.getDate()}</span><span class="n">${open||''}</span></div>
+      <div class="col-b">
+        ${carried.length ? `<div class="col-carry" data-carry><div class="cc-h"><span>Carried · ${carried.length}</span><button data-act="move-all">Move all</button></div>${carried.map(t=>cardHTML(t,side)).join('')}</div>` : ''}
+        ${list.map(t=>cardHTML(t,side)).join('')}
+        ${ghosts ? `<div class="col-note">${ghosts} carried to today →</div>` : ''}
+        ${past ? (list.length||ghosts ? '' : '<div class="col-note">Nothing recorded</div>')
+               : `<button class="col-add" data-act="col-add" data-d="${d}" data-nav="add:${d}" tabindex="-1" aria-label="Add a task on ${fmt(d)}">${I.plus.replace(/18/g,'13')} Add</button>`}
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="board-bar">
+      <div class="seg sm">
+        <button class="${side==='to'?'on':''}" data-act="board-side" data-s="to">Assigned to ${isMe?'me':first(u)} <span>${nTo}</span></button>
+        <button class="${side==='by'?'on':''}" data-act="board-side" data-s="by">Assigned by ${isMe?'me':first(u)} <span>${nBy}</span></button>
+      </div>
+      <span class="hint">Drag a card to another day, or select it and press <kbd>⇧</kbd><kbd>←</kbd> <kbd>⇧</kbd><kbd>→</kbd>. Past days are read-only.</span>
+    </div>
+    <div class="board">${cols}</div>`;
+}
+function cardHTML(t, side){
+  const late = isLate(t);
+  const who = side==='by' ? t.assignee : (t.assignedBy!==t.assignee ? t.assignedBy : null);
+  return `<div class="tcard ${t.done?'done':''} ${late?'is-late':''} ${state.flash.has(t.id)?'flash':''}" data-id="${t.id}" data-nav="task:${t.id}" tabindex="-1" aria-label="${ariaFor(t)}" ${t.done?'':'draggable="true"'}>
+    <button class="chk" tabindex="-1" data-act="toggle" title="${t.done?'Mark not done':'Mark done'}">${I.check}</button>
+    <div class="tc-body" data-act="open">
+      <div class="tc-title">${t.done?'':prioTag(t)}${esc(t.title)}</div>
+      <div class="tc-meta"><span class="tc-proj"><i style="background:${PROJECTS[t.project].color}"></i>${PROJECTS[t.project].name}</span>${late?lateB(t):''}${who?`<span title="${side==='by'?'Assigned to ':'From '}${USERS[who].name}">${av(who,18)}</span>`:''}</div>
+    </div>
+  </div>`;
+}
+
+function rowHTML(t, ctx){
+  const late = isLate(t);
+  const cls = ['row', t.done?'done':'', ctx==='ghost'?'ghost':'', ctx.startsWith('pdone')?'report':'', state.flash.has(t.id)?'flash':''].join(' ');
+  let meta = proj(t.project);
+  if (ctx==='to' || ctx==='carried'){
+    if (t.assignedBy!==t.assignee) meta += `<span class="from">${av(t.assignedBy,18)}<span class="ft">from ${first(t.assignedBy)}</span></span>`;
+  }
+  if (ctx==='carried') meta += `<span class="due">due ${fmt(t.due)}</span>${lateB(t)}`;
+  if (ctx==='by') meta += late ? `<span class="due">due ${fmt(t.due)}</span>${lateB(t)}` : `<span class="datep">${rel(eff(t))}</span>`;
+  if (ctx==='ghost') meta = `<span class="ghost-tag">→ carried to today</span>`;
+  if (ctx==='pdone' || ctx==='pdone-all'){
+    meta = (ctx==='pdone-all' ? proj(t.project) : '')
+      + `<span class="from">${av(t.assignee,18)}<span class="ft">${first(t.assignee)}</span></span>`
+      + `<span class="due">due ${rel(t.due)}</span>`
+      + (t.doneOn > t.due ? `<span class="late">${diff(t.doneOn,t.due)}d late</span>` : '')
+      + (t.doneBy && t.doneBy!==t.assignee ? `<span class="due">ticked by ${first(t.doneBy)}</span>` : '')
+      + `<span class="datep tm">${hm(t.doneAt)}</span>`;
+  }
+  if (ctx==='popen') meta = `<span class="from">${av(t.assignee,18)}<span class="ft">${first(t.assignee)}</span></span>` + (late ? lateB(t) : `<span class="datep">${rel(eff(t))}</span>`);
+  const acts = (t.done||ctx==='ghost') ? '' : `<div class="acts"><button class="icon-btn" tabindex="-1" data-act="move" title="Move date  (D)">${I.cal}</button><button class="icon-btn" tabindex="-1" data-act="assign" title="Transfer to someone  (T)">${I.swap}</button></div>`;
+  return `<div class="${cls}" data-id="${t.id}" data-nav="${ctx==='ghost'?'ghost':'task'}:${t.id}" tabindex="-1" aria-label="${ariaFor(t)}">
+    <button class="chk" tabindex="-1" data-act="${ctx==='ghost'?'open':'toggle'}" title="${t.done?'Mark not done':'Mark done'}">${I.check}</button>
+    <div class="row-main" data-act="open">${t.done && !ctx.startsWith('pdone')?'':prioTag(t)}<div class="row-title">${esc(t.title)}</div></div>
+    <div class="meta">${meta}</div>${acts}
+  </div>`;
+}
+
+function drawerHTML(t){
+  if (!t) return '';
+  const late = isLate(t);
+  const evs = [...t.events].reverse();
+  if (late) evs.unshift({sys:true, at:TODAY+'T00:00', html:`Rolling over each day since <b>${fmt(addDays(t.due,1))}</b> (shown, not logged)`});
+  return `<div class="backdrop" data-act="close-drawer"></div>
+  <aside class="drawer" data-id="${t.id}" role="dialog" aria-modal="true" aria-label="Task: ${esc(t.title)}" tabindex="-1">
+    <div class="dr-top">${proj(t.project)}<span class="spacer"></span><button class="icon-btn" data-act="close-drawer" title="Close  Esc" aria-label="Close">${I.x}</button></div>
+    <div class="dr-body">
+      <div class="dr-title" contenteditable="true" spellcheck="false" data-field="title">${esc(t.title)}</div>
+      <button class="done-btn ${t.done?'on':''}" data-act="toggle"><span class="chk">${I.check}</span>${t.done?'Done':'Mark done'}</button>
+      <dl class="fields">
+        <dt>Assignee</dt><dd><button class="field" data-act="assign">${av(t.assignee,22)} ${USERS[t.assignee].name} <svg class="c" ${I.chev.slice(5)}</button></dd>
+        <dt>Date</dt><dd><button class="field" data-act="move">${I.cal} ${t.done?fmt(t.due):fmt(eff(t))} ${late?`<span style="color:var(--muted);font-size:12.5px">· due ${fmt(t.due)}</span> ${lateB(t)}`:''} <svg class="c" ${I.chev.slice(5)}</button></dd>
+        <dt>Priority</dt><dd><button class="field" data-act="prio">${prioSvg(t.priority,15)} ${PRIOS[t.priority].name} <svg class="c" ${I.chev.slice(5)}</button></dd>
+        <dt>Project</dt><dd><button class="field" data-act="proj"><i style="width:9px;height:9px;border-radius:50%;background:${PROJECTS[t.project].color}"></i>${PROJECTS[t.project].name} <svg class="c" ${I.chev.slice(5)}</button></dd>
+        <dt>Created by</dt><dd class="plain">${av(t.createdBy,22)} ${USERS[t.createdBy].name}<span style="color:var(--faint)">· ${fmtTime(t.events[0].at).split(' · ')[0]}</span></dd>
+      </dl>
+      <div class="lbl">Notes</div>
+      <textarea data-field="notes" placeholder="Add details or links…">${esc(t.notes||'')}</textarea>
+      <div class="lbl">History <span class="muted">· every change, permanently recorded</span></div>
+      <ol class="trail">${evs.map(e => e.sys
+        ? `<li class="sys"><span class="av" style="--s:22px">${I.refresh}</span><div><div class="tx">${e.html}</div></div></li>`
+        : `<li>${av(e.actor,22)}<div><div class="tx"><b>${USERS[e.actor].first}</b>${e.via?` <span class="via" title="Made by an AI assistant connected over MCP, acting as ${esc(USERS[e.actor].name)}">via ${e.via}</span>`:''} ${e.html}${e.note?`<span class="note">“${esc(e.note)}”</span>`:''}</div><div class="tm">${fmtTime(e.at)}</div></div></li>`).join('')}</ol>
+    </div>
+  </aside>`;
+}
+
+function helpHTML(){
+  const kb = x => x.split(' ').map(y=>`<kbd>${y}</kbd>`).join('');
+  const g = (title, rows) => `<div class="hk-g"><h4>${title}</h4>${rows.map(([keys,desc])=>`<div class="hk-r"><span>${desc}</span><span class="hk-k">${keys.split(' / ').map(kb).join('<i>or</i>')}</span></div>`).join('')}</div>`;
+  return `<div class="backdrop" data-act="help-close"></div>
+  <div class="help" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+    <div class="help-h"><b>Keyboard shortcuts</b><span class="muted">Press <kbd>?</kbd> anytime</span><button class="icon-btn help-close" data-act="help-close" aria-label="Close">${I.x}</button></div>
+    <div class="help-b">
+      ${g('Move around', [['↑ ↓ / J K','Previous / next task'],['← → / H L','Previous / next day (board)'],['Enter','Open the task'],['Tab','Next control'],['Esc','Close panel or menu']])}
+      ${g('Selected task', [['X / Space','Done / not done'],['D','Change date'],['⇧ ← ⇧ →','One day earlier / later'],['T','Transfer to someone'],['1 2 3 4','Urgent · High · Normal · Low'],['E','Rename']])}
+      ${g('Anywhere', [['N','New task'],['V','Today → Week → Board'],['P',"Switch person (or project)"],['[ ]','Previous / next week (or day)'],['G T / G P / G U','Go to Tasks / Projects / Team'],['⌘ Z','Undo']])}
+      ${g('Menus & calendar', [['↑ ↓','Choose an option'],['← → ↑ ↓','Pick a day in the calendar'],['Enter','Select'],['Type','Search people'],['Esc','Back without changing']])}
+    </div>
+  </div>`;
+}
+
+/* =========================================================
+   Popovers
+   ========================================================= */
+const popEl = document.getElementById('pop');
+function selFor(a){
+  if (a.closest('.drawer')) return a.dataset.act ? `.drawer [data-act="${a.dataset.act}"]` : '.drawer';
+  const nav = a.closest('[data-nav]'); if (nav) return `[data-nav="${nav.dataset.nav}"]`;
+  if (a.id) return '#'+a.id;
+  return a.dataset.act ? `[data-act="${a.dataset.act}"]` : null;
+}
+function openPop(p, anchor){ const r = anchor.getBoundingClientRect(); state.pop = {...p, rect:{l:r.left,t:r.top,b:r.bottom,r:r.right}, returnSel: selFor(anchor), needFocus: true}; renderPop(); }
+function closePop(restore){ const sel = state.pop?.returnSel, wasQa = state.pop?.mode==='qa'; state.pop = null; renderPop(); if (wasQa && !restore) qaCollapseIfIdle();
+  if (restore && sel){ const el = canvas.querySelector(sel); el?.focus({preventScroll:true}); } }
+function renderPop(){
+  const p = state.pop; if (!p){ popEl.innerHTML=''; return; }
+  let h = '';
+  if (p.type==='move'){
+    const cur = p.mode==='qa' ? (state.qa.date||TODAY) : (p.ids.length===1 ? T(p.ids[0]).due : null);
+    const nextMon = addDays(weekStart(TODAY),7);
+    const fri = addDays(weekStart(TODAY),4);
+    const quick = [['Tomorrow',addDays(TODAY,1)], fri>addDays(TODAY,1)?['This Friday',fri]:null, ['Next Monday',nextMon], ['In a week',addDays(TODAY,7)]].filter(Boolean);
+    if (p.mode==='qa') quick.unshift(['Today',TODAY]);
+    const title = p.mode==='qa' ? 'Due date' : p.ids.length>1 ? `Move ${p.ids.length} carried tasks to…` : 'Move to…';
+    h = `<div class="pop-h">${title}</div>${quick.map(([l,d])=>`<button class="opt" data-act="setdate" data-d="${d}">${l}<span class="r">${fmt(d)}</span></button>`).join('')}<div class="pop-sep"></div>${calHTML(p.month, cur)}`;
+  }
+  if (p.type==='assign'){
+    const pid = p.mode==='qa' ? qaEff().proj : T(p.id).project;
+    const cur = p.mode==='qa' ? qaEff().who : T(p.id).assignee;
+    const list = people().filter(u => onProject(u, pid) && (!p.q || (USERS[u].name+' '+USERS[u].email).toLowerCase().includes(p.q.toLowerCase())));
+    h = `<div class="pop-h">${p.mode==='qa'?'Assign to':'Transfer to…'}</div>
+      <div style="padding:0 4px"><input class="pin" id="pop-q" placeholder="Search people" value="${esc(p.q||'')}"></div>
+      ${list.map(u=>`<button class="opt ${u===cur?'cur':''}" ${u===cur?'':`data-act="setuser" data-u="${u}"`}>${av(u,22)}${USERS[u].name}${u===ME?' <span style="color:var(--faint)">(you)</span>':''}<span class="r">${u===cur?'current':USERS[u].status==='invited'?'invited':''}</span></button>`).join('') || '<div class="pop-empty">No one on this project matches.</div>'}
+      <div class="pop-foot">Only people on <b>${PROJECTS[pid].name}</b> are listed.</div>
+      ${p.mode==='qa'?'':`<div class="pop-sep"></div><div style="padding:2px 4px 2px"><input class="pin" id="pop-note" placeholder="Add a note for the history (optional)" style="margin:0"></div>`}`;
+  }
+  if (p.type==='person'){
+    const w = weekInfo();
+    h = `<div class="pop-h">View the week of</div>${people().filter(u=>USERS[u].status==='active' && (u===ME || shares(u))).map(u=>{
+      const n = vis().filter(t=>t.assignee===u && !t.done && inWeek(eff(t),w)).length;
+      const l = vis().filter(t=>t.assignee===u && isLate(t)).length;
+      return `<button class="opt ${u===state.viewUser?'cur':''}" data-act="view" data-u="${u}">${av(u,24)}${u===ME?'Me':USERS[u].name}<span class="r">${l?`<span style="color:var(--late)">${l} late</span> · `:''}${n} open</span></button>`;}).join('')}`;
+  }
+  if (p.type==='projpick'){
+    const cnt = pid => projectDay(pid, state.projDay).done.length;
+    h = `<div class="pop-h">Show work finished in</div>
+      <button class="opt ${state.proj==='all'?'cur':''}" data-act="setpview" data-p="all">${projBadge('all',22)}${isAdmin(ME)?'All projects':'All my projects'}<span class="r">${cnt('all')} done</span></button><div class="pop-sep"></div>
+      ${Object.entries(PROJECTS).filter(([k])=>onProject(ME,k)).map(([k,v])=>`<button class="opt ${k===state.proj?'cur':''}" data-act="setpview" data-p="${k}"><i style="background:${v.color}"></i>${v.name}<span class="r">${cnt(k)} done</span></button>`).join('')}`;
+  }
+  if (p.type==='urole'){
+    const x = USERS[p.u], lastAdmin = isAdmin(p.u) && people().filter(isAdmin).length===1;
+    h = `<div class="pop-h">Role for ${esc(x.name)}</div>
+      <button class="opt ${x.role==='admin'?'cur':''}" ${x.role==='admin'?'':`data-act="set-role" data-m="admin"`}>Admin<span class="r">${x.role==='admin'?'current':'every project + team'}</span></button>
+      <button class="opt ${x.role==='member'?'cur':''}" ${x.role==='member'||lastAdmin?'':`data-act="set-role" data-m="member"`} ${lastAdmin?'disabled':''}>Member<span class="r">${x.role==='member'?'current':lastAdmin?'last admin':'only their projects'}</span></button>`;
+  }
+  if (p.type==='uproj'){
+    const x = USERS[p.u];
+    h = `<div class="pop-h">${esc(x.name)} can see</div>${Object.entries(PROJECTS).map(([k,v])=>{ const on = x.projects.includes(k), n = openIn(p.u,k), lock = on && (n>0 || x.projects.length===1);
+      return `<button class="opt check ${on?'on':''}" role="menuitemcheckbox" aria-checked="${on}" ${lock?'disabled':`data-act="toggle-uproj" data-p="${k}"`}><span class="cb">${on?I.check:''}</span><i style="background:${v.color}"></i>${v.name}<span class="r">${lock ? (n>0?`${n} open task${n>1?'s':''}`:'needs one') : ''}</span></button>`; }).join('')}
+      <div class="pop-foot">To take someone off a project, first transfer their open tasks there.</div>`;
+  }
+  if (p.type==='uremove'){
+    const x = USERS[p.u], open = tasks.filter(t=>t.assignee===p.u && !t.done), projs = [...new Set(open.map(t=>t.project))];
+    const lastAdmin = isAdmin(p.u) && people().filter(isAdmin).length===1;
+    const targets = people().filter(u => u!==p.u && USERS[u].status==='active' && projs.every(k=>onProject(u,k)));
+    h = lastAdmin ? `<div class="pop-h">Can't remove the last admin</div><div class="pop-body">Make someone else an admin first.</div>`
+      : `<div class="pop-h">Remove ${esc(x.status==='invited'?x.email:x.name)}?</div>
+        <div class="pop-body">${x.status==='invited'?'Their invite is cancelled and the address can no longer sign in.':'They lose access immediately. Their finished work and history stay.'}</div>
+        ${open.length ? `<div class="pop-h">First, give their ${open.length} open task${open.length>1?'s':''} to</div>${targets.map(u=>`<button class="opt" data-act="do-remove" data-u="${u}">${av(u,22)}${USERS[u].name}${u===ME?' <span style="color:var(--faint)">(you)</span>':''}<span class="r">then remove</span></button>`).join('')}<div class="pop-foot">Only people on all of their projects are listed.</div>`
+          : `<div style="padding:4px"><button class="btn-danger" data-act="do-remove" data-u="">Remove from team</button></div>`}`;
+  }
+  if (p.type==='prio'){
+    const cur = p.mode==='qa' ? state.qa.priority : T(p.id).priority;
+    h = `<div class="pop-h">Priority</div>${[1,2,3,4].map(k=>`<button class="opt ${k===cur?'cur':''}" ${k===cur?'':`data-act="setprio" data-p="${k}"`}>${prioSvg(k,15)}${PRIOS[k].name}<span class="r">${k===cur?'current':PRIOS[k].hint}</span></button>`).join('')}`;
+  }
+  if (p.type==='proj'){
+    const cur = p.mode==='qa' ? qaEff().proj : T(p.id).project;
+    const owner = p.mode==='qa' ? null : T(p.id).assignee;
+    h = `<div class="pop-h">Project</div>${myProjects().map(k=>{ const v = PROJECTS[k], blocked = owner && !onProject(owner,k);
+      return `<button class="opt ${k===cur?'cur':''}" ${k===cur||blocked?'':`data-act="setproj" data-p="${k}"`} ${blocked?'disabled':''}><i style="background:${v.color}"></i>${v.name}<span class="r">${k===cur?'current':blocked?`${first(owner)} isn't on it`:''}</span></button>`; }).join('')}
+      ${isAdmin(ME) ? `<div class="pop-sep"></div><button class="opt" data-act="team-goto" style="color:var(--accent)">${I.plus.replace(/18/g,'14')} New project…</button>` : `<div class="pop-foot">Only your projects are listed.</div>`}`;
+  }
+  popEl.innerHTML = `<div class="pop">${h}</div>`;
+  const el = popEl.firstChild, r = p.rect, W = el.offsetWidth, H = el.offsetHeight;
+  let left = Math.min(r.l, innerWidth - W - 12), top = r.b + 6;
+  if (top + H > innerHeight - 12) top = Math.max(12, r.t - H - 6);
+  el.style.left = Math.max(12,left)+'px'; el.style.top = top+'px';
+  el.setAttribute('role','dialog'); el.setAttribute('aria-label', el.querySelector('.pop-h')?.textContent || 'Menu');
+  const q = el.querySelector('#pop-q'); if (q && p.focus){ q.focus(); q.setSelectionRange(q.value.length,q.value.length); }
+  if (p.refocus){ el.querySelector(p.refocus)?.focus(); p.refocus = null; }
+  if (p.needFocus){ p.needFocus = false;
+    const first = q || el.querySelector('.opt.cur') || el.querySelector('.opt[data-act]') || el.querySelector('button:not(:disabled)');
+    first?.focus({preventScroll:true}); }
+}
+function calHTML(month, sel){
+  const m1 = month; const f = P(m1);
+  const start = addDays(m1, -((f.getDay()+6)%7));
+  let cells = '';
+  for (let i=0;i<42;i++){
+    const d = addDays(start,i), dd = P(d);
+    const c = [dd.getMonth()!==f.getMonth()?'om':'', d===TODAY?'td':'', d===sel?'sel':''].join(' ');
+    cells += `<button class="${c}" ${d<TODAY?'disabled':`data-act="setdate" data-d="${d}"`}>${dd.getDate()}</button>`;
+  }
+  return `<div class="cal"><div class="cal-h"><button class="icon-btn" data-act="cal" data-dir="-1">${I.left}</button><b>${MONL[f.getMonth()]} ${f.getFullYear()}</b><button class="icon-btn" data-act="cal" data-dir="1">${I.right}</button></div>
+    <div class="cal-g">${['M','T','W','T','F','S','S'].map(x=>`<span class="dw">${x}</span>`).join('')}${cells}</div></div>`;
+}
+const monthOf = d => d.slice(0,8)+'01';
+
+/* =========================================================
+   Mutations (each one writes a history entry)
+   ========================================================= */
+const snap = () => { undoSnap = JSON.stringify(tasks); };
+const log = (t, html, note) => t.events.push({at:now(), actor:ME, html, ...(note?{note}:{})});
+const flash = id => { state.flash.add(id); setTimeout(()=>state.flash.delete(id), 2700); };
+function toast(text, undo){ state.toast = {text, undo}; clearTimeout(toastTimer); toastTimer = setTimeout(()=>{ state.toast=null; const el = canvas.querySelector('.toast'); if (el) el.remove(); }, 4500); }
+
+function toggleDone(id){ const t = T(id); snap();
+  t.done = !t.done; t.doneOn = t.done ? TODAY : null; t.doneAt = t.done ? now() : null; t.doneBy = t.done ? ME : null;
+  log(t, t.done ? 'marked this done' : 'reopened this task');
+  if (t.done) toast(`Done: ${esc(t.title)}`, true);
+  flash(id);
+}
+function moveDate(ids, d){ snap();
+  ids.forEach(id => { const t = T(id); if (t.due===d) return;
+    const wl = isLate(t) ? ` <span style="color:var(--faint)">(was ${lateDays(t)}d late)</span>` : '';
+    log(t, `moved date <b>${fmt(t.due)}</b> → <b>${fmt(d)}</b>${wl}`); t.due = d; flash(id); });
+  toast(ids.length>1 ? `Moved ${ids.length} tasks to ${rel(d)}` : `Moved to ${rel(d)}`, true);
+}
+function reassign(id, u, note){ const t = T(id); if (t.assignee===u) return; snap();
+  const from = t.assignee; t.assignee = u; t.assignedBy = ME;
+  log(t, `transferred from <b>${first(from)}</b> to <b>${first(u)}</b>`, note||null);
+  flash(id); toast(`Transferred to ${USERS[u].name}`, true);
+}
+function setPriority(id, p){ const t = T(id); snap(); log(t, `changed priority <b>${PRIOS[t.priority].name}</b> → <b>${PRIOS[p].name}</b>`); t.priority = p; flash(id); toast(`Priority set to ${PRIOS[p].name}`, true); }
+function setProject(id, p){ const t = T(id); snap(); log(t, `changed project <b>${PROJECTS[t.project].name}</b> → <b>${PROJECTS[p].name}</b>`); t.project = p; }
+function addTask(){
+  const inp = canvas.querySelector('#qa-input'); const title = (inp?.value||'').trim();
+  if (!title){ const q = canvas.querySelector('#qa'); q.classList.remove('shake'); void q.offsetWidth; q.classList.add('shake'); inp.focus(); return; }
+  const w = weekInfo();
+  const {proj, who} = qaEff();
+  const due = state.qa.date || (inWeek(TODAY,w) ? TODAY : (w.ws > TODAY ? w.ws : TODAY));
+  let priority = state.qa.priority, clean = title;
+  const bang = clean.match(/^(!{1,2})\s*/);                      // "!Fix bug" → High, "!!Prod down" → Urgent
+  if (bang) { priority = bang[1].length===2 ? 1 : 2; clean = clean.slice(bang[0].length) || title; }
+  const id = 't'+(++seq);
+  const notes = (canvas.querySelector('#qa-notes')?.value || state.qa.notes || '').trim();
+  tasks.push({id,title:clean,project:proj,assignee:who,createdBy:ME,assignedBy:ME,due,priority,done:false,doneOn:null,notes,
+    events:[{at:now(),actor:ME,html:`created this task${who!==ME?` for <b>${first(who)}</b>`:''} · due ${fmt(due)}${priority!==NORMAL?` · ${PRIOS[priority].name} priority`:''}`}]});
+  undoSnap = null; flash(id);
+  state.qa = {title:'', notes:'', open:true, project:proj, date:null, assignee:null, priority:NORMAL};
+  toast(`Added for ${who===ME?'you':first(who)} · ${rel(due)}${inWeek(due,w)?'':' (another week)'}`, false);
+  render(); setTimeout(()=>canvas.querySelector('#qa-input')?.focus(), 0);
+}
+function simulate(){
+  if (state.screen!=='app'){ goTab('week'); }
+  const id = 't'+(++seq);
+  const proj = myProjects().includes('mkt') ? 'mkt' : myProjects()[0];
+  const from = people().find(u => u!==ME && USERS[u].status==='active' && onProject(u, proj)) || ME;
+  tasks.push({id,title:'Review Q4 deck before Friday',project:proj,assignee:ME,createdBy:from,assignedBy:from,due:TODAY,priority:2,done:false,doneOn:null,notes:'',
+    events:[{at:now(),actor:from,html:`created this task for <b>${first(ME)}</b> · due Today · High priority`}]});
+  state.lastSync = Date.now(); state.simDone = true; flash(id);
+  toast(`${av(from,18)}&nbsp; ${first(from)} assigned you “Review Q4 deck before Friday”`, false);
+  render();
+}
+function maybeAutoSim(){ if (!state.simDone && !EMBED){ state.simDone = true; setTimeout(()=>{ if (state.screen==='app' && state.viewUser===ME && !state.drawer) simulate(); else state.simDone=false; }, 9000); } }
+
+/* =========================================================
+   Events
+   ========================================================= */
+document.addEventListener('click', e => {
+  const a = e.target.closest('[data-act]');
+  const inPop = e.target.closest('#pop');
+  if (!a){ if (!inPop && state.pop){ state.pop=null; renderPop(); } return; }
+  const act = a.dataset.act;
+  const id = a.closest('[data-id]')?.dataset.id;
+  const keepPop = ['cal','toggle-uproj'].includes(act);
+  if (!keepPop && !inPop && state.pop && !['move','assign','person','move-all','qa-date','qa-who','qa-proj','proj','prio','qa-prio','proj-pick','urole','uproj','uremove'].includes(act)){ state.pop=null; renderPop(); }
+  switch(act){
+    case 'tab': goTab(a.dataset.t); break;
+    case 'notes': state.notes = !state.notes; renderShell(); break;
+    case 'signin': goTab('week'); break;
+    case 'sim': simulate(); break;
+    case 'toggle': toggleDone(id); render(); break;
+    case 'open': openDrawer(id); break;
+    case 'close-drawer': closeDrawer(true); break;
+    case 'help': openHelp(); break;
+    case 'help-close': closeHelp(); break;
+    case 'skip': { const n = canvas.querySelector('[data-nav][tabindex="0"]') || canvas.querySelector('[data-nav]'); n && focusNav(n); break; }
+    case 'expand': state.focusSel = `[data-act="expand"][data-k="${a.dataset.k}"]`; state.expanded.has(a.dataset.k) ? state.expanded.delete(a.dataset.k) : state.expanded.add(a.dataset.k); render(); break;
+    case 'week': { const d = +a.dataset.dir; state.weekOffset = d===0 ? 0 : state.weekOffset + d; render(); break; }
+    case 'view': state.page = 'tasks'; if (inPop) state.focusSel = '[data-act="person"]'; state.cursor = null; state.viewUser = a.dataset.u; state.drawer = null; state.weekOffset = state.weekOffset; state.qa.assignee = null; state.pop = null; renderPop();
+      canvas.querySelector('.app-scroll') && (canvas.querySelector('.app-scroll').scrollTop = 0); render(); break;
+    case 'person': openPop({type:'person'}, a); break;
+    case 'move': { const t = T(id); openPop({type:'move', mode:'task', ids:[id], month:monthOf(t.due<TODAY?TODAY:t.due)}, a); break; }
+    case 'move-all': { const ids = [...a.closest('[data-carry]').querySelectorAll('[data-id]')].map(el=>el.dataset.id); openPop({type:'move', mode:'bulk', ids, month:monthOf(TODAY)}, a); break; }
+    case 'assign': openPop({type:'assign', mode:'task', id}, a); break;
+    case 'proj': openPop({type:'proj', mode:'task', id}, a); break;
+    case 'qa-date': openPop({type:'move', mode:'qa', ids:[], month:monthOf(state.qa.date||TODAY)}, a); break;
+    case 'qa-who': openPop({type:'assign', mode:'qa'}, a); break;
+    case 'qa-proj': openPop({type:'proj', mode:'qa'}, a); break;
+    case 'prio': openPop({type:'prio', mode:'task', id}, a); break;
+    case 'qa-prio': openPop({type:'prio', mode:'qa'}, a); break;
+    case 'cal': { const f = P(state.pop.month); f.setMonth(f.getMonth() + (+a.dataset.dir)); state.pop.month = S(f); state.pop.refocus = `.cal-h [data-dir="${a.dataset.dir}"]`; renderPop(); break; }
+    case 'setdate': { const p = state.pop; state.pop = null; renderPop(); state.focusSel = p.returnSel;
+      if (p.mode==='qa') state.qa.date = a.dataset.d; else moveDate(p.ids, a.dataset.d); render(); break; }
+    case 'setuser': { const p = state.pop; const note = document.getElementById('pop-note')?.value.trim(); state.pop = null; renderPop(); state.focusSel = p.returnSel;
+      if (p.mode==='qa') state.qa.assignee = a.dataset.u; else reassign(p.id, a.dataset.u, note); render(); break; }
+    case 'setproj': { const p = state.pop; state.pop = null; renderPop(); state.focusSel = p.returnSel;
+      if (p.mode==='qa'){ state.qa.project = a.dataset.p; if (state.qa.assignee && !onProject(state.qa.assignee, a.dataset.p)) state.qa.assignee = null; } else setProject(p.id, a.dataset.p); render(); break; }
+    case 'setprio': { const p = state.pop; state.pop = null; renderPop(); state.focusSel = p.returnSel;
+      if (p.mode==='qa') state.qa.priority = +a.dataset.p; else setPriority(p.id, +a.dataset.p); render(); break; }
+    case 'add': addTask(); break;
+    case 'qa-cancel': state.qa.title = ''; state.qa.notes = ''; state.qa.open = false; state.focusSel = null; render(); focusNav(curNav() || navEls()[0]); break;
+    case 'inv-open': state.invite = {role:'member', projects:[], emails:''}; state.focusSel = '#inv-emails'; render(); break;
+    case 'inv-cancel': state.invite = null; state.focusSel = '[data-act="inv-open"]'; render(); break;
+    case 'inv-role': state.invite.emails = canvas.querySelector('#inv-emails').value; state.invite.role = a.dataset.m; state.invite.err = null; render(); break;
+    case 'inv-proj': { const inv = state.invite; inv.emails = canvas.querySelector('#inv-emails').value; inv.err = null;
+      inv.projects = inv.projects.includes(a.dataset.p) ? inv.projects.filter(x=>x!==a.dataset.p) : [...inv.projects, a.dataset.p]; render(); break; }
+    case 'inv-add': addPeople(); break;
+    case 'urole': openPop({type:'urole', u:a.dataset.u}, a); break;
+    case 'uproj': openPop({type:'uproj', u:a.dataset.u}, a); break;
+    case 'uremove': openPop({type:'uremove', u:a.dataset.u}, a); break;
+    case 'set-role': { const p = state.pop, x = USERS[p.u]; state.pop = null; renderPop(); state.focusSel = p.returnSel;
+      if (a.dataset.m==='member'){ const withTasks = [...new Set(tasks.filter(t=>t.assignee===p.u && !t.done).map(t=>t.project))];
+        x.projects = [...new Set([...x.projects, ...withTasks])]; if (!x.projects.length) x.projects = [myProjects()[0]];
+        toast(`${x.first} is now a member of ${x.projects.length} project${x.projects.length>1?'s':''} (where they have tasks). Adjust as needed.`, false); }
+      else toast(`${x.first} is now an admin`, false);
+      x.role = a.dataset.m; flash('u:'+p.u); render(); break; }
+    case 'toggle-uproj': { const x = USERS[state.pop.u], k = a.dataset.p;
+      x.projects = x.projects.includes(k) ? x.projects.filter(y=>y!==k) : [...x.projects, k];
+      state.pop.refocus = `[data-p="${k}"]`; render(); renderPop(); break; }
+    case 'do-remove': { const p = state.pop; state.pop = null; renderPop(); removeUser(p.u, a.dataset.u || ME); state.focusSel = '[data-act="inv-open"]'; render(); break; }
+    case 'team-goto': state.pop = null; renderPop(); state.page = 'team'; openProjEdit(null); break;
+    case 'pe-open': openProjEdit(a.dataset.p || null); break;
+    case 'pe-cancel': closeProjEdit(); break;
+    case 'pe-color': peSync(); state.projEdit.color = a.dataset.c; state.focusSel = `[data-act="pe-color"][data-c="${a.dataset.c}"]`; render(); break;
+    case 'pe-member': { peSync(); const m = state.projEdit.members; const u = a.dataset.u;
+      state.projEdit.members = m.includes(u) ? m.filter(x=>x!==u) : [...m, u]; state.focusSel = `[data-act="pe-member"][data-u="${u}"]`; render(); break; }
+    case 'pe-save': saveProjEdit(); break;
+    case 'page': state.invite = null; state.page = a.dataset.pg; state.cursor = null; state.drawer = null; if (state.page==='projects' && state.projDay>TODAY) state.projDay = TODAY; render(); break;
+    case 'proj-pick': openPop({type:'projpick'}, a); break;
+    case 'setpview': { if (a.dataset.p!=='all' && !onProject(ME, a.dataset.p)) break; const fromPop = inPop; state.pop = null; renderPop(); state.proj = a.dataset.p; state.page = 'projects'; state.cursor = null; state.projOpen = false;
+      state.focusSel = fromPop ? '[data-act="proj-pick"]' : null; render(); break; }
+    case 'pday': { const d = +a.dataset.dir; state.projDay = d===0 ? TODAY : addDays(state.projDay, d); if (state.projDay>TODAY) state.projDay = TODAY; state.cursor = null; render(); break; }
+    case 'proj-open': state.projOpen = !state.projOpen; state.focusSel = '[data-nav="popen"]'; render(); break;
+    case 'copy-day': copyDaySummary(); break;
+    case 'view-mode': state.view = a.dataset.m; if (state.view==='today') state.weekOffset = 0; render(); break;
+    case 'board-side': state.boardSide = a.dataset.s; render(); break;
+    case 'col-add': state.qa.date = a.dataset.d; render(); { const q = canvas.querySelector('#qa-input'); q.focus(); canvas.querySelector('#qa').scrollIntoView({block:'nearest'}); } break;
+    case 'undo': doUndo(); break;
+  }
+});
+document.addEventListener('input', e => {
+  if (e.target.id==='pe-desc'){ const c = canvas.querySelector('#pe-count'); if (c) c.textContent = `${e.target.value.length}/${DESC_MAX}`; }
+  if (e.target.id==='qa-input'){ state.qa.title = e.target.value; if (!state.qa.open) qaSetOpen(true); }
+  if (e.target.id==='qa-notes'){ state.qa.notes = e.target.value; growNotes(e.target); }
+  if (e.target.id==='pop-q'){ state.pop.q = e.target.value; state.pop.focus = true; renderPop(); }
+});
+/* =========================================================
+   Keyboard
+   ========================================================= */
+const ariaFor = t => `${t.title}. ${t.priority!==NORMAL?PRIOS[t.priority].name+' priority. ':''}${t.done?'Done. ':''}${isLate(t)?lateDays(t)+' days late. ':''}${t.done?'':'Due '+rel(eff(t))+'.'}`;
+const navEls = () => [...canvas.querySelectorAll('[data-nav]')];
+function curNav(){ const a = document.activeElement?.closest?.('[data-nav]'); if (a && canvas.contains(a)) return a;
+  return state.cursor ? canvas.querySelector(`[data-nav="${state.cursor}"]`) : null; }
+function focusNav(el){ if (!el) return; navEls().forEach(n=>n.tabIndex=-1); el.tabIndex = 0; el.focus({preventScroll:true}); el.scrollIntoView({block:'nearest', inline:'nearest'}); state.cursor = el.dataset.nav; }
+function taskCtx(){ if (state.drawer) return T(state.drawer); const k = curNav()?.dataset.nav || ''; return /^(task|ghost):/.test(k) ? T(k.split(':')[1]) : null; }
+function stepTask(dir){                       // ↑/↓ — in the board, stay inside the column
+  const el = curNav(), all = navEls(); if (!all.length) return;
+  if (!el) return focusNav(all[dir>0?0:all.length-1]);
+  const col = el.closest('.col'); const pool = col ? [...col.querySelectorAll('[data-nav]')] : all;
+  const n = pool[pool.indexOf(el)+dir]; if (n) focusNav(n);
+}
+function stepColumn(dir){                     // ←/→ — board only
+  const el = curNav(); const col = el?.closest('.col'); if (!col) return false;
+  const cols = [...canvas.querySelectorAll('.col')], idx = [...col.querySelectorAll('[data-nav]')].indexOf(el);
+  for (let c = cols.indexOf(col)+dir; c>=0 && c<cols.length; c+=dir){ const items = [...cols[c].querySelectorAll('[data-nav]')]; if (items.length){ focusNav(items[Math.min(idx, items.length-1)]); return true; } }
+  return true;
+}
+function openDrawer(id, editTitle){ state.drawer = id; if (canvas.querySelector(`[data-nav="task:${id}"]`)) state.cursor = 'task:'+id; state.focusSel = editTitle ? '.dr-title' : '.drawer'; render(); }
+function closeDrawer(restore){ const id = state.drawer; state.drawer = null; state.focusSel = restore ? `[data-nav="task:${id}"]` : null; render(); }
+function drawerStep(dir){                     // J/K with the panel open → previous/next task
+  const ids = navEls().filter(n=>n.dataset.nav.startsWith('task:')).map(n=>n.dataset.nav.slice(5));
+  const n = ids[ids.indexOf(state.drawer)+dir]; if (n) openDrawer(n);
+}
+function shiftDay(t, dir){
+  const d = addDays(eff(t), dir);
+  if (d < TODAY){ toast("Can't move a task into the past", false); render(); return; }
+  moveDate([t.id], d); render();
+}
+function openHelp(){ state.helpReturn = activeSelector(); state.help = true; state.focusSel = '.help-close'; render(); }
+function closeHelp(){ state.help = false; state.focusSel = state.helpReturn; render(); }
+function doUndo(){ if (!undoSnap) return; tasks = JSON.parse(undoSnap); undoSnap = null; state.toast = null; render(); }
+function trapTab(e, box){
+  const f = [...box.querySelectorAll('button:not(:disabled),[contenteditable="true"],textarea,input')].filter(x=>x.offsetParent!==null);
+  if (!f.length) return; e.preventDefault();
+  const i = f.indexOf(document.activeElement); f[(i + (e.shiftKey?-1:1) + f.length) % f.length].focus();
+}
+function popKeys(e){
+  const pop = popEl.querySelector('.pop'), k = e.key, a = document.activeElement;
+  if (k==='Escape'){ e.preventDefault(); closePop(true); return; }
+  if (k==='Tab'){ trapTab(e, pop); return; }
+  const f = [...pop.querySelectorAll('input, button:not(:disabled)')], i = f.indexOf(a);
+  if (a?.id==='pop-q' && k==='Enter'){ e.preventDefault(); pop.querySelector('.opt[data-act]')?.click(); return; }
+  if (a?.closest?.('.cal-g')){                // calendar grid: arrows move by day / week
+    const g = [...pop.querySelectorAll('.cal-g button')], step = {ArrowLeft:-1,ArrowRight:1,ArrowUp:-7,ArrowDown:7}[k];
+    if (step){ e.preventDefault(); const n = g[g.indexOf(a)+step];
+      if (n && !n.disabled) n.focus(); else if (k==='ArrowUp') pop.querySelector('.cal-h [data-dir="1"]')?.focus(); }
+    return;
+  }
+  if (k==='ArrowDown' || k==='ArrowUp'){ e.preventDefault();
+    let n = i<0 ? f[0] : f[i + (k==='ArrowDown'?1:-1)];
+    if (n?.closest('.cal-g') && k==='ArrowDown') n = pop.querySelector('.cal-g button.sel:not(:disabled)') || pop.querySelector('.cal-g button.td') || n;
+    n?.focus(); }
+}
+const growNotes = el => { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 240) + 'px'; };
+function qaSetOpen(open){ state.qa.open = open; const q = canvas.querySelector('#qa'); if (!q) return; q.classList.toggle('open', open);
+  const i = q.querySelector('#qa-input'); const {who} = qaEff();
+  i.placeholder = open ? 'Task title' : who===ME ? 'Add a task…' : `Add a task for ${first(who)}…`; }
+function qaCollapseIfIdle(){
+  setTimeout(() => {
+    const a = document.activeElement, q = canvas.querySelector('#qa');
+    if (!q || q.contains(a) || popEl.contains(a) || state.pop?.mode==='qa') return;
+    if (!state.qa.title.trim() && !state.qa.notes.trim()) qaSetOpen(false);
+  }, 0);
+}
+document.addEventListener('focusin', e => { if (e.target.closest?.('#qa')) qaSetOpen(true); });
+document.addEventListener('mousedown', e => { if (e.target.closest?.('#qa') && !state.qa.open) qaSetOpen(true); });
+document.addEventListener('focusout', e => { if (e.target.closest?.('#qa')) qaCollapseIfIdle(); });
+document.addEventListener('focusin', e => {          // clicking or tabbing onto a task makes it the selected one
+  const n = e.target.closest?.('[data-nav]'); if (!n || !canvas.contains(n)) return;
+  state.cursor = n.dataset.nav; navEls().forEach(x=>{ if (x!==n) x.tabIndex = -1; }); n.tabIndex = 0;
+});
+document.addEventListener('keydown', e => {
+  if (state.screen!=='app') return;
+  const k = e.key, tag = e.target.tagName, editing = tag==='INPUT'||tag==='TEXTAREA'||e.target.isContentEditable;
+  if (state.projEdit){
+    if (k==='Escape'){ e.preventDefault(); closeProjEdit(); }
+    else if (k==='Tab') trapTab(e, canvas.querySelector('.sheet'));
+    else if (k==='Enter' && (e.metaKey||e.ctrlKey || e.target.id==='pe-name')){ e.preventDefault(); saveProjEdit(); }
+    return; }
+  if (state.help){ if (k==='Escape' || k==='?' || (k==='/' && e.shiftKey)){ e.preventDefault(); closeHelp(); } else if (k==='Tab') trapTab(e, canvas.querySelector('.help')); return; }
+  if (state.pop){ popKeys(e); return; }
+  if (k==='Escape' && e.target.id==='inv-emails'){ state.invite = null; state.focusSel = '[data-act="inv-open"]'; render(); return; }
+  if (k==='Escape'){
+    if (editing){ e.target.blur(); if (e.target.id==='qa-input' || e.target.id==='qa-notes') focusNav(curNav() || navEls()[0]); else canvas.querySelector('.drawer')?.focus(); return; }
+    if (state.drawer) closeDrawer(true);
+    return;
+  }
+  if (e.target.id==='qa-input' && k==='Enter'){ e.preventDefault(); addTask(); return; }
+  if (e.target.id==='qa-notes' && k==='Enter' && (e.metaKey || e.ctrlKey)){ e.preventDefault(); addTask(); return; }
+  if (e.target.id==='inv-emails' && k==='Enter'){ e.preventDefault(); addPeople(); return; }
+  if (e.target.id==='inv-emails' && k==='Escape'){ state.invite = null; state.focusSel = '[data-act="inv-open"]'; render(); return; }
+  if (e.target.dataset?.field==='title' && k==='Enter'){ e.preventDefault(); e.target.blur(); canvas.querySelector('.drawer')?.focus(); return; }
+  if (editing) return;
+  if ((e.metaKey||e.ctrlKey) && k.toLowerCase()==='z'){ if (undoSnap){ e.preventDefault(); doUndo(); } return; }
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (k==='Tab' && state.drawer){ trapTab(e, canvas.querySelector('.drawer')); return; }
+
+  // anywhere
+  if (k==='?' || (k==='/' && e.shiftKey)){ e.preventDefault(); openHelp(); return; }
+  if (state.gPending && Date.now()-state.gPending < 1200 && (k==='t' || k==='p' || (k==='u' && isAdmin(ME)))){ state.gPending = 0; e.preventDefault();
+    state.page = k==='p' ? 'projects' : k==='u' ? 'team' : 'tasks'; state.drawer = null; state.cursor = null; state.focusSel = `[data-act="page"][data-pg="${state.page}"]`; render(); return; }
+  if (k==='g'){ state.gPending = Date.now(); return; }
+  if (k==='n'){ e.preventDefault(); if (state.drawer) closeDrawer(false);
+    if (state.page==='projects'){ state.page = 'tasks'; if (state.proj!=='all') state.qa.project = state.proj; state.focusSel = '#qa-input'; render(); return; }
+    canvas.querySelector('#qa-input')?.focus(); return; }
+  if (k==='v' && state.page!=='tasks') return;
+  if (k==='v'){ const o = ['today','list','board']; state.view = o[(o.indexOf(state.view)+1)%3]; if (state.view==='today') state.weekOffset = 0; render(); return; }
+  if (k==='p'){ const b = canvas.querySelector(state.page==='projects' ? '[data-act="proj-pick"]' : '[data-act="person"]'); b && openPop({type: state.page==='projects' ? 'projpick' : 'person'}, b); return; }
+  if ((k==='[' || k===']') && state.page==='projects'){ const n = addDays(state.projDay, k===']'?1:-1); if (n<=TODAY){ state.projDay = n; render(); } return; }
+  if (k==='[' || k===']'){ if (state.view!=='today'){ state.weekOffset += k===']'?1:-1; render(); } return; }
+
+  // moving around — arrows only when focus isn't on another control; J/K/H/L always
+  const onNav = !!e.target.closest?.('[data-nav]');
+  const free = onNav || e.target===document.body || e.target.classList?.contains('drawer');
+  const t = taskCtx();
+  if (e.shiftKey && (k==='ArrowLeft' || k==='ArrowRight')){ if (t && free){ e.preventDefault(); shiftDay(t, k==='ArrowRight'?1:-1); } return; }
+  if ((k==='ArrowDown' && free) || k==='j'){ e.preventDefault(); state.drawer ? drawerStep(1) : stepTask(1); return; }
+  if ((k==='ArrowUp' && free) || k==='k'){ e.preventDefault(); state.drawer ? drawerStep(-1) : stepTask(-1); return; }
+  if (((k==='ArrowRight' && free) || k==='l') && !state.drawer){ if (stepColumn(1)) e.preventDefault(); return; }
+  if (((k==='ArrowLeft' && free) || k==='h') && !state.drawer){ if (stepColumn(-1)) e.preventDefault(); return; }
+
+  // actions on the selected task
+  if (!t) return;
+  const isDiv = onNav && e.target.tagName==='DIV';
+  if ((k==='Enter' && isDiv && !state.drawer) || (k==='o' && !state.drawer)){ e.preventDefault(); openDrawer(t.id); return; }
+  if (k==='e'){ e.preventDefault(); openDrawer(t.id, true); return; }
+  if (k==='x' || (k===' ' && (isDiv || e.target.classList.contains('drawer')))){ e.preventDefault(); toggleDone(t.id); render(); return; }
+  const anchor = () => state.drawer ? canvas.querySelector(`.drawer [data-act="${k==='d'?'move':'assign'}"]`)
+                                    : (curNav()?.querySelector(`[data-act="${k==='d'?'move':'assign'}"]`) || curNav());
+  if (k==='d'){ e.preventDefault(); const an = anchor(); openPop({type:'move', mode:'task', ids:[t.id], month:monthOf(t.due<TODAY?TODAY:t.due)}, an); state.pop.returnSel = selFor(an); return; }
+  if (k==='t'){ e.preventDefault(); openPop({type:'assign', mode:'task', id:t.id}, anchor()); return; }
+  if (/^[1-4]$/.test(k)){ e.preventDefault(); if (t.priority!==+k){ setPriority(t.id, +k); render(); } return; }
+});
+document.addEventListener('focusout', e => {
+  const f = e.target.dataset?.field; if (!f || !state.drawer) return;
+  const t = T(state.drawer);
+  if (f==='title'){ const v = e.target.innerText.trim(); if (v && v!==t.title){ snap(); log(t, `renamed to “${esc(v)}”`); t.title = v; setTimeout(render,0); } }
+  if (f==='notes'){ const v = e.target.value; if (v!==t.notes){ snap(); t.notes = v; log(t, 'edited notes'); setTimeout(render,0); } }
+});
+/* drag a card to another day */
+document.addEventListener('dragstart', e => {
+  const c = e.target.closest?.('.tcard'); if (!c) return;
+  state.dragId = c.dataset.id; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', c.dataset.id);
+  requestAnimationFrame(()=>{ c.classList.add('dragging'); canvas.querySelector('.board')?.classList.add('is-dragging'); });
+  if (state.pop){ state.pop=null; renderPop(); }
+});
+document.addEventListener('dragend', () => {
+  state.dragId = null;
+  canvas.querySelectorAll('.dragging,.over').forEach(el=>el.classList.remove('dragging','over'));
+  canvas.querySelector('.board')?.classList.remove('is-dragging');
+});
+document.addEventListener('dragover', e => {
+  const col = e.target.closest?.('[data-drop]'); if (!col || !state.dragId) return;
+  e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+  canvas.querySelectorAll('.col.over').forEach(el=>{ if (el!==col) el.classList.remove('over'); });
+  col.classList.add('over');
+});
+document.addEventListener('dragleave', e => {
+  const col = e.target.closest?.('[data-drop]'); if (col && !col.contains(e.relatedTarget)) col.classList.remove('over');
+});
+document.addEventListener('drop', e => {
+  const col = e.target.closest?.('[data-drop]'); const id = state.dragId; if (!col || !id) return;
+  e.preventDefault(); state.dragId = null;
+  const t = T(id), d = col.dataset.day;
+  if (eff(t)===d) { render(); return; }   // dropped back on its own column (incl. carried cards on Today)
+  moveDate([id], d); render();
+});
+window.addEventListener('resize', () => { if (state.pop){ state.pop=null; renderPop(); } });
+canvas.addEventListener('scroll', () => { if (state.pop){ state.pop=null; renderPop(); } }, true);
+
+// "polling" heartbeat: every 10s pretend we synced
+function tickSync(){ const el = canvas.querySelector('.sync-ago'); if (!el) return;
+  const s = Math.floor((Date.now()-state.lastSync)/1000); el.textContent = s<3 ? 'just now' : `synced ${s}s ago`; }
+setInterval(tickSync, 1000);
+setInterval(()=>{ state.lastSync = Date.now(); tickSync(); }, 10000);
+
+/* =========================================================
+   Mobile + Tech screens
+   ========================================================= */
+function mobileHTML(){
+  const base = location.href.split('#')[0].split('?')[0];
+  return `<div class="phones">
+    <div class="phone-wrap"><div class="phone"><iframe src="${base}?embed=1" title="My week on mobile"></iframe></div><div class="phone-cap">My week · tap a row to open it</div></div>
+    <div class="phone-wrap"><div class="phone"><iframe src="${base}?embed=1&drawer=t1" title="Task detail on mobile"></iframe></div><div class="phone-cap">Task detail as a full-screen sheet</div></div>
+  </div>`;
+}
+
+function techHTML(){ return `<div class="doc">
+  <h1>Tech plan</h1>
+  <p class="lead">A small, single-tenant app: about four tables, about ten API routes, Google sign-in, and updates every few seconds. Cloudflare suits it well and will cost close to nothing at team size.</p>
+
+  <div class="flow">
+    <div class="node"><b>Browser</b><span>React SPA · checks every 10s</span></div>
+    <div class="arrow">HTTPS<div></div>same origin</div>
+    <div class="node cf"><b>Cloudflare Worker</b><span>Static assets + /api (Hono)</span></div>
+    <div class="arrow">SQL<div></div>batch writes</div>
+    <div class="node cf"><b>D1</b><span>tasks · task_events · users</span></div>
+    <div class="arrow">OIDC<div></div>sign-in only</div>
+    <div class="node"><b>Google</b><span>Restricted to your domain</span></div>
+  </div>
+
+  <h2>Stack</h2>
+  <div class="stacks">
+    <div class="stack rec"><span class="badge">Recommended</span><h3>Cloudflare: Workers + D1</h3>
+      <dl>
+        <dt>Frontend</dt><dd>React + Vite SPA, served as Workers static assets (or Pages)</dd>
+        <dt>API</dt><dd>One Worker with the Hono router, on the same origin as the app, so no CORS setup</dd>
+        <dt>Database</dt><dd>D1 (SQLite). Each change and its history entry are written in one <code>batch()</code>, so they succeed or fail together</dd>
+        <dt>Auth</dt><dd>Google OIDC in the Worker (the <i>Arctic</i> library), with an HttpOnly session cookie. After sign-in, the verified email must match a row in <code>users</code> that an admin added; otherwise the user sees the "no access" page. Cloudflare Access with an email allow-list would also work, but then the list lives in two places, so let the app own it</dd>
+        <dt>Live</dt><dd>Polling <code>/api/sync?since=v</code> every 10s, returning 304 when nothing changed. Later upgrade: push over WebSockets with Durable Objects, with no change to the UI</dd>
+        <dt>Cost</dt><dd>The free tier likely covers a small team. Workers Paid ($5/mo) removes the limits</dd>
+      </dl>
+      <div class="pc"><div class="pro"><div class="t">Pros</div><ul><li>One vendor, no servers</li><li>Fast at the edge</li><li>Close to zero cost</li></ul></div>
+      <div class="con"><div class="t">Cons</div><ul><li>SQLite, not Postgres (fine at this size)</li><li>You write about 150 lines of auth, unless you use Access</li></ul></div></div>
+    </div>
+    <div class="stack"><span class="badge">Alternate</span><h3>Supabase + Vercel</h3>
+      <dl>
+        <dt>Frontend</dt><dd>The same React SPA on Vercel or Netlify (or still on Cloudflare Pages)</dd>
+        <dt>API</dt><dd>Mostly direct table access through the Supabase client. Row Level Security enforces the admin/member project rules in the database itself</dd>
+        <dt>Database</dt><dd>Postgres. A trigger writes <code>task_events</code>, so no code path can skip the history</dd>
+        <dt>Auth</dt><dd>Supabase Auth's built-in Google provider. A sign-up hook rejects emails not in the invited list</dd>
+        <dt>Live</dt><dd>Realtime subscriptions on <code>tasks</code>, so no polling is needed</dd>
+        <dt>Cost</dt><dd>Free tier for prototyping. Pro plan ($25/mo) for production</dd>
+      </dl>
+      <div class="pc"><div class="pro"><div class="t">Pros</div><ul><li>Auth and realtime are mostly configuration</li><li>Real Postgres with a dashboard</li></ul></div>
+      <div class="con"><div class="t">Cons</div><ul><li>Two vendors</li><li>Free projects pause when idle</li><li>Higher fixed cost</li></ul></div></div>
+    </div>
+  </div>
+
+  <h2>The rules behind the screens</h2>
+  <div class="rules">
+    <div class="rule"><h4>Rollover is computed, never stored</h4><p>The date shown for a task is <code>today</code> if it's open and overdue, and its <code>due_date</code> otherwise. No nightly job, nothing to drift out of sync. At midnight in the team's time zone, overdue tasks simply appear under today, and "days late" keeps counting. Moving a task sets a new <code>due_date</code> and writes a history entry.</p></div>
+    <div class="rule"><h4>History is append-only</h4><p>Every change goes through one function that updates <code>tasks</code> and inserts into <code>task_events</code> in the same D1 batch. The API has no update or delete route for events. A transfer stores who it went from and to, plus the optional note.</p></div>
+    <div class="rule"><h4>Roles and project access</h4><p><b>Admins</b> see every project and are the only ones who can add or remove people, change roles and manage projects. <b>Members</b> belong to one or more projects (<code>project_members</code>). Every query the Worker runs is scoped to <code>project_id IN (:my_projects)</code> for members, in one middleware, so no route can forget it. Admin actions are written to an <code>audit_log</code>.</p></div>
+    <div class="rule"><h4>Transfers stay inside the project</h4><p>Within their projects, members can transfer any task, with no ownership checks, because the history provides the accountability. The new assignee must be on the task's project (admins always are), so nobody is assigned something they can't see. Moving a task to another project is allowed only if the assignee is on that project too. <code>assigned_by</code> drives the "Assigned by me" list.</p></div>
+    <div class="rule"><h4>Every task: a project, a date, an owner, a priority</h4><p><code>project_id</code>, <code>due_date</code>, <code>assignee_id</code> and <code>priority</code> are <code>NOT NULL</code>, and the API rejects any attempt to clear them. Creating a task defaults to your last project, today, you and Normal priority. When someone leaves the team, their open tasks must be transferred (in bulk, logged) before the account can be deactivated. In the same way, a project can only be archived once its open tasks have been moved to another project. No task is ever left without a project or an owner.</p></div>
+    <div class="rule"><h4>Project day is a read of finished work</h4><p>The Projects page lists tasks with <code>project_id = :p</code> and <code>done_at</code> on the chosen day (team time zone), as one list ordered by priority, then due date, then finish time. Everyone can see every project; there are no per-project permissions in a single-tenant team. An index on <code>(project_id, done_at)</code> keeps it instant.</p></div>
+    <div class="rule"><h4>Done tasks stay where they finished</h4><p>A task completed late is shown on the day it was finished (<code>done_at</code>), not back on its old due date, so finishing a carried-over task today keeps it under today.</p></div>
+    <div class="rule"><h4>Cheap polling</h4><p>Every write increases a global <code>version</code> counter in the same batch. Clients send the last version they saw and get back either 304 or only the changed tasks. Polling slows to every 60s when the tab is hidden, and syncs immediately when the tab regains focus.</p></div>
+  </div>
+
+  <h2>Data model</h2>
+<pre><span class="k">users</span>        id, email <span class="c">-- unique, the only way in</span>, name, avatar_url,
+             role <span class="c">-- admin | member</span>, status <span class="c">-- invited | active | removed</span>, added_by, added_at
+<span class="k">project_members</span> user_id, project_id   <span class="c">-- members only; admins implicitly on all</span>
+<span class="k">projects</span>     id, name, color, description <span class="c">-- ≤ 600 chars, mainly for MCP clients</span>, archived
+<span class="k">tasks</span>        id, title, notes, project_id <span class="c">-- NOT NULL</span>, assignee_id <span class="c">-- NOT NULL</span>, created_by, assigned_by,
+             due_date <span class="c">-- DATE NOT NULL</span>, priority <span class="c">-- 1 urgent | 2 high | 3 normal | 4 low, NOT NULL DEFAULT 3</span>,
+             status <span class="c">-- open | done</span>, done_at, done_by, updated_at, version
+<span class="k">task_events</span>  id, task_id, actor_id, via <span class="c">-- null | mcp client name</span>, type <span class="c">-- created | transferred | date_moved | priority_changed | done | reopened | edited</span>,
+             from_value, to_value, note, at   <span class="c">-- append-only</span>
+<span class="k">audit_log</span>    id, actor_id, action <span class="c">-- user_added | role_changed | projects_changed | user_removed</span>, target, detail, at
+<span class="k">meta</span>         key='version', value <span class="c">-- incremented on every write, used by /api/sync</span>
+
+<span class="c">-- One user's week (including tasks rolled over into it):</span>
+SELECT *, CASE WHEN status='open' AND due_date &lt; :today THEN :today ELSE due_date END AS shown_on
+FROM tasks WHERE assignee_id = :user AND shown_on BETWEEN :monday AND :sunday;</pre>
+
+  <h2>MCP server for AI assistants</h2>
+  <p>The same Worker also serves a remote MCP endpoint (<code>/mcp</code>, Streamable HTTP), built with Cloudflare's <code>agents</code> SDK (<code>McpAgent</code>) and <code>workers-oauth-provider</code>. People connect Claude or another MCP client and sign in with the same Google account. The assistant acts <b>as that person</b>: it sees exactly what they see, follows the same admin/member rules, and every change it makes is written to the history with <code>via</code> set, shown as <span class="via">via Claude</span>.</p>
+  <p><b>Project descriptions are how the assistant knows where things go.</b> <code>list_projects</code> returns each project's name and description, and the descriptions are also folded into the <code>create_task</code> tool description. So "add a task to fix the pricing page FAQ" lands in Website Redesign without asking.</p>
+  <table class="api">
+    <tr><td>list_projects()</td><td>The caller's projects with name, description, color and members</td></tr>
+    <tr><td>list_tasks(user?, project?, from?, to?, status?)</td><td>Tasks with the same rollover rule as the app ("today" includes carried-over tasks)</td></tr>
+    <tr><td>create_task(title, project, due_date, assignee, priority)</td><td>All five required, matching the app's rules. The assignee must be on the project</td></tr>
+    <tr><td>update_task(id, …) · complete_task(id)</td><td>Change date, priority, title or notes, or mark done. Each writes a history event</td></tr>
+    <tr><td>transfer_task(id, to, note?)</td><td>Same rule as the app: the new assignee must be on the task's project</td></tr>
+    <tr><td>project_day(project, date)</td><td>Finished tasks by priority, then due date. Good for "what got done on Acme yesterday?"</td></tr>
+  </table>
+
+  <h2>API</h2>
+  <table class="api">
+    <tr><td><span class="m">GET</span>/auth/google → /auth/callback</td><td>Google sign-in. Creates the member on first visit</td></tr>
+    <tr><td><span class="m">GET</span>/api/me · /api/users · /api/projects</td><td>Load the basics once per session (members get only their projects and the people on them)</td></tr>
+    <tr><td><span class="m">POST</span>/api/admin/users</td><td><b>Admin.</b> Add people by email with a role and, for members, projects</td></tr>
+    <tr><td><span class="m">PATCH</span>/api/admin/users/:id</td><td><b>Admin.</b> Change role or projects (refused while they have open tasks in a removed project)</td></tr>
+    <tr><td><span class="m">DEL</span>/api/admin/users/:id?transfer_to=</td><td><b>Admin.</b> Remove a person; their open tasks move to <code>transfer_to</code> in the same batch</td></tr>
+    <tr><td><span class="m">GET</span>/api/week?user=&amp;start=</td><td>Tasks assigned to and by that user for the week (with rollover applied)</td></tr>
+    <tr><td><span class="m">GET</span>/api/sync?since=v</td><td>The polling endpoint: 304, or the tasks changed since <code>v</code> plus the new version</td></tr>
+    <tr><td><span class="m">POST</span>/api/tasks</td><td>Create a task (title, project, due date, assignee, priority)</td></tr>
+    <tr><td><span class="m">PATCH</span>/api/tasks/:id</td><td>Edit title, notes, project, due date, priority, assignee (+ note) or status. Always writes an event</td></tr>
+    <tr><td><span class="m">POST</span>/api/tasks/move</td><td>Move several tasks at once ("Move all" carried over)</td></tr>
+    <tr><td><span class="m">GET</span>/api/tasks/:id/events</td><td>History for the task detail panel</td></tr>
+    <tr><td><span class="m">GET</span>/api/projects/:id/day?date=</td><td>Tasks finished in a project on a day, plus the ones planned but not finished (<code>:id</code> can be <code>all</code>)</td></tr>
+  </table>
+
+  <h2>Open questions for you</h2>
+  <ol class="qs">
+    <li><div><b>What counts as "assigned by me"?</b><i>The wireframe uses: tasks I created or last transferred that are now with someone else. Should a task stay on my list after it's passed on a second time?</i></div></li>
+    <li><div><b>Can tasks be deleted?</b><i>Suggestion: "Archive" instead of delete. The task is hidden, the event is logged, and the history stays intact.</i></div></li>
+    <li><div><b>What does "assign across projects" mean?</b><i>The wireframe reads it as: a member works across all of their own projects, and can assign a task to anyone on that task's project. The alternative is letting members assign to people outside the project, but then the assignee couldn't see their own task.</i></div></li>
+    <li><div><b>Can members create projects or edit descriptions?</b><i>The wireframe says no: only admins create projects, choose who's on them and write the descriptions MCP clients read.</i></div></li>
+    <li><div><b>Can assistants make changes, or only read?</b><i>The plan allows changes, all marked "via Claude" in the history. A per-person "read-only for assistants" switch would be easy to add.</i></div></li>
+    <li><div><b>Send an invite email?</b><i>Adding someone doesn't email them yet. The admin shares the link. An optional invite email is easy to add later (for example with Resend or Cloudflare Email).</i></div></li>
+    <li><div><b>Should Urgent be limited?</b><i>Urgent now exists (Urgent / High / Normal / Low). To keep it meaningful, it could be capped (for example, at most 3 open Urgent tasks per person) or notify the assignee immediately. The wireframe has no limit.</i></div></li>
+    <li><div><b>Show weekends?</b><i>The wireframe shows Mon–Sun. A team setting could switch to Mon–Fri only.</i></div></li>
+    <li><div><b>One team time zone, or each person's own?</b><i>This decides when "today" starts for rollover. One team time zone is simpler and consistent.</i></div></li>
+    <li><div><b>Notifications?</b><i>Polling keeps open tabs current. An optional daily email ("3 tasks carried over") would be a cron job.</i></div></li>
+  </ol>
+</div>`; }
+
+/* boot */
+render();
+if (!EMBED) maybeAutoSim();
+</script>
+</body>
+</html>

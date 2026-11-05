@@ -1,0 +1,163 @@
+import type { OAuthHelpers } from '@cloudflare/workers-oauth-provider';
+import type { Context } from 'hono';
+import type { Project, Task, TaskEvent, User } from '../shared/types';
+import type { SeriesInfo } from '../shared/repeat';
+import { todayIn } from '../shared/dates';
+
+export interface Env {
+  DB: D1Database;
+  ASSETS: Fetcher;
+  TEAM_TZ?: string;
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  ADMIN_EMAILS?: string;
+  DEV_LOGIN?: string;
+  /** Durable Object namespace for MCP sessions (worker/mcp.ts). */
+  MCP_OBJECT: DurableObjectNamespace;
+  /** OAuth clients, grants and tokens for MCP clients (managed by @cloudflare/workers-oauth-provider). */
+  OAUTH_KV: KVNamespace;
+  /** Injected by the OAuth provider into requests it passes to the app. */
+  OAUTH_PROVIDER: OAuthHelpers;
+}
+
+/** The signed-in person, as the API sees them. */
+export interface Viewer {
+  id: string;
+  email: string;
+  name: string;
+  role: 'admin' | 'member';
+  /** Member project ids (empty for admins). */
+  projects: string[];
+  /** The viewer's own IANA time zone. "Today" is always the viewer's today. */
+  tz: string;
+}
+
+export type AppEnv = { Bindings: Env; Variables: { viewer: Viewer } };
+export type Ctx = Context<AppEnv>;
+
+/** Fallback for people whose browser hasn't told us their time zone yet. */
+export const defaultTz = (env: Env) => validTz(env.TEAM_TZ) || 'UTC';
+/** An IANA time zone name the runtime understands, or null. */
+export function validTz(tz: string | null | undefined): string | null {
+  if (!tz || tz.length > 64) return null;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return tz;
+  } catch {
+    return null;
+  }
+}
+/** Today's date (YYYY-MM-DD) where the viewer is. */
+export const today = (v: Viewer) => todayIn(v.tz);
+export const nowIso = () => new Date().toISOString();
+export const uid = () => crypto.randomUUID();
+
+/** Loads a viewer by user id (active users only). Used for MCP calls, which carry a user id instead of a cookie. */
+export async function loadViewer(env: Env, userId: string): Promise<Viewer | null> {
+  const u = await env.DB.prepare("SELECT * FROM users WHERE id = ? AND status = 'active'").bind(userId).first<UserRow>();
+  if (!u) return null;
+  return toViewer(env, u, validTz(u.time_zone) || defaultTz(env));
+}
+export const toViewer = async (env: Env, u: UserRow, tz: string): Promise<Viewer> => ({
+  id: u.id, email: u.email, name: u.name, role: u.role, projects: u.role === 'admin' ? [] : await memberProjects(env.DB, u.id), tz,
+});
+
+export const canSeeProject = (v: Viewer, projectId: string) => v.role === 'admin' || v.projects.includes(projectId);
+
+export class HttpError extends Error {
+  constructor(public status: 400 | 401 | 403 | 404 | 409 | 500, message: string) {
+    super(message);
+  }
+}
+export const bad = (msg: string) => new HttpError(400, msg);
+export const conflict = (msg: string) => new HttpError(409, msg);
+export const forbidden = (msg = 'Not allowed') => new HttpError(403, msg);
+export const notFound = (msg = 'Not found') => new HttpError(404, msg);
+
+// ---------- crypto helpers ----------
+export const b64url = (bytes: ArrayBuffer | Uint8Array) => {
+  const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  let s = '';
+  for (const b of u8) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+};
+export const randomToken = (n = 32) => b64url(crypto.getRandomValues(new Uint8Array(n)));
+export const sha256 = (s: string) => crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+export const sha256hex = async (s: string) =>
+  [...new Uint8Array(await sha256(s))].map((b) => b.toString(16).padStart(2, '0')).join('');
+
+// ---------- row mapping ----------
+// Always selected FROM tasks (no alias): the last column folds in the task's series, if any.
+export const TASK_COLS =
+  'id, title, notes, project_id, assignee_id, created_by, assigned_by, due_date, priority, status, done_at, done_on, done_by, created_at, updated_at, version, series_id, ' +
+  "(SELECT json_object('id', s.id, 'rule', json(s.rule), 'anchor', s.starts_on, 'active', s.active, 'made', s.made, 'assigneeId', s.assignee_id, 'title', s.title) " +
+  'FROM series s WHERE s.id = tasks.series_id) AS series_json';
+
+export interface TaskRow {
+  id: string; title: string; notes: string; project_id: string; assignee_id: string; created_by: string; assigned_by: string;
+  due_date: string; priority: number; status: 'open' | 'done'; done_at: string | null; done_on: string | null; done_by: string | null;
+  created_at: string; updated_at: string; version: number; series_id: string | null; series_json: string | null;
+}
+const parseSeries = (j: string | null): SeriesInfo | null => {
+  if (!j) return null;
+  const s = JSON.parse(j) as SeriesInfo & { active: number | boolean };
+  return { ...s, active: !!s.active };
+};
+export const mapTask = (r: TaskRow): Task => ({
+  id: r.id, title: r.title, notes: r.notes, projectId: r.project_id, assigneeId: r.assignee_id, createdBy: r.created_by,
+  assignedBy: r.assigned_by, dueDate: r.due_date, priority: r.priority as Task['priority'], status: r.status, doneAt: r.done_at,
+  doneOn: r.done_on, doneBy: r.done_by, createdAt: r.created_at, updatedAt: r.updated_at, version: r.version,
+  series: parseSeries(r.series_json),
+});
+
+export interface UserRow {
+  id: string; email: string; name: string; avatar_url: string | null; color: string; role: 'admin' | 'member';
+  status: 'invited' | 'active' | 'removed'; added_by: string | null; added_at: string; last_seen_at: string | null; time_zone: string | null;
+}
+export const mapUser = (r: UserRow, projects: string[]): User => ({
+  id: r.id, email: r.email, name: r.name || r.email.split('@')[0], avatarUrl: r.avatar_url, color: r.color, role: r.role,
+  status: r.status, projects: r.role === 'admin' ? [] : projects, addedAt: r.added_at, timeZone: r.time_zone,
+});
+
+export interface ProjectRow { id: string; name: string; color: string; description: string; archived: number; created_at: string }
+export const mapProject = (r: ProjectRow): Project => ({ id: r.id, name: r.name, color: r.color, description: r.description, archived: !!r.archived });
+
+export interface EventRow { id: string; task_id: string; actor_id: string; via: string | null; type: string; from_value: string | null; to_value: string | null; note: string | null; at: string }
+export const mapEvent = (r: EventRow): TaskEvent => ({
+  id: r.id, taskId: r.task_id, actorId: r.actor_id, via: r.via, type: r.type as TaskEvent['type'],
+  fromValue: r.from_value, toValue: r.to_value, note: r.note, at: r.at,
+});
+
+// ---------- common queries ----------
+export async function getUser(db: D1Database, id: string) {
+  return db.prepare('SELECT * FROM users WHERE id = ?').bind(id).first<UserRow>();
+}
+export async function memberProjects(db: D1Database, userId: string): Promise<string[]> {
+  const { results } = await db.prepare('SELECT project_id FROM project_members WHERE user_id = ?').bind(userId).all<{ project_id: string }>();
+  return results.map((r) => r.project_id);
+}
+/** Is this (active or invited) user able to see work in this project? */
+export async function userOnProject(db: D1Database, userId: string, projectId: string): Promise<boolean> {
+  const u = await getUser(db, userId);
+  if (!u || u.status === 'removed') return false;
+  if (u.role === 'admin') return true;
+  const r = await db.prepare('SELECT 1 FROM project_members WHERE user_id = ? AND project_id = ?').bind(userId, projectId).first();
+  return !!r;
+}
+
+export const bumpVersion = (db: D1Database) => db.prepare("UPDATE meta SET value = value + 1 WHERE key = 'version'");
+export const bumpDirectory = (db: D1Database) => db.prepare("UPDATE meta SET value = value + 1 WHERE key = 'directory_version'");
+export const CURRENT_VERSION = "(SELECT value FROM meta WHERE key = 'version')";
+
+export const eventStmt = (
+  db: D1Database,
+  e: { taskId: string; actorId: string; type: TaskEvent['type']; from?: string | null; to?: string | null; note?: string | null; via?: string | null; at: string },
+) =>
+  db
+    .prepare('INSERT INTO task_events (id, task_id, actor_id, via, type, from_value, to_value, note, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(uid(), e.taskId, e.actorId, e.via ?? null, e.type, e.from ?? null, e.to ?? null, e.note ?? null, e.at);
+
+export const auditStmt = (db: D1Database, actorId: string, action: string, target: string | null, detail: unknown) =>
+  db
+    .prepare('INSERT INTO audit_log (id, actor_id, action, target, detail, at) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(uid(), actorId, action, target, detail == null ? null : JSON.stringify(detail), nowIso());

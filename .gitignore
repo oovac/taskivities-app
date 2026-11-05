@@ -1,0 +1,9 @@
+node_modules
+dist
+.wrangler
+.dev.vars
+# Each instance's Cloudflare IDs (see tenants/example.env). Only the example is committed.
+tenants/*.env
+!tenants/example.env
+*.tsbuildinfo
+.DS_Store

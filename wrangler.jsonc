@@ -1,0 +1,76 @@
+// Settings shared by every Taskivities instance, plus placeholders for local development.
+// Don't put an instance's IDs here: each deployed instance (Worker) has its own tenants/<instance>.env
+// (not committed), and `npm run deploy -- <instance>` fills them in. See tenants/example.env.
+// The placeholder IDs below only work locally; a plain `wrangler deploy` with this file fails on purpose.
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "taskivities-local",
+	"main": "worker/index.ts",
+	"compatibility_date": "2026-10-01",
+	// Needed by the `agents` SDK (MCP server).
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"assets": {
+		// The React app. Anything that isn't a file falls back to index.html (client-side routes).
+		// Bound so the Worker can serve the built-in logo when none is uploaded.
+		"binding": "ASSETS",
+		"not_found_handling": "single-page-application",
+		// These paths always go to the Worker, never to static files.
+		// /mcp and the OAuth endpoints are for AI assistants (MCP clients); see worker/index.ts.
+		"run_worker_first": [
+			"/api/*",
+			"/logo.svg",
+			"/auth/*",
+			"/mcp",
+			"/mcp/*",
+			"/authorize",
+			"/token",
+			"/register",
+			"/.well-known/*"
+		]
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "taskivities-local", // per instance: D1_DATABASE_NAME
+			"database_id": "00000000-0000-0000-0000-000000000000", // per instance: D1_DATABASE_ID
+			"migrations_dir": "migrations"
+		}
+	],
+	// One Durable Object per MCP session (the assistant's connection). See worker/mcp.ts.
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "MCP_OBJECT",
+				"class_name": "TaskivitiesMCP"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": [
+				"TaskivitiesMCP"
+			]
+		}
+	],
+	// OAuth clients, grants and tokens for MCP clients (@cloudflare/workers-oauth-provider).
+	"kv_namespaces": [
+		{
+			"binding": "OAUTH_KV",
+			"id": "00000000000000000000000000000000" // per instance: OAUTH_KV_ID
+		}
+	],
+	// Branding: admins upload the logo (SVG) on the Settings page; it's stored in D1, not here.
+	"vars": {
+		// Fallback only (per instance: TEAM_TZ). Each person's "today" uses their own browser's time zone;
+		// this is used until we know it.
+		"TEAM_TZ": "America/New_York"
+	},
+	// Secrets, per instance: `npm run tenant -- secret <instance> NAME` for GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
+	// and optionally ADMIN_EMAILS. Locally they come from .dev.vars.
+	"observability": {
+		"enabled": true
+	}
+}

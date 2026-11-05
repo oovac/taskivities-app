@@ -1,0 +1,13 @@
+# Copy to .dev.vars for local development (never commit .dev.vars).
+
+# Google OAuth client (Web application). Authorized redirect URI: http://localhost:5173/auth/callback
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+
+# Optional, comma-separated: addresses always let in as admins. (On an empty database the first person to sign in
+# becomes the admin anyway.)
+ADMIN_EMAILS=
+
+# Local only: enables /auth/dev-login?email=... so you can sign in as seeded users without Google.
+# Ignored unless the request comes from localhost. Never set this in production.
+DEV_LOGIN=1
