@@ -9,7 +9,9 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
-- **People and projects on one screen:** there's no separate Projects page anymore. Pick a person or a project from the switcher at the top of the page; everything a project's view had (the day report, Not finished, Archived) is still there. The logo and **G T** go to your week, and **G P** to the project you last looked at, even after a reload. The ⋯ menu next to the logo is now just Team and Settings, for admins.
+## v0.3.2 (2026-11-06)
+
+- **People and projects on one screen:** there's no separate Projects page anymore. Pick a person or a project from the switcher at the top of the page; everything a project's view had (the day report, Not finished, Archived) is still there. The logo and **G T** go to your week, and **G P** to the project you last looked at, even after a reload. The ⋯ menu next to the logo is now just People & projects and Settings, for admins.
 - **Project boards use the full width,** like a person's board.
 - **Team is now People & projects:** the admin page for managing people and projects has a name that says both, at `/manage` (the old `/team` still works). People and projects are on two tabs (People at `/manage`, Projects at `/manage/projects`), each with its own button: **Add people** or **New project**. **G U** still goes there.
 - **Phones:** opening the switcher (or any menu with a search box) no longer pops up the keyboard and closes itself. Tap the search box to type; the list fits above the keyboard.
