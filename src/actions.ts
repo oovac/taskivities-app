@@ -686,6 +686,29 @@ export async function addComment(id: string, text: string): Promise<boolean> {
   }
 }
 
+/** Follow or stop following a task: me, or (`userId`) someone else on its project. */
+export async function setFollowing(id: string, follow: boolean, userId?: string) {
+  const prev = S().tasks[id];
+  if (!prev) return;
+  const me = S().me!.id;
+  const who = userId ?? me;
+  if (!follow && who === prev.assigneeId) return;
+  pending.add(id);
+  mine.set(id, Date.now());
+  const followers = follow ? [...new Set([...prev.followers, who])] : prev.followers.filter((f) => f !== who);
+  set((s) => ({ tasks: { ...s.tasks, [id]: { ...prev, followers } } }));
+  try {
+    const { task } = await api.post<{ task: Task }>(`/api/tasks/${id}/follow`, { follow, ...(who !== me ? { userId: who } : {}) });
+    putTask(task);
+    if (who === me) toast(follow ? `Following “${prev.title}”` : `Stopped following “${prev.title}”`, () => { set({ toast: null }); void setFollowing(id, !follow); });
+  } catch (e) {
+    set((s) => ({ tasks: { ...s.tasks, [id]: prev } }));
+    toastError(e);
+  } finally {
+    pending.delete(id);
+  }
+}
+
 /** Opens the task (if needed) and puts the cursor in its notes, expanding them when empty. */
 export function editNotes(id: string) {
   // Ask for the focus first: the state change below can render right away, and the focus is applied after a render.

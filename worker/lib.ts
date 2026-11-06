@@ -115,12 +115,13 @@ export const TASK_COLS =
   "(SELECT json_group_array(json_object('id', c.id, 'text', c.text, 'done', c.done)) " +
   'FROM (SELECT id, text, done FROM checklist_items WHERE task_id = tasks.id ORDER BY position, created_at) c) AS checklist_json, ' +
   "(SELECT json_group_array(json_object('id', a.id, 'name', a.name, 'size', a.size, 'type', a.type, 'by', a.uploaded_by, 'at', a.uploaded_at)) " +
-  'FROM (SELECT * FROM attachments WHERE task_id = tasks.id AND removed_at IS NULL ORDER BY uploaded_at) a) AS attachments_json';
+  'FROM (SELECT * FROM attachments WHERE task_id = tasks.id AND removed_at IS NULL ORDER BY uploaded_at) a) AS attachments_json, ' +
+  '(SELECT json_group_array(json_array(f.user_id, f.following)) FROM (SELECT * FROM task_followers WHERE task_id = tasks.id ORDER BY at) f) AS followers_json';
 
 export interface TaskRow {
   id: string; title: string; notes: string; project_id: string; assignee_id: string; created_by: string; assigned_by: string;
   due_date: string; priority: number; status: 'open' | 'done'; done_at: string | null; done_on: string | null; done_by: string | null;
-  created_at: string; updated_at: string; version: number; series_id: string | null; archived_at: string | null; archived_by: string | null; series_json: string | null; comment_count: number; checklist_json: string | null; attachments_json: string | null;
+  created_at: string; updated_at: string; version: number; series_id: string | null; archived_at: string | null; archived_by: string | null; series_json: string | null; comment_count: number; checklist_json: string | null; attachments_json: string | null; followers_json?: string | null;
 }
 const parseSeries = (j: string | null): SeriesInfo | null => {
   if (!j) return null;
@@ -137,7 +138,16 @@ export const mapTask = (r: TaskRow): Task => ({
   archivedAt: r.archived_at ?? null,
   archivedBy: r.archived_by ?? null,
   checklist: (JSON.parse(r.checklist_json || '[]') as { id: string; text: string; done: number }[]).map((c) => ({ id: c.id, text: c.text, done: !!c.done })),
+  followers: followersFrom(r.created_by, r.followers_json),
 });
+
+/** The creator follows unless they stopped (a row with following = 0); everyone else follows with a row (migrations/0015). */
+export function followersFrom(createdBy: string, json: string | null | undefined): string[] {
+  const rows = JSON.parse(json || '[]') as [string, number][];
+  const creatorStopped = rows.some(([u, f]) => u === createdBy && !f);
+  const others = rows.filter(([u, f]) => f && u !== createdBy).map(([u]) => u);
+  return creatorStopped ? others : [createdBy, ...others];
+}
 
 export interface UserRow {
   id: string; email: string; name: string; avatar_url: string | null; color: string; role: 'admin' | 'member';

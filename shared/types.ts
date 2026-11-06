@@ -37,7 +37,7 @@ export interface Project {
 export interface NotifyPrefs {
   /** A task given to you by someone else (new, or handed over). */
   assigned: boolean;
-  /** A comment on a task that's yours or that you created. */
+  /** Tasks I follow (or have): comments, done or reopened, handed to someone, and being added as a follower. */
   comments: boolean;
   /** At 8:00 in your time zone: how many tasks today, if any. */
   morning: boolean;
@@ -46,9 +46,10 @@ export const NOTIFY_DEFAULTS: NotifyPrefs = { assigned: true, comments: true, mo
 
 /**
  * One entry in someone's inbox (the bell): read from the task history, never stored separately.
- * new: a task made for you · assigned: a task handed to you · comment: on a task you have or created.
+ * new: a task made for you · assigned: a task handed to you · and on tasks you have or follow: comment, done,
+ * reopened, handed (to someone else; also when your task is handed away) · followed: someone added you as a follower.
  */
-export type InboxKind = 'new' | 'assigned' | 'comment';
+export type InboxKind = 'new' | 'assigned' | 'comment' | 'done' | 'reopened' | 'handed' | 'followed';
 export interface InboxItem {
   /** The history entry's id. */
   id: string;
@@ -63,6 +64,8 @@ export interface InboxItem {
   via: string | null;
   /** The comment, or the note sent with a handover. */
   note: string | null;
+  /** handed: who got the task. */
+  to: string | null;
   at: string;
 }
 export interface InboxPage {
@@ -113,6 +116,8 @@ export interface Task {
   /** Archived tasks are hidden everywhere except the Projects page's Archived section. */
   archivedAt: string | null;
   archivedBy: string | null;
+  /** People following it (the creator, unless they stopped, and anyone who followed, was added or commented). Whoever has it always hears about it too. */
+  followers: string[];
 }
 
 export type EventType =
@@ -140,6 +145,9 @@ export type EventType =
   | 'check_renamed'
   | 'check_removed'
   /** Attachments: to_value is the file name. */
+  /** Someone else was added as a follower / taken off (to_value: who). Following yourself isn't recorded. */
+  | 'follower_added'
+  | 'follower_removed'
   | 'attached'
   | 'detached'
   /** Archived (hidden from every list) / restored. */

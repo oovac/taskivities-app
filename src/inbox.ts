@@ -1,6 +1,6 @@
 // The inbox (the bell in the top bar): tasks given to me, comments on my tasks and handovers, read from the task
 // history (worker/inbox.ts). Opening it marks everything shown as seen.
-import type { InboxItem, InboxPage } from '../shared/types';
+import type { InboxItem, InboxKind, InboxPage } from '../shared/types';
 import { api } from './api';
 import { openPop } from './actions';
 import { S, set } from './store';
@@ -44,7 +44,7 @@ async function markRead(upTo: string | undefined) {
 /** Entries as the inbox shows them: a handover of several tasks at once is one row, and so are comments on one task. */
 export interface InboxRow {
   key: string;
-  kind: 'new' | 'assigned' | 'comment' | 'handover';
+  kind: InboxKind | 'handover';
   items: InboxItem[];
   unread: boolean;
 }

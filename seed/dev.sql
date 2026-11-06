@@ -88,4 +88,10 @@ SELECT 'ed_' || id, id, done_by, NULL, 'done', NULL, NULL, NULL, done_at FROM ta
 INSERT INTO task_events (id, task_id, actor_id, via, type, from_value, to_value, note, at)
 VALUES ('ev_mcp', 't06', 'u_jordan', 'Claude', 'priority_changed', '3', '2', NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 day'));
 
+-- Followers: Sara asked Jordan to keep an eye on Arjun's review (creators follow without a row: migration 0015)
+INSERT INTO task_followers (task_id, user_id, following, added_by, at)
+VALUES ('t37', 'u_jordan', 1, 'u_sara', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 hours'));
+INSERT INTO task_events (id, task_id, actor_id, via, type, from_value, to_value, note, at)
+VALUES ('ef_t37', 't37', 'u_sara', NULL, 'follower_added', NULL, 'u_jordan', NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 hours'));
+
 UPDATE meta SET value = 1 WHERE key = 'version';

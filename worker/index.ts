@@ -11,6 +11,7 @@ import { hookRoutes } from './webhooks';
 import { attachmentRoutes, uploadRoutes } from './attachments';
 import { morningSummaries, pushRoutes } from './push';
 import { inboxRoutes } from './inbox';
+import { followRoutes } from './followers';
 
 // The MCP session Durable Object (bound as MCP_OBJECT in wrangler.jsonc).
 export { TaskivitiesMCP };
@@ -43,6 +44,7 @@ app.route('/authorize', oauthRoutes);
 app.use('/api/*', sameOrigin, requireSession);
 app.route('/api/admin', admin);
 app.route('/api/tasks', attachmentRoutes);
+app.route('/api/tasks', followRoutes);
 app.route('/api/push', pushRoutes);
 app.route('/api/inbox', inboxRoutes);
 app.route('/api', api);

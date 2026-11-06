@@ -8,7 +8,8 @@ import {
   CURRENT_VERSION, TASK_COLS, bad, bumpVersion, canSeeProject, eventStmt, forbidden, mapTask, notFound, nowIso, today, uid,
   userOnProject,
 } from './lib';
-import { type Notice, notify } from './push';
+import { type Notice, WATCHERS, notify } from './push';
+import { followStmt } from './followers';
 
 /** SQL fragment limiting tasks to the projects the viewer can see (never an archived project's). */
 export const visible = (v: Viewer, alias = '') =>
@@ -185,6 +186,9 @@ export async function applyPatch(env: Env, v: Viewer, id: string, b: Patch, via:
     const note = (b.note ?? '').trim().slice(0, 500) || null;
     ev({ type: 'transferred', from: t.assignee_id, to: assignee, note });
     notices.push({ to: assignee, kind: 'assigned', actorId: v.id, via, taskId: id, text: note });
+    // Followers hear who has it now, and so does whoever had it (if someone else moved it).
+    notices.push({ to: WATCHERS, kind: 'handed', actorId: v.id, via, taskId: id, target: assignee });
+    if (t.assignee_id !== v.id) notices.push({ to: t.assignee_id, kind: 'handed', actorId: v.id, via, taskId: id, target: assignee });
   }
   if (b.dueDate !== undefined && b.dueDate !== t.due_date) {
     if (!isDate(b.dueDate)) throw bad('Invalid date.');
@@ -200,9 +204,11 @@ export async function applyPatch(env: Env, v: Viewer, id: string, b: Patch, via:
     if (b.status === 'done') {
       set('status', 'done'); set('done_at', now); set('done_on', t0); set('done_by', v.id);
       ev({ type: 'done' });
+      notices.push({ to: WATCHERS, kind: 'done', actorId: v.id, via, taskId: id });
     } else if (b.status === 'open') {
       set('status', 'open'); set('done_at', null); set('done_on', null); set('done_by', null);
       ev({ type: 'reopened' });
+      notices.push({ to: WATCHERS, kind: 'reopened', actorId: v.id, via, taskId: id });
     } else throw bad('Invalid status.');
   }
   // ----- repeating tasks -----
@@ -299,6 +305,16 @@ export async function applyPatch(env: Env, v: Viewer, id: string, b: Patch, via:
            SELECT lower(hex(randomblob(16))), ?, text, 0, position, ?, ?, ? FROM checklist_items
            WHERE task_id = ? AND EXISTS (SELECT 1 FROM tasks WHERE id = ?)`,
         ).bind(nextId, v.id, now, now, id, nextId),
+        // And the same followers: this copy's creator (unless they stopped) and everyone else following it.
+        db.prepare(
+          `INSERT OR IGNORE INTO task_followers (task_id, user_id, following, added_by, at)
+           SELECT ?, user_id, following, added_by, ? FROM task_followers WHERE task_id = ? AND EXISTS (SELECT 1 FROM tasks WHERE id = ?)`,
+        ).bind(nextId, now, id, nextId),
+        db.prepare(
+          `INSERT OR IGNORE INTO task_followers (task_id, user_id, following, added_by, at)
+           SELECT ?, ?, 1, ?, ? WHERE ? != ? AND EXISTS (SELECT 1 FROM tasks WHERE id = ?)
+             AND NOT EXISTS (SELECT 1 FROM task_followers WHERE task_id = ? AND user_id = ? AND following = 0)`,
+        ).bind(nextId, t.created_by, t.created_by, now, t.created_by, v.id, nextId, id, t.created_by),
       );
     } else {
       after.push(db.prepare('UPDATE series SET active = 0, updated_at = ? WHERE id = ?').bind(now, live.id));
@@ -352,9 +368,11 @@ export async function addComment(env: Env, v: Viewer, id: string, text: unknown,
     bumpVersion(db),
     db.prepare(`UPDATE tasks SET updated_at = ?, version = ${CURRENT_VERSION} WHERE id = ?`).bind(now, t.id),
     eventStmt(db, { taskId: t.id, actorId: v.id, via, type: 'comment', note: body, at: now }),
+    // Commenting follows the task, so you hear the replies.
+    followStmt(db, t.id, v.id, v.id, now),
   ]);
-  // Whoever has the task, and whoever created it.
-  notify(env, [...new Set([t.assignee_id, t.created_by])].map((to) => ({ to, kind: 'comment' as const, actorId: v.id, via, taskId: t.id, text: body })));
+  // Whoever has the task and everyone following it.
+  notify(env, [{ to: WATCHERS, kind: 'comment', actorId: v.id, via, taskId: t.id, text: body }]);
   return mapTask((await loadTask(db, t.id))!);
 }
 

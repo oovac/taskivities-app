@@ -17,7 +17,7 @@ export function InboxPop({ s }: { s: State }) {
       ) : ib.error && !ib.items.length ? (
         <div className="pop-empty">Couldn't load your inbox. <button className="linkish" onClick={() => void loadInbox()}>Try again</button></div>
       ) : !rows.length ? (
-        <div className="pop-empty">Nothing yet. When someone gives you a task or comments on one of yours, it shows up here.</div>
+        <div className="pop-empty">Nothing yet. When someone gives you a task, or comments on one you have or follow, it shows up here.</div>
       ) : (
         <div className="inbox-list">
           {rows.map((r) => <Row key={r.key} r={r} s={s} />)}
@@ -28,7 +28,7 @@ export function InboxPop({ s }: { s: State }) {
           )}
         </div>
       )}
-      <div className="pop-foot">Tasks given to you, comments on your tasks, and handovers. Notifications or not, they're all here.</div>
+      <div className="pop-foot">Tasks given to you, and what happens on tasks you have or follow. Notifications or not, it's all here.</div>
     </div>
   );
 }
@@ -43,6 +43,10 @@ function Row({ r, s }: { r: InboxRow; s: State }) {
     r.kind === 'new' ? <><b>{who(it.actorId, it.via)}</b> gave you a new task</> :
     r.kind === 'assigned' ? <><b>{who(it.actorId, it.via)}</b> gave you a task</> :
     r.kind === 'handover' ? <><b>{who(it.actorId, it.via)}</b> gave you {r.items.length} tasks</> :
+    r.kind === 'done' ? <><b>{who(it.actorId, it.via)}</b> finished a task</> :
+    r.kind === 'reopened' ? <><b>{who(it.actorId, it.via)}</b> reopened a task</> :
+    r.kind === 'handed' ? (it.to === it.actorId ? <><b>{who(it.actorId, it.via)}</b> took a task</> : <><b>{who(it.actorId, it.via)}</b> gave a task to <b>{firstName(s.users[it.to ?? ''])}</b></>) :
+    r.kind === 'followed' ? <><b>{who(it.actorId, it.via)}</b> added you as a follower</> :
     <>{andList(people.map((p) => <b key={p}>{p}</b>))} commented{r.items.length > 1 ? ` (${r.items.length})` : ''}</>;
   const open = () => {
     closePop(false);

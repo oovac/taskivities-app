@@ -8,7 +8,7 @@ import { type ThemePref, themePref } from './theme';
 
 export type Page = 'tasks' | 'projects' | 'team' | 'settings';
 export type View = 'today' | 'list' | 'board';
-export type PopType = 'move' | 'assign' | 'prio' | 'proj' | 'person' | 'projpick' | 'urole' | 'uproj' | 'udisable' | 'uenable' | 'notify' | 'update' | 'inbox' | 'account' | 'repeat' | 'taskmenu' | 'pages';
+export type PopType = 'move' | 'assign' | 'prio' | 'proj' | 'person' | 'projpick' | 'urole' | 'uproj' | 'udisable' | 'uenable' | 'notify' | 'update' | 'inbox' | 'followers' | 'account' | 'repeat' | 'taskmenu' | 'pages';
 
 export interface Pop {
   type: PopType;

@@ -3,16 +3,19 @@
 // needs clearing out. The same people are told as with notifications (worker/push.ts):
 //   • new       a task made for you (a 'created' event whose assignee is you)
 //   • assigned  a task handed to you ('transferred' to you), including handovers when someone is disabled
-//   • comment   a comment on a task you have or created
+//   • on a task you have or follow (worker/followers.ts): comment, done, reopened, handed (to someone else)
+//   • handed    also a task of yours handed to someone else by another person
+//   • followed  someone else added you as a follower
 // Your own changes aren't in it (unless a webhook made them for you), and neither are tasks you can't see now
 // (archived, or in a project you're not on or that's archived). users.inbox_read_at marks what's been seen.
 import { Hono } from 'hono';
 import { INBOX_PAGE, type InboxItem, type InboxKind, type InboxPage } from '../shared/types';
 import { type AppEnv, type Viewer, bad, nowIso } from './lib';
 import { visible } from './tasks';
+import { WATCHED_TASKS } from './followers';
 
 interface Row {
-  id: string; task_id: string; actor_id: string; via: string | null; note: string | null; at: string; rid: number;
+  id: string; task_id: string; actor_id: string; via: string | null; note: string | null; to_value: string | null; at: string; rid: number;
   kind: InboxKind; title: string; status: string; project_id: string;
 }
 
@@ -25,7 +28,7 @@ async function entries(db: D1Database, v: Viewer, opts: { before?: { at: string;
   if (opts.after) { time += ' AND e.at > ?'; timeBinds.push(opts.after); }
   const common = `t.archived_at IS NULL AND ${vis.sql} AND (e.actor_id != ? OR e.via LIKE '% webhook')${time}`;
   const commonBinds = [...vis.binds, v.id, ...timeBinds];
-  const cols = 'e.id, e.task_id, e.actor_id, e.via, e.note, e.at, e.rowid AS rid, t.title, t.status, t.project_id';
+  const cols = 'e.id, e.task_id, e.actor_id, e.via, e.note, e.to_value, e.at, e.rowid AS rid, t.title, t.status, t.project_id';
   // One branch per kind, each able to use its own index (migrations/0014_inbox.sql) and each limited on its own.
   const branches: [string, unknown[]][] = [
     [`SELECT ${cols}, 'new' AS kind FROM task_events e JOIN tasks t ON t.id = e.task_id
@@ -33,17 +36,29 @@ async function entries(db: D1Database, v: Viewer, opts: { before?: { at: string;
     [`SELECT ${cols}, 'assigned' AS kind FROM task_events e JOIN tasks t ON t.id = e.task_id
        WHERE e.type = 'transferred' AND e.to_value = ? AND ${common}`, [v.id, ...commonBinds]],
     [`SELECT ${cols}, 'comment' AS kind FROM task_events e JOIN tasks t ON t.id = e.task_id
-       WHERE e.task_id IN (SELECT id FROM tasks WHERE assignee_id = ? UNION SELECT id FROM tasks WHERE created_by = ?)
-         AND e.type = 'comment' AND ${common}`, [v.id, v.id, ...commonBinds]],
+       WHERE e.task_id IN (${WATCHED_TASKS}) AND e.type = 'comment' AND ${common}`, [v.id, v.id, v.id, v.id, ...commonBinds]],
+    [`SELECT ${cols}, CASE e.type WHEN 'transferred' THEN 'handed' ELSE e.type END AS kind FROM task_events e JOIN tasks t ON t.id = e.task_id
+       WHERE e.task_id IN (${WATCHED_TASKS}) AND e.type IN ('done', 'reopened', 'transferred') AND e.to_value IS NOT ? AND ${common}`,
+      [v.id, v.id, v.id, v.id, v.id, ...commonBinds]],
+    [`SELECT ${cols}, 'handed' AS kind FROM task_events e JOIN tasks t ON t.id = e.task_id
+       WHERE e.type = 'transferred' AND e.from_value = ? AND e.to_value != ? AND ${common}`, [v.id, v.id, ...commonBinds]],
+    [`SELECT ${cols}, 'followed' AS kind FROM task_events e JOIN tasks t ON t.id = e.task_id
+       WHERE e.type = 'follower_added' AND e.to_value = ? AND ${common}`, [v.id, ...commonBinds]],
   ];
-  const sql = branches.map(([q]) => `SELECT * FROM (${q} ORDER BY e.at DESC, e.rowid DESC LIMIT ${limit})`).join(' UNION ALL ') +
-    ` ORDER BY at DESC, rid DESC LIMIT ${limit}`;
-  return (await db.prepare(sql).bind(...branches.flatMap(([, b]) => b)).all<Row>()).results;
+  // One statement per branch, in one round trip (D1 allows only 5 terms in a compound SELECT), merged newest first.
+  // A handover can match two branches (a task I follow, handed away from me): it's shown once.
+  const results = await db.batch<Row>(branches.map(([q, b]) => db.prepare(`${q} ORDER BY e.at DESC, e.rowid DESC LIMIT ${limit}`).bind(...b)));
+  const seen = new Set<string>();
+  return results.flatMap((r) => r.results)
+    .sort((a, b) => (a.at === b.at ? b.rid - a.rid : a.at < b.at ? 1 : -1))
+    .filter((r) => !seen.has(r.id) && !!seen.add(r.id))
+    .slice(0, limit);
 }
 
 const toItem = (r: Row): InboxItem => ({
   id: r.id, kind: r.kind, taskId: r.task_id, title: r.title, done: r.status === 'done', projectId: r.project_id,
-  actorId: r.actor_id, via: r.via, note: r.note, at: r.at,
+  actorId: r.actor_id, via: r.via, note: r.kind === 'handed' || r.kind === 'assigned' || r.kind === 'comment' ? r.note : null,
+  to: r.kind === 'handed' ? r.to_value : null, at: r.at,
 });
 
 export const UNREAD_MAX = 100;
