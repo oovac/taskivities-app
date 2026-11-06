@@ -21,12 +21,26 @@ import { InboxPop } from './InboxPop';
 
 const setDraft = (p: Partial<State['draft']>) => set((s) => ({ draft: { ...s.draft, ...p } }));
 const updatePop = (p: Partial<Pop>) => set((s) => (s.pop ? { pop: { ...s.pop, ...p } } : {}));
+/** Phones and tablets: focusing a search box there opens the on-screen keyboard, so popovers don't do it on open. */
+const isTouch = () => matchMedia('(hover: none) and (pointer: coarse)').matches;
+/** The height you can see: on phones, the window above the on-screen keyboard. */
+const viewH = () => window.visualViewport?.height ?? innerHeight;
 
 export function Popover() {
   const s = useStore();
   const p = s.pop;
   const ref = useRef<HTMLDivElement>(null);
   const opened = useRef<Pop | null>(null);
+  // Fit again when the visible height changes (the on-screen keyboard opening or closing).
+  const [, refit] = useState(0);
+  useEffect(() => {
+    if (!p) return;
+    const vv = window.visualViewport;
+    const on = () => refit((n) => n + 1);
+    vv?.addEventListener('resize', on);
+    window.addEventListener('resize', on);
+    return () => { vv?.removeEventListener('resize', on); window.removeEventListener('resize', on); };
+  }, [!!p]);
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -34,14 +48,14 @@ export function Popover() {
     // Position first (synchronously), then focus: hidden elements can't take focus.
     const W = el.offsetWidth, H = el.offsetHeight, r = p.rect;
     let top = r.b + 6;
-    if (top + H > innerHeight - 12) top = Math.max(12, r.t - H - 6);
+    if (top + H > viewH() - 12) top = Math.max(12, r.t - H - 6);
     el.style.left = `${Math.max(12, Math.min(r.l, innerWidth - W - 12))}px`;
     el.style.top = `${top}px`;
     el.style.visibility = 'visible';
     const isNew = !opened.current || opened.current.rect !== p.rect || opened.current.type !== p.type;
     opened.current = p;
     if (isNew) {
-      const first = el.querySelector<HTMLElement>('#pop-q') || el.querySelector<HTMLElement>('.opt.cur:not(:disabled)') ||
+      const first = (isTouch() ? null : el.querySelector<HTMLElement>('#pop-q')) || el.querySelector<HTMLElement>('.opt.cur:not(:disabled)') ||
         el.querySelector<HTMLElement>('.opt:not(:disabled)') || el.querySelector<HTMLElement>('button:not(:disabled)');
       first?.focus({ preventScroll: true });
     }
@@ -301,7 +315,7 @@ function SwitchPop({ p, s }: { p: Pop; s: State }) {
   const sel = onProjects && s.projSel !== 'all' ? s.projects[s.projSel] : null;
   return (
     // As tall as the space under the button allows, so the whole list is always reachable (it scrolls).
-    <div className="switch" style={{ maxHeight: Math.max(260, innerHeight - p.rect.b - 48) }}>
+    <div className="switch" style={{ maxHeight: Math.max(200, viewH() - p.rect.b - 48) }}>
       <div style={{ padding: '4px 4px 0' }}>
         <input className="pin" id="pop-q" placeholder={onProjects ? 'Search projects and people' : 'Search people and projects'} value={p.q || ''} autoComplete="off"
           onChange={(e) => updatePop({ q: e.target.value })}

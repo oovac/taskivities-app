@@ -32,7 +32,14 @@ export function App() {
       if (S().pop && !(e.target as Element | null)?.closest?.('.pop')) closePop(false);
     };
     document.addEventListener('mousedown', outside);
-    const closeOnResize = () => S().pop && closePop(false);
+    // Close popovers when the window gets wider or narrower (they're placed by their button), but not when only the
+    // height changes: on phones that's the on-screen keyboard, which opens when you tap a popover's search box.
+    let lastW = innerWidth;
+    const closeOnResize = () => {
+      if (innerWidth === lastW) return;
+      lastW = innerWidth;
+      if (S().pop) closePop(false);
+    };
     window.addEventListener('resize', closeOnResize);
     // Live updates: poll every 10s, every 60s when the tab is hidden, and right away when it comes back.
     const timer = setInterval(() => {
