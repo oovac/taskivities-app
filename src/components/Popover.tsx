@@ -5,7 +5,7 @@ import { isAdmin, onProject } from '../../shared/rules';
 import { PRIORITIES, type NotifyPrefs, type Priority, type Task } from '../../shared/types';
 import {
   assignable, closePop, defaultDraftDate, moveTasks, openConnect, openPop, viewProject, disableUser, enableUser, setPage, setPriority, setProject, setRepeat, signOut, switchablePeople, transfer,
-  updateUser, viewPerson, editNotes, editChecklist, pickAttachments, archiveTask,
+  updateUser, viewPerson, editNotes, editChecklist, pickAttachments, archiveTask, setFollowing,
 } from '../actions';
 import { focusLater } from '../focus';
 import { type ThemePref, setThemePref } from '../theme';
@@ -17,6 +17,7 @@ import { displayName, draftEffective, firstName, isLate, myProjects, shownOn } f
 import { projectDayData } from '../pages/ProjectsPage';
 import { openProjEdit } from '../pages/TeamPage';
 import { Avatar, Dot, I, PrioIcon, ProjBadge } from './ui';
+import { InboxPop } from './InboxPop';
 
 const setDraft = (p: Partial<State['draft']>) => set((s) => ({ draft: { ...s.draft, ...p } }));
 const updatePop = (p: Partial<Pop>) => set((s) => (s.pop ? { pop: { ...s.pop, ...p } } : {}));
@@ -70,6 +71,8 @@ function Content({ p, s }: { p: Pop; s: State }) {
     case 'uenable': return <EnablePop p={p} s={s} />;
     case 'notify': return <NotifyPop s={s} />;
     case 'update': return <UpdatePop s={s} />;
+    case 'inbox': return <InboxPop s={s} />;
+    case 'followers': return <FollowersPop p={p} s={s} />;
     case 'account': return <AccountPop s={s} />;
     case 'taskmenu': return <TaskMenu p={p} s={s} />;
     case 'repeat': return <RepeatPop p={p} s={s} />;
@@ -467,6 +470,37 @@ function AccountPop({ s }: { s: State }) {
   );
 }
 
+/** Who follows a task: tick people on its project (whoever has it always hears about it). */
+function FollowersPop({ p, s }: { p: Pop; s: State }) {
+  const t = s.tasks[p.id!];
+  if (!t) return null;
+  const me = s.me!.id;
+  const q = (p.q || '').toLowerCase();
+  const list = assignable(s, t.projectId)
+    .filter((u) => u.status === 'active' && (!q || `${u.name} ${u.email}`.toLowerCase().includes(q)))
+    .sort((a, b) => (a.id === me ? -1 : b.id === me ? 1 : displayName(a).localeCompare(displayName(b))));
+  return (
+    <>
+      <div className="pop-h">Followers</div>
+      <div style={{ padding: '0 4px' }}>
+        <input className="pin" id="pop-q" placeholder="Search people" value={p.q || ''} autoComplete="off" onChange={(e) => updatePop({ q: e.target.value })} />
+      </div>
+      {list.length ? list.map((u) => {
+        const has = u.id === t.assigneeId;
+        const on = has || t.followers.includes(u.id);
+        return (
+          <button key={u.id} className={`opt check ${on ? 'on' : ''}`} role="menuitemcheckbox" aria-checked={on} disabled={has} data-u={u.id}
+            onClick={() => void setFollowing(t.id, !on, u.id === me ? undefined : u.id)}>
+            <span className="cb">{on && I.check()}</span><Avatar user={u} />{displayName(u)}{u.id === me && <span style={{ color: 'var(--faint)' }}> (you)</span>}
+            <span className="r">{has ? 'has it' : u.id === t.createdBy ? 'created it' : ''}</span>
+          </button>
+        );
+      }) : <div className="pop-empty">No one on this project matches.</div>}
+      <div className="pop-foot">Followers hear about comments, when it's done or reopened, and when it's handed on. Commenting follows a task.</div>
+    </>
+  );
+}
+
 /** For admins: is there a newer release than the one this instance runs, and how to deploy it. */
 function UpdatePop({ s }: { s: State }) {
   const u = s.update;
@@ -511,7 +545,7 @@ function NotifyPop({ s }: { s: State }) {
   const run = async (f: () => Promise<string | null | void>) => { setBusy(true); setMsg(null); const r = await f(); setBusy(false); if (r) setMsg(r); };
   const kinds: [keyof NotifyPrefs, string][] = [
     ['assigned', 'Someone gives me a task'],
-    ['comments', 'Comments on my tasks'],
+    ['comments', 'Tasks I have or follow: comments, done, handed on'],
     ['morning', 'Morning summary at 8:00'],
   ];
   return (

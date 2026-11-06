@@ -3,7 +3,8 @@ import { addDays } from '../shared/dates';
 import { isAdmin } from '../shared/rules';
 import type { Priority } from '../shared/types';
 import {
-  closeConnect, closeDrawer, closeHelp, closePop, moveTasks, openDrawer, openHelp, openPop, setPage, setPriority, setView, skipTask, toast, toggleDone, closeHook, editChecklist, editNotes, pickAttachments } from './actions';
+  closeConnect, closeDrawer, closeHelp, closePop, moveTasks, openDrawer, openHelp, openPop, setPage, setPriority, setView, skipTask, toast, toggleDone, closeHook, editChecklist, editNotes, pickAttachments, setFollowing } from './actions';
+import { openInbox } from './inbox';
 import { openMove } from './components/rows';
 import { curNav, focusLater, focusNav, navEls, trapTab } from './focus';
 import { S, set } from './store';
@@ -116,6 +117,13 @@ export function onKeyDown(e: KeyboardEvent) {
     setPage(k === 'p' ? 'projects' : k === 'u' ? 'team' : k === 's' ? 'settings' : 'tasks');
     return;
   }
+  if (gPending && Date.now() - gPending < 1200 && k === 'i') {
+    gPending = 0;
+    e.preventDefault();
+    const b = document.querySelector<HTMLElement>('[data-act="inbox"]');
+    if (b) openInbox(b);
+    return;
+  }
   if (k === 'g') { gPending = Date.now(); return; }
   // N = new task, ⇧N = notes of the selected task (decided by Shift, so Caps Lock doesn't matter).
   const isN = k === 'n' || k === 'N';
@@ -177,6 +185,7 @@ export function onKeyDown(e: KeyboardEvent) {
   if (isN && e.shiftKey) { e.preventDefault(); editNotes(task.id); return; }
   if ((k === 'a' || k === 'A') && e.shiftKey) { e.preventDefault(); pickAttachments(task.id); return; }
   // C = comment, ⇧C = checklist (by Shift, like N / ⇧N).
+  if (k === 'f' && task.assigneeId !== s.me!.id) { e.preventDefault(); void setFollowing(task.id, !task.followers.includes(s.me!.id)); return; }
   if ((k === 'c' || k === 'C') && e.shiftKey) { e.preventDefault(); editChecklist(task.id); return; }
   if (k === 'c' || k === 'C') { e.preventDefault(); if (s.drawer !== task.id) openDrawer(task.id); focusLater('#comment-box'); return; }
   if (k === 'x' || (k === ' ' && (isDiv || t.classList.contains('drawer')))) { e.preventDefault(); toggleDone(task.id); return; }

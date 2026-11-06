@@ -3,6 +3,7 @@
 //     subscription is stored in push_subscriptions.
 //   • notify() is called after a task change is saved. It runs after the response (waitUntil), so it never slows a change.
 //   • morningSummaries() runs on the Cron Trigger: at 8:00 in each person's time zone, how many tasks today.
+// Who hears about a task: whoever has it and its followers (worker/followers.ts).
 // People are only told about other people's changes (and their assistants'), never their own.
 import { waitUntil } from 'cloudflare:workers';
 import { Hono } from 'hono';
@@ -10,6 +11,7 @@ import { addDays, fmt, todayIn } from '../shared/dates';
 import { NOTIFY_DEFAULTS, type NotifyPrefs } from '../shared/types';
 import { type AppEnv, type Env, bad, defaultTz, nowIso, uid, validTz } from './lib';
 import { type PushKeys, type PushTarget, fromB64u, sendPush, validEndpoint } from './webpush';
+import { watchersOf } from './followers';
 
 export const pushKeys = (env: Env): PushKeys | null =>
   env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY ? { publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY } : null;
@@ -52,9 +54,13 @@ async function openToday(db: D1Database, userId: string, day: string) {
 }
 
 // ---------- after a change ----------
+/** A notice to everyone on the task (whoever has it and its followers), worked out after the change is saved. */
+export const WATCHERS = '*';
+
 export interface Notice {
+  /** A person's id, or WATCHERS. */
   to: string;
-  kind: 'assigned' | 'comment';
+  kind: 'assigned' | 'comment' | 'done' | 'reopened' | 'handed' | 'followed';
   actorId: string;
   /** The assistant ("Claude") or webhook ("GitHub webhook") that made the change for the actor. */
   via: string | null;
@@ -66,60 +72,95 @@ export interface Notice {
   /** Several tasks handed over at once (when someone is disabled), and whose they were. */
   count?: number;
   fromName?: string;
+  /** handed: who has the task now. */
+  target?: string;
 }
+
+/** When one change means several things to one person, they hear the first of these. */
+const RANK: Notice['kind'][] = ['assigned', 'followed', 'handed', 'done', 'reopened', 'comment'];
 
 /** Sends notices after the response. Nobody is told about their own change, unless a webhook made it for them. */
 export function notify(env: Env, notices: Notice[]) {
   const keys = pushKeys(env);
-  const list = notices.filter((n) => n.to !== n.actorId || n.via?.endsWith(' webhook'));
-  if (!keys || !list.length) return;
+  if (!keys || !notices.length) return;
+  const list = notices;
   const job = deliver(env, keys, list).catch((e) => console.error('notify failed', e));
   try { waitUntil(job); } catch { /* not inside a request: the promise runs on its own */ }
 }
 
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
-async function deliver(env: Env, keys: PushKeys, notices: Notice[]) {
+async function deliver(env: Env, keys: PushKeys, raw: Notice[]) {
   const db = env.DB;
+  // Expand "everyone on the task", then drop people's own changes (unless a webhook made them for them).
+  const expanded: Notice[] = [];
+  for (const n of raw) {
+    if (n.to !== WATCHERS) expanded.push(n);
+    else if (n.taskId) for (const to of await watchersOf(db, n.taskId)) expanded.push({ ...n, to });
+  }
+  const notices = expanded.filter((n) => n.to !== n.actorId || n.via?.endsWith(' webhook'))
+    .sort((a, b) => RANK.indexOf(a.kind) - RANK.indexOf(b.kind));
+  if (!notices.length) return;
   const to = [...new Set(notices.map((n) => n.to))];
   const subs = (await db.prepare(`SELECT * FROM push_subscriptions WHERE user_id IN (${to.map(() => '?').join(',')})`).bind(...to).all<SubRow>()).results;
   if (!subs.length) return;
-  const people = [...new Set([...to, ...notices.map((n) => n.actorId)])];
-  const users = new Map((await db.prepare(`SELECT id, name, email, status, notify, time_zone FROM users WHERE id IN (${people.map(() => '?').join(',')})`)
-    .bind(...people).all<{ id: string; name: string; email: string; status: string; notify: string | null; time_zone: string | null }>()).results.map((u) => [u.id, u]));
+  const people = [...new Set([...to, ...notices.map((n) => n.actorId), ...notices.map((n) => n.target).filter(Boolean) as string[]])];
+  const users = new Map((await db.prepare(`SELECT id, name, email, role, status, notify, time_zone FROM users WHERE id IN (${people.map(() => '?').join(',')})`)
+    .bind(...people).all<{ id: string; name: string; email: string; role: string; status: string; notify: string | null; time_zone: string | null }>()).results.map((u) => [u.id, u]));
   const taskIds = [...new Set(notices.map((n) => n.taskId).filter(Boolean) as string[])];
   const tasks = new Map(taskIds.length ? (await db.prepare(
-    `SELECT t.id, t.title, t.due_date, p.name AS project FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.id IN (${taskIds.map(() => '?').join(',')})`,
-  ).bind(...taskIds).all<{ id: string; title: string; due_date: string; project: string }>()).results.map((t) => [t.id, t]) : []);
+    `SELECT t.id, t.title, t.due_date, t.project_id, p.name AS project, p.archived FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.id IN (${taskIds.map(() => '?').join(',')})`,
+  ).bind(...taskIds).all<{ id: string; title: string; due_date: string; project_id: string; project: string; archived: number }>()).results.map((t) => [t.id, t]) : []);
+  // Followers may have left the project since: only people who can see the task now hear about it.
+  const members = new Set((await db.prepare(`SELECT user_id || '|' || project_id AS k FROM project_members WHERE user_id IN (${to.map(() => '?').join(',')})`)
+    .bind(...to).all<{ k: string }>()).results.map((r) => r.k));
   const name = (id: string) => { const u = users.get(id); return u?.name || u?.email.split('@')[0] || 'Someone'; };
 
   const seen = new Set<string>();
   for (const n of notices) {
-    const key = `${n.to}|${n.kind}|${n.taskId ?? ''}`;
+    const key = n.taskId ? `${n.to}|${n.taskId}` : `${n.to}|${n.kind}|${n.actorId}`;
     if (seen.has(key)) continue;
     seen.add(key);
     const u = users.get(n.to);
     const mine = subs.filter((s) => s.user_id === n.to);
     if (!u || u.status !== 'active' || !mine.length) continue;
+    const t = n.taskId ? tasks.get(n.taskId) : undefined;
+    if (t && (t.archived || (u.role !== 'admin' && !members.has(`${n.to}|${t.project_id}`)))) continue;
     const prefs = prefsOf(u.notify);
     if (n.kind === 'assigned' ? !prefs.assigned : !prefs.comments) continue;
     const who = n.via?.endsWith(' webhook') ? n.via : n.via ? `${name(n.actorId)} via ${n.via}` : name(n.actorId);
     const day = todayIn(validTz(u.time_zone) || defaultTz(env));
-    const t = n.taskId ? tasks.get(n.taskId) : undefined;
     const due = t ? (t.due_date === day ? 'due today' : t.due_date === addDays(day, 1) ? 'due tomorrow' : t.due_date < day ? `was due ${fmt(t.due_date)}` : `due ${fmt(t.due_date)}`) : '';
     let payload: Payload;
     if (n.count) {
       payload = { title: `${who} gave you ${n.count} task${n.count > 1 ? 's' : ''}`, body: n.fromName ? `They were ${n.fromName}'s.` : '', url: '/', tag: `handover-${n.actorId}` };
     } else if (!t) {
       continue;
-    } else if (n.kind === 'assigned') {
-      payload = {
-        title: n.isNew ? `New task from ${who}` : `${who} gave you a task`,
-        body: [clip(t.title, 120), `${t.project} · ${due}`, n.text ? `“${clip(n.text, 140)}”` : ''].filter(Boolean).join('\n'),
-        url: `/?task=${t.id}`, tag: `task-${t.id}`,
-      };
     } else {
-      payload = { title: `${who} commented`, body: `${clip(t.title, 80)}\n“${clip(n.text ?? '', 180)}”`, url: `/?task=${t.id}`, tag: `task-${t.id}` };
+      const link = { url: `/?task=${t.id}`, tag: `task-${t.id}` };
+      const line = `${clip(t.title, 120)}\n${t.project} · ${due}`;
+      switch (n.kind) {
+        case 'assigned':
+          payload = { title: n.isNew ? `New task from ${who}` : `${who} gave you a task`, body: [line, n.text ? `“${clip(n.text, 140)}”` : ''].filter(Boolean).join('\n'), ...link };
+          break;
+        case 'comment':
+          payload = { title: `${who} commented`, body: `${clip(t.title, 80)}\n“${clip(n.text ?? '', 180)}”`, ...link };
+          break;
+        case 'done':
+          payload = { title: `${who} finished a task`, body: `${clip(t.title, 120)}\n${t.project}`, ...link };
+          break;
+        case 'reopened':
+          payload = { title: `${who} reopened a task`, body: line, ...link };
+          break;
+        case 'handed': {
+          const target = n.target === n.to ? 'you' : n.target === n.actorId ? null : name(n.target ?? '');
+          payload = { title: target ? `${who} gave a task to ${target}` : `${who} took a task`, body: line, ...link };
+          break;
+        }
+        case 'followed':
+          payload = { title: `${who} added you as a follower`, body: line, ...link };
+          break;
+      }
     }
     payload.badge = await openToday(db, n.to, day);
     await sendAll(env, keys, mine, payload, { topic: n.taskId?.replace(/-/g, ''), urgency: n.kind === 'assigned' ? 'high' : 'normal' });

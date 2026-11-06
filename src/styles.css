@@ -540,7 +540,7 @@ kbd{display:inline-grid;place-items:center;min-width:21px;height:21px;padding:0 
 /* Phones: no keyboard, so no shortcuts button. */
 @media (max-width:640px){
   .kb-btn{display:none}
-  .topbar > .ai-btn,.topbar > .sync,.topbar > .me{flex:none}
+  .topbar > .ai-btn,.topbar > .sync,.topbar > .me,.topbar > .inbox-btn{flex:none}
 }
 
 /* ---------- repeating tasks ---------- */
@@ -806,3 +806,33 @@ a.att-n:hover{color:var(--accent);text-decoration:underline}
 .update-cmds{margin:0 0 8px;padding:8px 10px;border-radius:8px;background:var(--sunken);border:1px solid var(--line);font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre;overflow-x:auto;color:var(--text)}
 .update-acts{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .pop-foot .linkish{font-size:inherit}
+
+/* ---------- inbox (the bell) ---------- */
+.inbox-btn{position:relative}
+.inbox-btn.on{background:var(--fill-strong);color:var(--text)}
+.inbox-n{position:absolute;top:-3px;right:-5px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--accent);color:#fff;font-size:10px;font-weight:700;line-height:16px;text-align:center;box-shadow:0 0 0 2px var(--panel)}
+.pop:has(.inbox){width:372px;max-width:calc(100vw - 24px)}
+.inbox-list{max-height:min(62vh,520px);overflow-y:auto;overscroll-behavior:contain}
+.inbox-row{align-items:flex-start;gap:10px;padding:9px 10px}
+.inbox-row .av{margin-top:1px}
+.inbox-main{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.inbox-head{font-size:13px;color:var(--text-2)}
+.inbox-head b{color:var(--text);font-weight:600}
+.inbox-title{font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.inbox-title.done{text-decoration:line-through;color:var(--faint)}
+.inbox-note{font-size:12.5px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line}
+.inbox-meta{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--faint);margin-top:1px}
+.inbox-row.unread{background:var(--accent-soft)}
+.inbox-row.unread:hover{background:var(--fill)}
+.inbox-dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-top:6px}
+.inbox-more{justify-content:center;color:var(--accent);font-weight:600;font-size:13px}
+.inbox .pop-empty{line-height:1.45}
+
+/* ---------- followers ---------- */
+.fields dd.fol{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.av-stack{display:inline-flex;margin-right:2px}
+.av-stack .av{box-shadow:0 0 0 2px var(--panel)}
+.av-stack .av + .av{margin-left:-6px}
+.follow-btn{font-size:12.5px;font-weight:600;padding:4px 10px;border-radius:999px;border:1px solid var(--line);color:var(--text-2);background:var(--panel)}
+.follow-btn:hover{background:var(--fill)}
+.follow-btn.on{color:var(--accent-ink);background:var(--accent-soft);border-color:transparent}

@@ -31,8 +31,8 @@ export function HelpSheet() {
         </div>
         <div className="help-b">
           <G title="Move around" rows={[['↑ ↓ / J K', 'Previous / next task'], ['← → / H L', 'Previous / next day (board)'], ['Enter', 'Open the task'], ['Tab', 'Next control'], ['Esc', 'Close panel or menu']]} />
-          <G title="Selected task" rows={[['X / Space', 'Done / not done'], ['D', 'Change date'], ['⇧ ← ⇧ →', 'One day earlier / later'], ['T', 'Transfer to someone'], ['R', 'Change repeat (repeating)'], ['S', 'Skip this copy (repeating)'], ['1 2 3 4', 'Urgent · High · Normal · Low'], ['E', 'Rename'], ['⇧ N', 'Notes'], ['⇧ C', 'Checklist'], ['⇧ A', 'Attach files'], ['C', 'Comment']]} />
-          <G title="Anywhere" rows={[['N', 'New task'], ['V', 'Today → Week → Board'], ['P', 'Switch to another person or project'], ['[ ]', 'Previous / next week (or day)'], ['G T / G P / G U / G S', 'Go to Tasks / Projects / Team / Settings'], ['⌘ Z', 'Undo']]} />
+          <G title="Selected task" rows={[['X / Space', 'Done / not done'], ['D', 'Change date'], ['⇧ ← ⇧ →', 'One day earlier / later'], ['T', 'Transfer to someone'], ['R', 'Change repeat (repeating)'], ['S', 'Skip this copy (repeating)'], ['1 2 3 4', 'Urgent · High · Normal · Low'], ['E', 'Rename'], ['⇧ N', 'Notes'], ['⇧ C', 'Checklist'], ['⇧ A', 'Attach files'], ['C', 'Comment'], ['F', 'Follow / unfollow']]} />
+          <G title="Anywhere" rows={[['N', 'New task'], ['V', 'Today → Week → Board'], ['P', 'Switch to another person or project'], ['[ ]', 'Previous / next week (or day)'], ['G T / G P / G U / G S', 'Go to Tasks / Projects / Team / Settings'], ['G I', 'Open your inbox'], ['⌘ Z', 'Undo']]} />
           <G title="Menus & calendar" rows={[['↑ ↓', 'Choose an option'], ['← → ↑ ↓', 'Pick a day in the calendar'], ['Enter', 'Select'], ['Type', 'Search people'], ['Esc', 'Back without changing']]} />
         </div>
       </div>

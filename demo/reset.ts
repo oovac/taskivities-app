@@ -5,7 +5,7 @@ import type { Env } from '../worker/lib';
 
 // Children before parents, so foreign keys never block a delete.
 const TABLES = [
-  'task_events', 'checklist_items', 'attachments', 'upload_links',
+  'task_events', 'task_followers', 'checklist_items', 'attachments', 'upload_links',
   'webhook_keys', 'webhook_requests', 'webhooks',
   'tasks', 'series', 'project_members',
   'google_tokens', 'push_subscriptions', 'sessions', 'settings', 'audit_log',

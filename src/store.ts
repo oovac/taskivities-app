@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AppSettings, ArchivedProject, NotifyPrefs, Priority, Project, Role, Task, TaskEvent, User, WebhookInfo } from '../shared/types';
+import type { AppSettings, ArchivedProject, InboxItem, NotifyPrefs, Priority, Project, Role, Task, TaskEvent, User, WebhookInfo } from '../shared/types';
 import { NORMAL, NOTIFY_DEFAULTS } from '../shared/types';
 import type { PushState } from './push';
 import type { Release } from './updates';
@@ -8,7 +8,7 @@ import { type ThemePref, themePref } from './theme';
 
 export type Page = 'tasks' | 'projects' | 'team' | 'settings';
 export type View = 'today' | 'list' | 'board';
-export type PopType = 'move' | 'assign' | 'prio' | 'proj' | 'person' | 'projpick' | 'urole' | 'uproj' | 'udisable' | 'uenable' | 'notify' | 'update' | 'account' | 'repeat' | 'taskmenu' | 'pages';
+export type PopType = 'move' | 'assign' | 'prio' | 'proj' | 'person' | 'projpick' | 'urole' | 'uproj' | 'udisable' | 'uenable' | 'notify' | 'update' | 'inbox' | 'followers' | 'account' | 'repeat' | 'taskmenu' | 'pages';
 
 export interface Pop {
   type: PopType;
@@ -22,6 +22,16 @@ export interface Pop {
   returnSel: string | null;
   month?: string;
   q?: string;
+}
+
+export interface InboxState {
+  items: InboxItem[];
+  /** Cursor for older entries (null: no more). */
+  next: string | null;
+  /** When I'd last looked, before this visit: newer entries show as unread. */
+  readAt: string | null;
+  loading: boolean;
+  error?: boolean;
 }
 
 export interface Upload { id: string; taskId: string; name: string; loaded: number; total: number }
@@ -87,6 +97,9 @@ export interface State {
   updateCheckedAt: number | null;
   updateChecking: boolean;
   updateSeenTick: number;
+  /** The inbox (the bell): how many entries I haven't seen, and the entries loaded while it's open. */
+  inboxUnread: number;
+  inbox: InboxState | null;
   pop: Pop | null;
   toast: Toast | null;
   help: boolean;
@@ -162,6 +175,8 @@ export const useStore = create<State>()(() => ({
   updateCheckedAt: null,
   updateChecking: false,
   updateSeenTick: 0,
+  inboxUnread: 0,
+  inbox: null,
   pop: null,
   toast: null,
   help: false,

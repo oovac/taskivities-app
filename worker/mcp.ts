@@ -14,6 +14,7 @@ import {
 import type { McpProps } from './oauth';
 import { UPLOAD_LINK_MINUTES, addAttachmentBytes, addAttachmentFromUrl, createUploadLink, readAttachment, typeFromName } from './attachments';
 import { addComment, changeChecklist, createTask, setArchived, loadVisibleTask, updateTask, updateTaskWithNext, visible } from './tasks';
+import { setFollowing } from './followers';
 
 const PRIORITY_NAMES = ['urgent', 'high', 'normal', 'low'] as const;
 type PriorityName = (typeof PRIORITY_NAMES)[number];
@@ -100,6 +101,7 @@ function describeTask(t: Task, dir: Directory, t0: string) {
     ...(t.notes ? { notes: t.notes } : {}),
     ...(t.series?.active ? { repeats: describeRepeat(t.series.rule, t.series.anchor) } : {}),
     ...(t.comments ? { comments: t.comments } : {}),
+    ...(t.followers.some((f) => f !== t.assigneeId) ? { followers: t.followers.filter((f) => f !== t.assigneeId).map((f) => userLabel(dir, f)) } : {}),
     ...(t.attachments.length ? { attachments: t.attachments.map((a) => ({ id: a.id, name: a.name, type: a.type, size: a.size })) } : {}),
     ...(t.checklist.length ? { checklist: t.checklist.map((c) => ({ id: c.id, item: c.text, done: c.done })) } : {}),
   };
@@ -536,6 +538,30 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
           const to = findUser(dir, v, args.to);
           const task = await updateTask(this.env, v, args.id, { assigneeId: to.id, note: args.note, thisOnly: args.this_only }, this.via);
           return { transferred: describeTask(task, dir, t0) };
+        }),
+    );
+
+    this.server.registerTool(
+      'follow_task',
+      {
+        title: 'Follow a task',
+        description:
+          'Follow a task (or stop), so you hear about its comments, when it is done or reopened, and when it is handed to someone, ' +
+          "in notifications and the app's inbox. Whoever has the task always hears about it. " +
+          "Pass `person` to add or remove someone else on the task's project; that shows in the task's history and tells them.",
+        inputSchema: {
+          id: z.string().describe('Task id from list_tasks.'),
+          follow: z.boolean().optional().describe('false to stop following. Default true.'),
+          person: z.string().optional().describe('Someone else: name, first name or email. Default: you.'),
+        },
+        annotations: { idempotentHint: true },
+      },
+      (args) =>
+        this.run(async (v, dir, t0) => {
+          await loadVisibleTask(this.env.DB, v, args.id);
+          const who = args.person ? findUser(dir, v, args.person).id : null;
+          const task = await setFollowing(this.env, v, args.id, args.follow ?? true, who, this.via);
+          return { [args.follow === false ? 'unfollowed' : 'following']: describeTask(task, dir, t0) };
         }),
     );
 

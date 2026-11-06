@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useState } from 'react';
 import { boot, closePop, openConnect, openHelp, openPop, openTask, setPage, sync } from './actions';
 import { updateBadge } from './push';
 import { checkForUpdate, updateSeen } from './updates';
+import { openInbox } from './inbox';
 import { appName } from '../shared/types';
 import { Drawer } from './components/Drawer';
 import { ConnectSheet } from './components/ConnectSheet';
@@ -85,6 +86,11 @@ export function App() {
         <button className="ai-btn" data-act="connect" title="MCP: connect Claude or another AI assistant" onClick={openConnect}>{I.bolt(14)}<span>MCP</span></button>
         <button className="icon-btn kb-btn" title="Keyboard shortcuts  (?)" aria-label="Keyboard shortcuts" onClick={openHelp}>{I.kbd()}</button>
         <SyncPill />
+        <button className={`icon-btn inbox-btn${s.pop?.type === 'inbox' ? ' on' : ''}`} data-act="inbox" aria-haspopup="dialog"
+          aria-label={s.inboxUnread ? `Inbox, ${s.inboxUnread} new` : 'Inbox'} title="Inbox  (G I)" onClick={(e) => openInbox(e.currentTarget)}>
+          {I.bell(17)}
+          {s.inboxUnread > 0 && <span className="inbox-n">{s.inboxUnread > 99 ? '99+' : s.inboxUnread}</span>}
+        </button>
         <button className="me" data-act="account" title={`${s.me.name} · ${admin ? 'Admin' : 'Member'}${s.update ? ' · Update available' : ''}`}
           onClick={(e) => openPop({ type: 'account' }, e.currentTarget)}>
           <Avatar user={s.me} size={30} />

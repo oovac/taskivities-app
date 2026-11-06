@@ -3,7 +3,7 @@ import { addDays, fmt } from '../../shared/dates';
 import { isLate, shownOn } from '../../shared/rules';
 import { describe } from '../../shared/repeat';
 import { CHECK_TEXT_MAX, COMMENT_MAX, PRIORITIES, type AttachmentInfo, type ChecklistItem, type Priority, type TaskEvent } from '../../shared/types';
-import { addChecklistItems, addComment, attachmentUrl, closeDrawer, pickAttachments, removeAttachment, uploadFiles, editChecklist, editNotes, removeChecklistItem, renameChecklistItem, toggleChecklistItem, loadEvents, openPop, patchTask, skipTask, toggleDone } from '../actions';
+import { setFollowing, addChecklistItems, addComment, attachmentUrl, closeDrawer, pickAttachments, removeAttachment, uploadFiles, editChecklist, editNotes, removeChecklistItem, renameChecklistItem, toggleChecklistItem, loadEvents, openPop, patchTask, skipTask, toggleDone } from '../actions';
 import { set, useStore, type State } from '../store';
 import { displayName, firstName, stamp } from '../util';
 import { openMove, LateBadge } from './rows';
@@ -97,6 +97,8 @@ export function Drawer() {
               <Dot color={p?.color ?? '#A0A0AB'} />{p?.name} <span className="c">{I.chev()}</span></button></dd>
             <dt>Created by</dt>
             <dd className="plain"><Avatar user={creator} /> {displayName(creator)}<span style={{ color: 'var(--faint)' }}>· {stamp(t.createdAt, s.today).split(' · ')[0]}</span></dd>
+            <dt>Followers</dt>
+            <dd className="fol"><Followers t={t} s={s} /></dd>
           </dl>
           {t.series?.active && t.status === 'open' && <div className="dr-hint">Changes to this copy carry over to future ones.</div>}
           {showNotes && (
@@ -154,6 +156,30 @@ export function Drawer() {
   );
 }
 
+/** Who follows the task (not counting whoever has it), and Follow / Unfollow for me. */
+function Followers({ t, s }: { t: NonNullable<State['tasks'][string]>; s: State }) {
+  const me = s.me!.id;
+  const ids = t.followers.filter((id) => id !== t.assigneeId && s.users[id] && s.users[id].status !== 'disabled')
+    .sort((a, b) => (a === me ? -1 : b === me ? 1 : 0));
+  const names = ids.map((id) => (id === me ? 'You' : firstName(s.users[id])));
+  const label = !names.length ? 'No one else' : names.length <= 3 ? andList(names).join('') : `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`;
+  const following = t.followers.includes(me);
+  return (
+    <>
+      <button className="field" data-act="followers" title="Who hears about this task  (F follows it)" aria-haspopup="dialog"
+        onClick={(e) => openPop({ type: 'followers', mode: 'task', id: t.id }, e.currentTarget)}>
+        {ids.length > 0 && <span className="av-stack">{ids.slice(0, 4).map((id) => <Avatar key={id} user={s.users[id]} size={20} />)}</span>}
+        {label} <span className="c">{I.chev()}</span>
+      </button>
+      {t.assigneeId !== me && (
+        <button className={`follow-btn${following ? ' on' : ''}`} data-act="follow" aria-pressed={following} onClick={() => void setFollowing(t.id, !following)}>
+          {following ? 'Following' : 'Follow'}
+        </button>
+      )}
+    </>
+  );
+}
+
 function EventText({ e, s }: { e: TaskEvent; s: State }) {
   const name = (id: string | null) => (id ? firstName(s.users[id]) : 'someone');
   const proj = (id: string | null) => (id && s.projects[id]?.name) || 'another project';
@@ -182,6 +208,8 @@ function EventText({ e, s }: { e: TaskEvent; s: State }) {
     case 'check_removed': return <>removed <b>{e.toValue}</b> from the checklist</>;
     case 'archived': return <>archived this task</>;
     case 'restored': return <>restored this task</>;
+    case 'follower_added': return <>added <b>{name(e.toValue)}</b> as a follower</>;
+    case 'follower_removed': return <>stopped <b>{name(e.toValue)}</b> following this</>;
     case 'attached': return <>attached <b>{e.toValue}</b></>;
     case 'detached': return <>removed the file <b>{e.toValue}</b></>;
     case 'skipped': return <>skipped <b>{e.fromValue ? fmt(e.fromValue) : '?'}</b> · next one <b>{e.toValue ? fmt(e.toValue) : '?'}</b></>;
