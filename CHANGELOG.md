@@ -9,6 +9,9 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+- **One switcher for people and projects:** the same list on Tasks and Projects, with people first on Tasks and projects first on Projects. It has a search box, jump buttons for big teams, and it scrolls instead of running off the screen, so the second section is always reachable.
+- **Open by default when looking at someone else's work:** in another person's week and in a project's week every past day with something in it starts open (empty days stay folded), and a project's "Not finished" list starts open and stays that way when you switch projects. Your own week still folds past days away to keep it clean.
+
 ## v0.3.0 (2026-11-05)
 
 - **Inbox:** a bell in the top bar lists what needs you: tasks given to you, comments on your tasks, and handovers, with a count of what's new. It works whether or not notifications are on, and on every device. It's read from the task history, so nothing extra is stored. **G I** opens it.

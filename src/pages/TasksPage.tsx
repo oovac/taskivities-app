@@ -106,7 +106,7 @@ export function WeekControls({ s, w }: { s: State; w: ReturnType<typeof weekInfo
 
 /**
  * One day of a week list. `pool`: the tasks in view (a person's, or a project's); `k`: whose (for remembering which
- * past days are expanded). `ctx`: 'to' for a person, 'proj' for a project (rows then say whose each task is).
+ * past days are opened or folded; past days start folded only in your own week). `ctx`: 'to' for a person, 'proj' for a project (rows then say whose each task is).
  */
 export function Day({ s, d, k: who, pool, carried, TD, previews, ctx = 'to', showProject = false }: {
   s: State; d: string; k: string; pool: Task[]; carried: Task[]; TD: boolean; previews: Preview[]; ctx?: 'to' | 'proj'; showProject?: boolean;
@@ -120,9 +120,12 @@ export function Day({ s, d, k: who, pool, carried, TD, previews, ctx = 'to', sho
     const done = sortRows(mine.filter((t) => t.status === 'done' && shownOn(t, s.today) === d));
     const ghosts = mine.filter((t) => isLate(t, s.today) && t.dueDate === d);
     const key = `${who}:${d}`;
-    const open = s.expanded[key] || s.weekOffset < 0;
+    // Your own week folds past days away, so it stays clean. Someone else's week, or a project's, is a report of
+    // their work: every day starts open, except days with nothing in them. Either way a day you open or fold stays that way.
+    const folds = (ctx === 'to' && who === s.me!.id && s.weekOffset >= 0) || (!done.length && !ghosts.length);
+    const open = folds ? !!s.expanded[key] : s.expanded[key] !== false;
     const parts = [done.length ? `${done.length} done` : '', ghosts.length ? `${ghosts.length} carried to today` : ''].filter(Boolean);
-    const toggle = () => set((st) => ({ expanded: { ...st.expanded, [key]: !st.expanded[key] } }));
+    const toggle = () => set((st) => ({ expanded: { ...st.expanded, [key]: !open } }));
     if (!open)
       return (
         <div className="day">

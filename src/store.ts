@@ -188,7 +188,7 @@ export const useStore = create<State>()(() => ({
   projEdit: null,
   projSel: 'all',
   projDay: '',
-  projOpen: false,
+  projOpen: true,
   archived: null,
   archOpen: false,
   archivedProjects: null,

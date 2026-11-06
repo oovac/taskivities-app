@@ -63,8 +63,7 @@ function Content({ p, s }: { p: Pop; s: State }) {
     case 'assign': return <AssignPop p={p} s={s} />;
     case 'prio': return <PrioPop p={p} s={s} />;
     case 'proj': return <ProjPop p={p} s={s} />;
-    case 'person': return <PersonPop s={s} />;
-    case 'projpick': return <ProjPickPop s={s} />;
+    case 'person': case 'projpick': return <SwitchPop p={p} s={s} />;
     case 'urole': return <RolePop p={p} s={s} />;
     case 'uproj': return <UserProjectsPop p={p} s={s} />;
     case 'udisable': return <DisablePop p={p} s={s} />;
@@ -232,98 +231,115 @@ function ProjPop({ p, s }: { p: Pop; s: State }) {
   );
 }
 
-/** Switch whose work (or which project) you're looking at. People first, then projects. */
-function PersonPop({ s }: { s: State }) {
-  const all = Object.values(s.tasks);
+/**
+ * The switcher: whose work or which project you're looking at. One list for both pages: on Tasks, people come first;
+ * on Projects, projects do. Search filters both, and the list scrolls, so it works for big teams too.
+ */
+function SwitchPop({ p, s }: { p: Pop; s: State }) {
+  const me = s.me!.id;
+  const onProjects = s.page === 'projects';
+  const tasks = Object.values(s.tasks);
   const ws = addDays(weekStart(s.today), s.weekOffset * 7);
   const we = addDays(ws, 6);
   const TD = s.view === 'today';
+  // Week and board: what's open that week. Today: what's open today (people) / done that day (projects page).
   const inView = (t: Task) => t.status === 'open' && (TD ? shownOn(t, s.today) === s.today : shownOn(t, s.today) >= ws && shownOn(t, s.today) <= we);
-  const list = switchablePeople(s).sort((a, b) => (a.id === s.me!.id ? -1 : b.id === s.me!.id ? 1 : displayName(a).localeCompare(displayName(b))));
-  return (
-    <>
+  const inP = (id: string) => (t: Task) => (id === 'all' ? !!s.projects[t.projectId] : t.projectId === id);
+  const projCount = (id: string) => (onProjects && TD
+    ? `${projectDayData(s, id, s.projDay).done.length} done`
+    : `${tasks.filter((t) => inP(id)(t) && inView(t)).length} open`);
+  const q = (p.q || '').trim().toLowerCase();
+  const match = (...xs: (string | undefined)[]) => !q || xs.some((x) => x?.toLowerCase().includes(q));
+  const people = switchablePeople(s)
+    .filter((u) => match(u.name, u.email, u.id === me ? 'me' : ''))
+    .sort((a, b) => (a.id === me ? -1 : b.id === me ? 1 : displayName(a).localeCompare(displayName(b))));
+  const projects = myProjects(s).filter((pr) => match(pr.name));
+  const showAll = match(isAdmin(s.me!) ? 'All projects' : 'All my projects');
+  const curPerson = !onProjects && s.page === 'tasks' ? s.viewUser || me : null;
+  const curProj = onProjects ? s.projSel : null;
+
+  const goPerson = (id: string) => { closePop(false); focusLater('[data-act="person"]'); viewPerson(id); };
+  const goProject = (id: string) => {
+    closePop(false);
+    focusLater('[data-act="proj-pick"]');
+    if (onProjects) set({ projSel: id });
+    else viewProject(id);
+  };
+
+  const peopleSec = people.length > 0 && (
+    <div key="people" data-sec="people">
       <div className="pop-h">People</div>
-      {list.map((u) => {
-        const open = all.filter((t) => t.assigneeId === u.id && inView(t)).length;
-        const late = all.filter((t) => t.assigneeId === u.id && isLate(t, s.today)).length;
+      {people.map((u) => {
+        const open = tasks.filter((t) => t.assigneeId === u.id && inView(t)).length;
+        const late = tasks.filter((t) => t.assigneeId === u.id && isLate(t, s.today)).length;
         return (
-          <button key={u.id} className={`opt ${s.page === 'tasks' && u.id === (s.viewUser || s.me!.id) ? 'cur' : ''}`} data-u={u.id}
-            onClick={() => { closePop(false); focusLater('[data-act="person"]'); viewPerson(u.id); }}>
-            <Avatar user={u} size={24} />{u.id === s.me!.id ? 'Me' : displayName(u)}
+          <button key={u.id} className={`opt ${u.id === curPerson ? 'cur' : ''}`} data-u={u.id} onClick={() => goPerson(u.id)}>
+            <Avatar user={u} size={22} /><span className="sw-name">{u.id === me ? 'Me' : displayName(u)}</span>
             <span className="r">{late > 0 && <><span style={{ color: 'var(--late)' }}>{late} late</span> · </>}{open} open</span>
           </button>
         );
       })}
-      <ProjectOpts s={s} inView={inView} />
-    </>
+    </div>
   );
-}
-
-/** The projects part of the switcher (shown under people on a person's view). */
-function ProjectOpts({ s, inView }: { s: State; inView: (t: Task) => boolean }) {
-  const all = Object.values(s.tasks);
-  const projects = myProjects(s);
-  if (!projects.length) return null;
-  return (
-    <>
-      <div className="pop-sep" />
+  const projectsSec = (showAll || projects.length > 0) && (
+    <div key="projects" data-sec="projects">
       <div className="pop-h">Projects</div>
+      {showAll && (
+        <button className={`opt ${curProj === 'all' ? 'cur' : ''}`} data-p="all" onClick={() => goProject('all')}>
+          <ProjBadge project="all" size={22} /><span className="sw-name">{isAdmin(s.me!) ? 'All projects' : 'All my projects'}</span><span className="r">{projCount('all')}</span>
+        </button>
+      )}
       {projects.map((pr) => (
-        <button key={pr.id} className="opt" data-p={pr.id} title={pr.description}
-          onClick={() => { closePop(false); focusLater('[data-act="proj-pick"]'); viewProject(pr.id); }}>
-          <Dot color={pr.color} />{pr.name}<span className="r">{all.filter((t) => t.projectId === pr.id && inView(t)).length} open</span>
+        <button key={pr.id} className={`opt ${pr.id === curProj ? 'cur' : ''}`} data-p={pr.id} title={pr.description} onClick={() => goProject(pr.id)}>
+          <span className="sw-dot"><Dot color={pr.color} /></span><span className="sw-name">{pr.name}</span><span className="r">{projCount(pr.id)}</span>
         </button>
       ))}
-    </>
+    </div>
   );
-}
-
-function ProjPickPop({ s }: { s: State }) {
-  const pick = (id: string) => { closePop(false); focusLater('[data-act="proj-pick"]'); set({ projSel: id, projOpen: false }); };
-  const TD = s.view === 'today';
-  const ws = addDays(weekStart(s.today), s.weekOffset * 7);
-  const we = addDays(ws, 6);
-  const tasks = Object.values(s.tasks);
-  const inP = (id: string) => (t: Task) => (id === 'all' ? !!s.projects[t.projectId] : t.projectId === id);
-  // Today: what got done that day. Week and board: what's open that week.
-  const count = (id: string) => TD
-    ? `${projectDayData(s, id, s.projDay).done.length} done`
-    : `${tasks.filter((t) => inP(id)(t) && t.status === 'open' && shownOn(t, s.today) >= ws && shownOn(t, s.today) <= we).length} open`;
-  const sel = s.projSel !== 'all' ? s.projects[s.projSel] : null;
-  const people = switchablePeople(s).sort((a, b) => (a.id === s.me!.id ? -1 : b.id === s.me!.id ? 1 : displayName(a).localeCompare(displayName(b))));
+  const sections = onProjects ? [projectsSec, peopleSec] : [peopleSec, projectsSec];
+  const first = () => document.querySelector<HTMLElement>('.pop .sw-list .opt:not(.cur)') || document.querySelector<HTMLElement>('.pop .sw-list .opt');
+  const sel = onProjects && s.projSel !== 'all' ? s.projects[s.projSel] : null;
   return (
-    <>
-      <div className="pop-h">Projects</div>
-      <button className={`opt ${s.projSel === 'all' ? 'cur' : ''}`} onClick={() => pick('all')}>
-        <ProjBadge project="all" size={22} />{isAdmin(s.me!) ? 'All projects' : 'All my projects'}<span className="r">{count('all')}</span>
-      </button>
-      <div className="pop-sep" />
-      {myProjects(s).map((pr) => (
-        <button key={pr.id} className={`opt ${pr.id === s.projSel ? 'cur' : ''}`} title={pr.description} onClick={() => pick(pr.id)}>
-          <Dot color={pr.color} />{pr.name}<span className="r">{count(pr.id)}</span>
-        </button>
-      ))}
-      {isAdmin(s.me!) && (
-        <>
-          <div className="pop-sep" />
+    // As tall as the space under the button allows, so the whole list is always reachable (it scrolls).
+    <div className="switch" style={{ maxHeight: Math.max(260, innerHeight - p.rect.b - 48) }}>
+      <div style={{ padding: '4px 4px 0' }}>
+        <input className="pin" id="pop-q" placeholder={onProjects ? 'Search projects and people' : 'Search people and projects'} value={p.q || ''} autoComplete="off"
+          onChange={(e) => updatePop({ q: e.target.value })}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); first()?.click(); } }} />
+      </div>
+      {/* Big teams: jump straight to a section instead of scrolling past the other one. */}
+      {!q && people.length + projects.length > 12 && (
+        <div className="sw-jump">
+          {(onProjects ? (['projects', 'people'] as const) : (['people', 'projects'] as const)).map((k) => (
+            <button key={k} className="no-arrow" data-act={`jump-${k}`}
+              onClick={() => {
+                const list = document.querySelector<HTMLElement>('.pop .sw-list');
+                const sec = list?.querySelector<HTMLElement>(`[data-sec="${k}"]`);
+                if (list && sec) list.scrollTo({ top: sec.offsetTop - 4, behavior: 'smooth' });
+              }}>
+              {k === 'people' ? 'People' : 'Projects'} <span>{k === 'people' ? people.length : projects.length}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="sw-list">
+        {sections.filter(Boolean).map((sec, i) => <div key={i}>{i > 0 && <div className="pop-sep" />}{sec}</div>)}
+        {!people.length && !projects.length && !showAll && <div className="pop-empty">No one and no project matches “{p.q}”.</div>}
+      </div>
+      {isAdmin(s.me!) && !q && (
+        <div className="sw-foot">
           {sel && (
             <button className="opt" data-act="proj-edit" onClick={() => { closePop(false); focusLater('[data-act="proj-pick"]'); openProjEdit(sel.id); }}>
               {I.edit(14)} Edit project…
             </button>
           )}
-          <button className="opt" data-act="proj-new" style={{ color: 'var(--accent)' }} onClick={() => { closePop(false); focusLater('[data-act="proj-pick"]'); openProjEdit(null); }}>
+          <button className="opt" data-act="proj-new" style={{ color: 'var(--accent)' }}
+            onClick={() => { closePop(false); focusLater(onProjects ? '[data-act="proj-pick"]' : '[data-act="person"]'); openProjEdit(null); }}>
             {I.plus(14)} New project…
           </button>
-        </>
+        </div>
       )}
-      <div className="pop-sep" />
-      <div className="pop-h">People</div>
-      {people.map((u) => (
-        <button key={u.id} className="opt" data-u={u.id} onClick={() => { closePop(false); focusLater('[data-act="person"]'); viewPerson(u.id); }}>
-          <Avatar user={u} size={22} />{u.id === s.me!.id ? 'Me' : displayName(u)}
-        </button>
-      ))}
-    </>
+    </div>
   );
 }
 

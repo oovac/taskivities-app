@@ -385,7 +385,7 @@ export function viewPerson(userId: string) {
 /** A project's view (or 'all'), keeping the same Today / Week / Board choice. */
 export function viewProject(projectId: string) {
   const s = S();
-  set({ projSel: projectId, projOpen: false, page: 'projects', drawer: null, pop: null, projDay: s.projDay || s.today });
+  set({ projSel: projectId, page: 'projects', drawer: null, pop: null, projDay: s.projDay || s.today });
   history.replaceState(null, '', '/projects');
 }
 export function setView(view: State['view']) {

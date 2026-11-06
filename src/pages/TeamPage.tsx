@@ -277,7 +277,7 @@ export function ProjectEditor({ pe, s }: { pe: ProjEdit; s: State }) {
     const fresh = !pe.id;
     set((st) => ({
       projEdit: null,
-      ...(fresh && st.page === 'projects' ? { projSel: r.id, projOpen: false } : {}),
+      ...(fresh && st.page === 'projects' ? { projSel: r.id } : {}),
       ...(fresh && pe.forDraft ? { draft: { ...st.draft, projectId: r.id } } : {}),
     }));
     focusLater(pe.returnSel);

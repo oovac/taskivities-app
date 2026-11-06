@@ -56,7 +56,8 @@ function popKeys(e: KeyboardEvent) {
   const a = document.activeElement as HTMLElement | null;
   if (k === 'Escape') { e.preventDefault(); closePop(true); return; }
   if (k === 'Tab') { trapTab(e, pop); return; }
-  const f = [...pop.querySelectorAll<HTMLElement>('input, button:not(:disabled)')];
+  // .no-arrow: shortcuts (like the switcher's section jumps) that arrows skip; Tab still reaches them.
+  const f = [...pop.querySelectorAll<HTMLElement>('input, button:not(:disabled):not(.no-arrow)')];
   const i = a ? f.indexOf(a) : -1;
   if (a?.closest('.cal-g')) {
     const g = [...pop.querySelectorAll<HTMLButtonElement>('.cal-g button')];
