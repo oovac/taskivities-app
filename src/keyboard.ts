@@ -134,7 +134,8 @@ export function onKeyDown(e: KeyboardEvent) {
     e.preventDefault();
     if (s.drawer) closeDrawer(false);
     if (s.page !== 'tasks' && !(s.page === 'projects' && s.view !== 'today')) {
-      if (s.page === 'projects' && s.projSel !== 'all') set((st) => ({ draft: { ...st.draft, projectId: s.projSel } }));
+      const one = s.projSel === 'multi' ? (s.multi.projects.length === 1 ? s.multi.projects[0] : null) : s.projSel !== 'all' ? s.projSel : null;
+      if (s.page === 'projects' && one) set((st) => ({ draft: { ...st.draft, projectId: one } }));
       setPage('tasks');
       setTimeout(() => document.getElementById('qa-input')?.focus(), 0);
     } else document.getElementById('qa-input')?.focus();

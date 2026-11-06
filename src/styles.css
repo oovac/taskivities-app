@@ -878,6 +878,23 @@ a.att-n:hover{color:var(--accent);text-decoration:underline}
 .pop:has(.switch){width:300px;max-width:calc(100vw - 24px)}
 .switch{display:flex;flex-direction:column}
 .switch .pin{margin-bottom:4px}
+/* Switcher: "Several" picks people and projects together (checkboxes) */
+.sw-top{display:flex;gap:6px;align-items:center;padding:4px 4px 0}
+.sw-top .pin{flex:1;min-width:0}
+.sw-several{flex:none;display:inline-flex;align-items:center;gap:6px;height:32px;margin-bottom:4px;padding:0 10px;border-radius:8px;border:1px solid var(--line);font-size:12.5px;font-weight:600;color:var(--muted)}
+.sw-several:hover{color:var(--text)}
+.sw-several.on{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent-ink)}
+.sw-chk{flex:none;width:16px;height:16px;border-radius:5px;border:1.5px solid var(--line-strong);display:inline-grid;place-items:center;background:var(--panel)}
+.sw-chk.on,.sw-several.on .sw-chk{background:var(--accent);border-color:var(--accent);color:#fff}
+.sw-chk svg{width:11px;height:11px}
+.sw-hint{padding:2px 10px 6px;font-size:11.5px;color:var(--faint)}
+.sw-picked{display:flex;align-items:center;gap:6px;padding:8px 10px}
+.sw-picked span{margin-right:auto;font-size:12.5px;color:var(--muted)}
+/* A view of several people / projects: their avatars and colours, overlapping */
+.mbadge{display:inline-flex;align-items:center;min-width:40px;height:40px;flex:none;padding-left:2px}
+.mbadge .mb-i{display:inline-flex;margin-left:-9px;border-radius:50%;box-shadow:0 0 0 2px var(--bg)}
+.mbadge .mb-i:first-child{margin-left:0}
+.mbadge .mb-p{display:block;width:24px;height:24px;border-radius:7px}
 .sw-list{overflow-y:auto;overscroll-behavior:contain;min-height:0;flex:1}
 .sw-list .pop-h{position:sticky;top:0;z-index:1;background:var(--panel)}
 .sw-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

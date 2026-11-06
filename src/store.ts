@@ -11,6 +11,14 @@ import { type ThemePref, themePref } from './theme';
 /** 'team' is the People & projects page (admins; at /manage, and the old /team). */
 export type Page = 'tasks' | 'projects' | 'team' | 'settings';
 export type ManageTab = 'people' | 'projects';
+export interface MultiSel { people: string[]; projects: string[] }
+const savedMulti = (): MultiSel => {
+  try {
+    const m = JSON.parse(localStorage.getItem('tv:multi') || 'null') as MultiSel | null;
+    if (m && Array.isArray(m.people) && Array.isArray(m.projects)) return { people: m.people.map(String), projects: m.projects.map(String) };
+  } catch { /* ignore */ }
+  return { people: [], projects: [] };
+};
 export const BOARD_WEEKS_MAX = 52;
 export type View = 'today' | 'list' | 'board';
 export type PopType = 'move' | 'assign' | 'prio' | 'proj' | 'person' | 'projpick' | 'urole' | 'uproj' | 'udisable' | 'uenable' | 'notify' | 'update' | 'inbox' | 'followers' | 'account' | 'repeat' | 'taskmenu' | 'pages' | 'effort';
@@ -119,7 +127,11 @@ export interface State {
   draft: Draft;
   invite: InviteDraft | null;
   projEdit: ProjEdit | null;
-  projSel: string; // project id or 'all'
+  projSel: string; // project id, 'all', or 'multi' (see `multi`)
+  /** Several people and/or projects at once (projSel 'multi'): tasks of these people in these projects (an empty list: any). */
+  multi: MultiSel;
+  /** The switcher picks several at once (checkboxes) instead of one. Remembered on this device. */
+  multiPick: boolean;
   projDay: string;
   projOpen: boolean;
   /** A project's view: archived tasks of the selected project (null = not loaded), and whether the section is open. */
@@ -200,6 +212,8 @@ export const useStore = create<State>()(() => ({
   invite: null,
   projEdit: null,
   projSel: localStorage.getItem('tv:proj') || 'all', // a project that's gone falls back to 'all' (ProjectsPage)
+  multi: savedMulti(),
+  multiPick: localStorage.getItem('tv:multiPick') === '1',
   projDay: '',
   projOpen: true,
   archived: null,

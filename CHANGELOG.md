@@ -9,6 +9,10 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+- **Copy what got done:** a copy button next to the week controls copies every task done in the days shown as one Markdown list, with the total effort where projects track it. It works for your week, anyone's, a project's, and several people or projects together.
+
+- **See several people or projects together:** turn on **Several** in the switcher and tick people and projects. Several people show all their tasks together; several projects show those projects together; people and projects together show those people's tasks in those projects. Today, Week and Board all work with it, each tick changes the view at once, and it's remembered after a reload. Ticking just one person or one project goes back to their usual view.
+
 ## v0.4.0 (2026-11-06)
 
 - **Effort:** a project can now track effort on its tasks, as **time spent** (like 1h 30m), **T-shirt sizes** (XS–XL) or **story points** (1–21), chosen in the project's editor. It can be required before a task is marked done: ticking it asks for the effort first. Set it in the task panel; it shows as a small badge on the task. A project's day report, Copy summary and week show totals ("1 done · 1h 30m", "13 pts planned"). Assistants can read and set it too (`effort` on `create_task`, `update_task` and `complete_task`).

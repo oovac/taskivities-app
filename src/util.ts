@@ -42,7 +42,7 @@ export const weekInfo = (s: State) => {
   const range = weeks > 1 ? `${weeks} weeks · ${span}` : span;
   const o = s.weekOffset;
   const label = o === 0 ? 'This week' : o === 1 ? 'Next week' : o === -1 ? 'Last week' : o > 0 ? `In ${o} weeks` : `${-o} weeks ago`;
-  return { ws, we, days, weeks, range, label };
+  return { ws, we, days, weeks, range, span, label };
 };
 export const inRange = (d: string, from: string, to: string) => d >= from && d <= to;
 

@@ -9,7 +9,7 @@ import { PRIORITIES } from '../shared/types';
 import { api, ApiError } from './api';
 import { applyBrand } from './brand';
 import { activeSelector, focusLater, selFor } from './focus';
-import { BOARD_WEEKS_MAX, type ManageTab, type Page, type Pop, type PopType, type State, S, emptyDraft, set } from './store';
+import { BOARD_WEEKS_MAX, type ManageTab, type MultiSel, type Page, type Pop, type PopType, type State, S, emptyDraft, set } from './store';
 import { syncPush } from './push';
 import { checkForUpdate } from './updates';
 import { loadInbox } from './inbox';
@@ -57,7 +57,7 @@ function applyDirectory(b: Bootstrap): Partial<State> {
   return {
     me: b.me, users, projects, today: b.today, tz: b.tz, dirVersion: b.directoryVersion, settings: b.settings, gmail: b.gmail, attachmentsOn: b.attachments, viewUser, page,
     pushKey: b.push?.publicKey ?? null, notify: b.notify, updateRepo: b.updates?.repo ?? null, inboxUnread: b.inboxUnread ?? 0,
-    projSel: s.projSel === 'all' || projects[s.projSel] ? s.projSel : 'all',
+    projSel: s.projSel === 'all' || s.projSel === 'multi' || projects[s.projSel] ? s.projSel : 'all',
     projDay: s.projDay || b.today,
   };
 }
@@ -412,6 +412,38 @@ export function viewProject(projectId: string) {
   set({ projSel: projectId, page: 'projects', drawer: null, pop: null, projDay: s.projDay || s.today });
   localStorage.setItem('tv:proj', projectId);
   history.replaceState(null, '', '/projects');
+}
+/**
+ * Shows several people and/or projects at once (the switcher's "Select several"). One person or one project alone is
+ * their usual view; nothing picked is All projects. Keeps any open menu open, so you can keep picking.
+ */
+export function viewMulti(sel: MultiSel) {
+  const s = S();
+  const m: MultiSel = { people: [...new Set(sel.people)], projects: [...new Set(sel.projects)] };
+  const common = { drawer: null, projDay: s.projDay || s.today };
+  if (m.people.length === 1 && !m.projects.length) {
+    set({ ...common, viewUser: m.people[0], page: 'tasks', draft: { ...s.draft, assigneeId: null } });
+    history.replaceState(null, '', '/');
+    return;
+  }
+  const projSel = !m.people.length && m.projects.length <= 1 ? (m.projects[0] ?? 'all') : 'multi';
+  set({ ...common, projSel, page: 'projects', ...(projSel === 'multi' ? { multi: m } : {}) });
+  localStorage.setItem('tv:proj', projSel);
+  if (projSel === 'multi') localStorage.setItem('tv:multi', JSON.stringify(m));
+  history.replaceState(null, '', '/projects');
+}
+export function setMultiPick(on: boolean) {
+  set({ multiPick: on });
+  localStorage.setItem('tv:multiPick', on ? '1' : '0');
+}
+/** What the switcher's "Select several" starts from: whoever or whatever is on screen now. */
+export function currentSel(s: State): MultiSel {
+  if (s.page === 'tasks') return { people: [s.viewUser || s.me!.id], projects: [] };
+  if (s.page === 'projects') {
+    if (s.projSel === 'multi') return s.multi;
+    if (s.projSel !== 'all' && s.projects[s.projSel]) return { people: [], projects: [s.projSel] };
+  }
+  return { people: [], projects: [] };
 }
 /** How many weeks the Board shows (1 to BOARD_WEEKS_MAX). */
 export function setBoardWeeks(n: number) {

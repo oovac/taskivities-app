@@ -4,6 +4,7 @@ import { isLate, shownOn } from '../../shared/rules';
 import type { Task } from '../../shared/types';
 import { ensureRange, moveTasks, openPop, setBoardWeeks, setView, viewPerson } from '../actions';
 import { QuickAdd } from '../components/QuickAdd';
+import { copyDone } from '../copyDone';
 import { PreviewCard, PreviewRow, TaskCard, TaskRow, drag, openMove } from '../components/rows';
 import { Avatar, I } from '../components/ui';
 import { BOARD_WEEKS_MAX, set, useStore, type State } from '../store';
@@ -54,6 +55,10 @@ export function TasksPage() {
         <div className="weeknav">
           <ViewSeg s={s} />
           {TD ? <div className="wk"><b>Today</b><span>{fmt(s.today)}</span></div> : <WeekControls s={s} w={w} />}
+          <CopyDone onClick={() => void copyDone(s, {
+            title: displayName(person), span: TD ? fmt(s.today) : w.span, tasks: mine,
+            from: TD ? s.today : w.ws, to: TD ? s.today : w.we, who: false, project: true,
+          })} />
         </div>
       </div>
       <QuickAdd />
@@ -86,6 +91,11 @@ export function ViewSeg({ s }: { s: State }) {
     </div>
   );
 }
+
+/** Copies what got done in the days shown, as Markdown grouped by day (src/copyDone.ts). */
+export const CopyDone = ({ onClick }: { onClick: () => void }) => (
+  <button className="icon-btn" data-act="copy-done" title="Copy what got done, as Markdown" aria-label="Copy what got done, as Markdown" onClick={onClick}>{I.copy(16)}</button>
+);
 
 /** ← This week → (the label takes you back to this week when you're elsewhere). */
 export function WeekControls({ s, w }: { s: State; w: ReturnType<typeof weekInfo> }) {

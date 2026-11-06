@@ -1,18 +1,53 @@
 import { useEffect } from 'react';
 import { DOW, addDays, fmt, parseDate } from '../../shared/dates';
 import { isAdmin, isLate } from '../../shared/rules';
-import { PRIORITIES, type Project, type Task } from '../../shared/types';
-import { effortFor, effortLabel, effortTotal } from '../../shared/effort';
+import { PRIORITIES, type Task } from '../../shared/types';
+import { type EffortType, effortFor, effortLabel, effortTotal } from '../../shared/effort';
 import { ensureRange, loadArchived, openPop, restoreTask, toast } from '../actions';
 import { QuickAdd } from '../components/QuickAdd';
 import { TaskRow } from '../components/rows';
-import { I, ProjBadge } from '../components/ui';
+import { Avatar, I, ProjBadge } from '../components/ui';
 import { set, useStore, type State } from '../store';
-import { displayName, shownOn, byPrioThenOldest, inRange, previewsWhere, weekInfo } from '../util';
-import { Day, ViewSeg, WeekBoard, WeekControls } from './TasksPage';
+import { displayName, firstName, shownOn, byPrioThenOldest, inRange, previewsWhere, weekInfo } from '../util';
+import { CopyDone, Day, ViewSeg, WeekBoard, WeekControls } from './TasksPage';
+import { copyDone } from '../copyDone';
 
-export function projectDayData(s: State, pid: string, day: string) {
-  const inP = (t: Task) => (pid === 'all' ? !!s.projects[t.projectId] : t.projectId === pid);
+/** Names as a short list: "Priya", "Priya and Arjun", "Priya, Arjun and Tom", "Priya, Arjun and 3 more". */
+const listNames = (xs: string[]) =>
+  xs.length <= 1 ? xs.join('') : xs.length <= 3 ? `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}` : `${xs.slice(0, 2).join(', ')} and ${xs.length - 2} more`;
+
+/**
+ * What a project view shows: one project, all of yours, or (the switcher's "Select several") the tasks of some people
+ * in some projects. `project` is set when it's a single project (its settings apply: effort, the quick-add's project).
+ */
+export function projectView(s: State) {
+  const all = isAdmin(s.me!) ? 'All projects' : 'All my projects';
+  const seen = (t: Task) => !!s.projects[t.projectId];
+  if (s.projSel === 'multi') {
+    const projects = s.multi.projects.filter((id) => s.projects[id]);
+    const people = s.multi.people.filter((id) => s.users[id]);
+    const project = projects.length === 1 ? s.projects[projects[0]] : null;
+    const who = listNames(people.map((id) => (id === s.me!.id ? 'Me' : firstName(s.users[id]))));
+    const what = listNames(projects.map((id) => s.projects[id].name));
+    // Effort totals when every project in view measures it the same way.
+    const types = new Set((projects.length ? projects : Object.keys(s.projects)).map((id) => s.projects[id]?.effort ?? null));
+    return {
+      key: 'multi', multi: true as const, people, projects, project, showProject: !project,
+      name: (who && what ? `${who} in ${what}` : who || what) || all,
+      effort: types.size === 1 ? [...types][0] : null,
+      inP: (t: Task) => seen(t) && (!projects.length || projects.includes(t.projectId)) && (!people.length || people.includes(t.assigneeId)),
+    };
+  }
+  const pid = s.projSel !== 'all' && s.projects[s.projSel] ? s.projSel : 'all';
+  const project = pid === 'all' ? null : s.projects[pid];
+  return {
+    key: pid, multi: false as const, people: [] as string[], projects: project ? [pid] : [], project, showProject: !project,
+    name: project ? project.name : all, effort: project?.effort ?? null,
+    inP: (t: Task) => (project ? t.projectId === pid : seen(t)),
+  };
+}
+
+export function projectDayData(s: State, inP: (t: Task) => boolean, day: string) {
   const all = Object.values(s.tasks);
   // Finished that day, by priority, then due date, then finish time.
   const done = all
@@ -26,21 +61,22 @@ export function projectDayData(s: State, pid: string, day: string) {
 
 export function ProjectsPage() {
   const s = useStore();
-  const pid = s.projSel !== 'all' && s.projects[s.projSel] ? s.projSel : 'all';
+  const pv = projectView(s);
+  const pid = pv.key;
   const day = s.projDay || s.today;
-  const all = pid === 'all';
-  const project = all ? null : s.projects[pid];
+  const all = pv.showProject; // rows say which project each task is in
+  const project = pv.project;
   const mode = s.view; // Today (this page's day report) · Week · Board, shared with people's views
   const w = weekInfo(s);
   useEffect(() => { if (mode === 'today') void ensureRange(day, day); else void ensureRange(w.ws, w.we); }, [mode, day, w.ws, w.we]);
   // New tasks from here go in this project (you can still pick another).
-  useEffect(() => { if (pid !== 'all') set((st) => ({ draft: { ...st.draft, projectId: pid } })); }, [pid]);
+  useEffect(() => { if (project) set((st) => ({ draft: { ...st.draft, projectId: project.id } })); }, [project?.id]);
 
-  const { done, open } = projectDayData(s, pid, day);
-  const name = all ? (isAdmin(s.me!) ? 'All projects' : 'All my projects') : project!.name;
-  const inP = (t: Task) => (all ? !!s.projects[t.projectId] : t.projectId === pid);
-  // Effort (a single project that tracks it): the day's total, and each task's in the copied summary.
-  const et = project?.effort ?? null;
+  const inP = pv.inP;
+  const { done, open } = projectDayData(s, inP, day);
+  const name = pv.name;
+  // Effort (projects that all measure it the same way): the day's total, and each task's in the copied summary.
+  const et = pv.effort;
   const doneEffort = et ? effortTotal(et, done.map((t) => t.effort)) : '';
   const effortOf = (t: Task) => { const v = et ? effortFor(t.effort, et) : null; return et && v ? ` · ${effortLabel(et, v)}` : ''; };
   const goDay = (n: number) => set({ projDay: n === 0 ? s.today : addDays(day, n) > s.today ? s.today : addDays(day, n) });
@@ -62,15 +98,18 @@ export function ProjectsPage() {
     <>
       <div className="phead">
         <button className="who" data-act="proj-pick" title={`${project?.description ? `${project.description}\n\n` : ''}Switch to another project or person  (P)`} onClick={(e) => openPop({ type: 'projpick' }, e.currentTarget)}>
-          <ProjBadge project={project ?? 'all'} />
+          {pv.multi ? <MultiBadge s={s} people={pv.people} projects={pv.projects} /> : <ProjBadge project={project ?? 'all'} />}
           <span>
             <span className="h1">{name} {I.chev()}</span>
-            <span className="sub">{mode === 'today' ? <>{done.length} done{doneEffort && ` · ${doneEffort}`}{open.length > 0 && ` · ${open.length} not finished`}</> : <WeekSub s={s} w={w} inP={inP} project={project} />}</span>
+            <span className="sub">{mode === 'today' ? <>{done.length} done{doneEffort && ` · ${doneEffort}`}{open.length > 0 && ` · ${open.length} not finished`}</> : <WeekSub s={s} w={w} inP={inP} et={et} />}</span>
           </span>
         </button>
         <div className="weeknav">
           <ViewSeg s={s} />
-          {mode !== 'today' ? <WeekControls s={s} w={w} /> : <>
+          {mode !== 'today' ? <>
+            <WeekControls s={s} w={w} />
+            <CopyDone onClick={() => void copyDone(s, { title: name, span: w.span, tasks: Object.values(s.tasks).filter(inP), from: w.ws, to: w.we, who: true, project: all })} />
+          </> : <>
           <button className="icon-btn" data-act="pday" data-dir="-1" title="Previous day  [" aria-label="Previous day" onClick={() => goDay(-1)}>{I.left()}</button>
           <div className="wk">
             <b>{day === s.today ? 'Today' : day === addDays(s.today, -1) ? 'Yesterday' : DOW[parseDate(day).getDay()]}</b>
@@ -105,19 +144,18 @@ export function ProjectsPage() {
         </section>
       )}
       </>}
-      <ArchivedSection s={s} pid={pid} all={all} />
+      {!pv.multi && <ArchivedSection s={s} pid={pid} all={all} />}
     </>
   );
 }
 
 /** "12 open this week · 3 carried over" for a project's week and board. */
-function WeekSub({ s, w, inP, project }: { s: State; w: ReturnType<typeof weekInfo>; inP: (t: Task) => boolean; project: Project | null }) {
+function WeekSub({ s, w, inP, et }: { s: State; w: ReturnType<typeof weekInfo>; inP: (t: Task) => boolean; et: EffortType | null }) {
   const tasks = Object.values(s.tasks).filter(inP);
   const openTasks = tasks.filter((t) => t.status === 'open' && inRange(shownOn(t, s.today), w.ws, w.we));
   const late = tasks.filter((t) => isLate(t, s.today)).length;
   const span = w.weeks > 1 ? 'shown' : s.weekOffset === 0 ? 'this week' : 'that week';
   // Effort: what got done in these days, and for estimates (sizes, points) what's still planned.
-  const et = project?.effort ?? null;
   const doneE = et ? effortTotal(et, tasks.filter((t) => t.status === 'done' && t.doneOn && inRange(t.doneOn, w.ws, w.we)).map((t) => t.effort)) : '';
   const openE = et && et !== 'time' ? effortTotal(et, openTasks.map((t) => t.effort)) : '';
   return (
@@ -177,5 +215,17 @@ function ArchivedSection({ s, pid, all }: { s: State; pid: string; all: boolean 
         </div>
       )}
     </section>
+  );
+}
+
+/** Several people and/or projects: their avatars and colours, overlapping, in the space of one badge. */
+function MultiBadge({ s, people, projects }: { s: State; people: string[]; projects: string[] }) {
+  const shown = [...people.map((id) => ({ k: id, u: s.users[id] })), ...projects.map((id) => ({ k: id, p: s.projects[id] }))].slice(0, 3);
+  return (
+    <span className="mbadge" aria-hidden="true">
+      {shown.map((x) => (
+        <span key={x.k} className="mb-i">{'u' in x && x.u ? <Avatar user={x.u} size={24} /> : 'p' in x && x.p ? <span className="mb-p" style={{ background: x.p.color }} /> : null}</span>
+      ))}
+    </span>
   );
 }

@@ -5,7 +5,7 @@ import { isAdmin, onProject } from '../../shared/rules';
 import { PRIORITIES, type NotifyPrefs, type Priority, type Task } from '../../shared/types';
 import {
   assignable, closePop, defaultDraftDate, moveTasks, openConnect, openPop, viewProject, disableUser, enableUser, setPage, setPriority, setProject, setRepeat, signOut, switchablePeople, transfer,
-  updateUser, viewPerson, editNotes, editChecklist, pickAttachments, archiveTask, setFollowing, setEffort,
+  updateUser, viewPerson, editNotes, editChecklist, pickAttachments, archiveTask, setFollowing, setEffort, currentSel, setMultiPick, viewMulti,
 } from '../actions';
 import { focusLater } from '../focus';
 import { EFFORT_TYPES, effortFor, effortFromInput, fmtTime } from '../../shared/effort';
@@ -309,7 +309,7 @@ function SwitchPop({ p, s }: { p: Pop; s: State }) {
   const inView = (t: Task) => t.status === 'open' && (TD ? shownOn(t, s.today) === s.today : shownOn(t, s.today) >= ws && shownOn(t, s.today) <= we);
   const inP = (id: string) => (t: Task) => (id === 'all' ? !!s.projects[t.projectId] : t.projectId === id);
   const projCount = (id: string) => (onProjects && TD
-    ? `${projectDayData(s, id, s.projDay).done.length} done`
+    ? `${projectDayData(s, inP(id), s.projDay).done.length} done`
     : `${tasks.filter((t) => inP(id)(t) && inView(t)).length} open`);
   const q = (p.q || '').trim().toLowerCase();
   const match = (...xs: (string | undefined)[]) => !q || xs.some((x) => x?.toLowerCase().includes(q));
@@ -320,6 +320,14 @@ function SwitchPop({ p, s }: { p: Pop; s: State }) {
   const showAll = match(isAdmin(s.me!) ? 'All projects' : 'All my projects');
   const curPerson = !onProjects && s.page === 'tasks' ? s.viewUser || me : null;
   const curProj = onProjects ? s.projSel : null;
+  // "Select several": rows are checkboxes, and each tick changes the view at once (the menu stays open).
+  const several = s.multiPick;
+  const picked = currentSel(s);
+  const nPicked = picked.people.length + picked.projects.length;
+  const flip = (xs: string[], id: string) => (xs.includes(id) ? xs.filter((x) => x !== id) : [...xs, id]);
+  const pickPerson = (id: string) => viewMulti({ ...picked, people: flip(picked.people, id) });
+  const pickProject = (id: string) => viewMulti({ ...picked, projects: id === 'all' ? [] : flip(picked.projects, id) });
+  const Chk = ({ on }: { on: boolean }) => <span className={`sw-chk ${on ? 'on' : ''}`} aria-hidden="true">{on && I.check(11)}</span>;
 
   const goPerson = (id: string) => { closePop(false); focusLater('[data-act="person"]'); viewPerson(id); };
   const goProject = (id: string) => {
@@ -336,8 +344,10 @@ function SwitchPop({ p, s }: { p: Pop; s: State }) {
         const open = tasks.filter((t) => t.assigneeId === u.id && inView(t)).length;
         const late = tasks.filter((t) => t.assigneeId === u.id && isLate(t, s.today)).length;
         return (
-          <button key={u.id} className={`opt ${u.id === curPerson ? 'cur' : ''}`} data-u={u.id} onClick={() => goPerson(u.id)}>
-            <Avatar user={u} size={22} /><span className="sw-name">{u.id === me ? 'Me' : displayName(u)}</span>
+          <button key={u.id} className={`opt ${!several && u.id === curPerson ? 'cur' : ''}`} data-u={u.id}
+            {...(several ? { role: 'menuitemcheckbox', 'aria-checked': picked.people.includes(u.id) } : {})}
+            onClick={() => (several ? pickPerson(u.id) : goPerson(u.id))}>
+            {several && <Chk on={picked.people.includes(u.id)} />}<Avatar user={u} size={22} /><span className="sw-name">{u.id === me ? 'Me' : displayName(u)}</span>
             <span className="r">{late > 0 && <><span style={{ color: 'var(--late)' }}>{late} late</span> · </>}{open} open</span>
           </button>
         );
@@ -348,32 +358,52 @@ function SwitchPop({ p, s }: { p: Pop; s: State }) {
     <div key="projects" data-sec="projects">
       <div className="pop-h">Projects</div>
       {showAll && (
-        <button className={`opt ${curProj === 'all' ? 'cur' : ''}`} data-p="all" onClick={() => goProject('all')}>
-          <ProjBadge project="all" size={22} /><span className="sw-name">{isAdmin(s.me!) ? 'All projects' : 'All my projects'}</span><span className="r">{projCount('all')}</span>
+        <button className={`opt ${!several && curProj === 'all' ? 'cur' : ''}`} data-p="all"
+          {...(several ? { role: 'menuitemcheckbox', 'aria-checked': !picked.projects.length } : {})}
+          title={several ? 'Any project: tasks of the people picked, wherever they are' : undefined}
+          onClick={() => (several ? pickProject('all') : goProject('all'))}>
+          {several && <Chk on={!picked.projects.length} />}<ProjBadge project="all" size={22} /><span className="sw-name">{isAdmin(s.me!) ? 'All projects' : 'All my projects'}</span><span className="r">{projCount('all')}</span>
         </button>
       )}
       {projects.map((pr) => (
-        <button key={pr.id} className={`opt ${pr.id === curProj ? 'cur' : ''}`} data-p={pr.id} title={pr.description} onClick={() => goProject(pr.id)}>
-          <span className="sw-dot"><Dot color={pr.color} /></span><span className="sw-name">{pr.name}</span><span className="r">{projCount(pr.id)}</span>
+        <button key={pr.id} className={`opt ${!several && pr.id === curProj ? 'cur' : ''}`} data-p={pr.id} title={pr.description}
+          {...(several ? { role: 'menuitemcheckbox', 'aria-checked': picked.projects.includes(pr.id) } : {})}
+          onClick={() => (several ? pickProject(pr.id) : goProject(pr.id))}>
+          {several && <Chk on={picked.projects.includes(pr.id)} />}<span className="sw-dot"><Dot color={pr.color} /></span><span className="sw-name">{pr.name}</span><span className="r">{projCount(pr.id)}</span>
         </button>
       ))}
     </div>
   );
-  const sections = onProjects ? [projectsSec, peopleSec] : [peopleSec, projectsSec];
+  // Order by the button that opened it (not the page), so picking several doesn't reshuffle the list under you.
+  const projFirst = p.type === 'projpick';
+  const sections = projFirst ? [projectsSec, peopleSec] : [peopleSec, projectsSec];
   const first = () => document.querySelector<HTMLElement>('.pop .sw-list .opt:not(.cur)') || document.querySelector<HTMLElement>('.pop .sw-list .opt');
   const sel = onProjects && s.projSel !== 'all' ? s.projects[s.projSel] : null;
   return (
     // As tall as the space under the button allows, so the whole list is always reachable (it scrolls).
     <div className="switch" style={{ maxHeight: Math.max(200, viewH() - p.rect.b - 48) }}>
-      <div style={{ padding: '4px 4px 0' }}>
-        <input className="pin" id="pop-q" placeholder={onProjects ? 'Search projects and people' : 'Search people and projects'} value={p.q || ''} autoComplete="off"
+      <div className="sw-top">
+        <input className="pin" id="pop-q" placeholder="Search" aria-label={projFirst ? 'Search projects and people' : 'Search people and projects'} value={p.q || ''} autoComplete="off"
           onChange={(e) => updatePop({ q: e.target.value })}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); first()?.click(); } }} />
+        <button className={`sw-several ${several ? 'on' : ''}`} data-act="multi-pick" aria-pressed={several}
+          title={several ? 'Back to picking one' : 'Pick several people and projects to see their tasks together'}
+          onClick={() => setMultiPick(!several)}>
+          <span className="sw-chk" aria-hidden="true">{several && I.check(11)}</span>Several
+        </button>
       </div>
+      {several && (
+        <div className="sw-hint">
+          {picked.people.length && picked.projects.length ? 'Tasks of the people picked, in the projects picked.'
+            : picked.people.length > 1 ? 'Everyone picked, together. Add projects to narrow it.'
+            : picked.projects.length > 1 ? 'The projects picked, together. Add people to narrow it.'
+            : 'Tick people and projects to see their tasks together.'}
+        </div>
+      )}
       {/* Big teams: jump straight to a section instead of scrolling past the other one. */}
       {!q && people.length + projects.length > 12 && (
         <div className="sw-jump">
-          {(onProjects ? (['projects', 'people'] as const) : (['people', 'projects'] as const)).map((k) => (
+          {(projFirst ? (['projects', 'people'] as const) : (['people', 'projects'] as const)).map((k) => (
             <button key={k} className="no-arrow" data-act={`jump-${k}`}
               onClick={() => {
                 const list = document.querySelector<HTMLElement>('.pop .sw-list');
@@ -389,7 +419,14 @@ function SwitchPop({ p, s }: { p: Pop; s: State }) {
         {sections.filter(Boolean).map((sec, i) => <div key={i}>{i > 0 && <div className="pop-sep" />}{sec}</div>)}
         {!people.length && !projects.length && !showAll && <div className="pop-empty">No one and no project matches “{p.q}”.</div>}
       </div>
-      {isAdmin(s.me!) && !q && (
+      {several && (
+        <div className="sw-foot sw-picked">
+          <span>{nPicked} picked</span>
+          <button className="btn-ghost sm" data-act="multi-clear" disabled={!nPicked} onClick={() => viewMulti({ people: [], projects: [] })}>Clear</button>
+          <button className="btn-primary sm" data-act="multi-done" onClick={() => closePop(true)}>Done</button>
+        </div>
+      )}
+      {isAdmin(s.me!) && !q && !several && (
         <div className="sw-foot">
           {sel && (
             <button className="opt" data-act="proj-edit" onClick={() => { closePop(false); focusLater('[data-act="proj-pick"]'); openProjEdit(sel.id); }}>
