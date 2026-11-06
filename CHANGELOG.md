@@ -9,6 +9,8 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+## v0.3.1 (2026-11-06)
+
 - **One switcher for people and projects:** the same list on Tasks and Projects, with people first on Tasks and projects first on Projects. It has a search box, jump buttons for big teams, and it scrolls instead of running off the screen, so the second section is always reachable.
 - **Open by default when looking at someone else's work:** in another person's week and in a project's week every past day with something in it starts open (empty days stay folded), and a project's "Not finished" list starts open and stays that way when you switch projects. Your own week still folds past days away to keep it clean.
 
