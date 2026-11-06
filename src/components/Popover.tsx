@@ -256,7 +256,7 @@ function SwitchPop({ p, s }: { p: Pop; s: State }) {
   const ws = addDays(weekStart(s.today), s.weekOffset * 7);
   const we = addDays(ws, 6);
   const TD = s.view === 'today';
-  // Week and board: what's open that week. Today: what's open today (people) / done that day (projects page).
+  // Week and board: what's open that week. Today: what's open today (people) / done that day (a project).
   const inView = (t: Task) => t.status === 'open' && (TD ? shownOn(t, s.today) === s.today : shownOn(t, s.today) >= ws && shownOn(t, s.today) <= we);
   const inP = (id: string) => (t: Task) => (id === 'all' ? !!s.projects[t.projectId] : t.projectId === id);
   const projCount = (id: string) => (onProjects && TD
@@ -754,9 +754,8 @@ function CustomRepeat({ init, base, onBack, onSave }: { init: Repeat; base: stri
 function PagesPop({ s }: { s: State }) {
   const admin = isAdmin(s.me!);
   const pages = [
-    // Tasks only from another page: the logo goes there too.
-    ...(s.page !== 'tasks' ? [{ pg: 'tasks' as const, label: 'Tasks', icon: I.check(14), key: 'G T' }] : []),
-    { pg: 'projects' as const, label: 'Projects', icon: I.folder(15), key: 'G P' },
+    // Back to tasks from Team or Settings (the logo goes there too). People and projects are in the switcher.
+    ...(s.page === 'team' || s.page === 'settings' ? [{ pg: 'tasks' as const, label: 'Tasks', icon: I.check(14), key: 'G T' }] : []),
     ...(admin ? [
       { pg: 'team' as const, label: 'Team', icon: I.users(15), key: 'G U' },
       { pg: 'settings' as const, label: 'Settings', icon: I.gear(15), key: 'G S' },

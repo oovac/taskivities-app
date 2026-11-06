@@ -3,7 +3,7 @@ import { addDays } from '../shared/dates';
 import { isAdmin } from '../shared/rules';
 import type { Priority } from '../shared/types';
 import {
-  closeConnect, closeDrawer, closeHelp, closePop, moveTasks, openDrawer, openHelp, openPop, setPage, setPriority, setView, skipTask, toast, toggleDone, closeHook, editChecklist, editNotes, pickAttachments, setFollowing } from './actions';
+  closeConnect, closeDrawer, goHome, closeHelp, closePop, moveTasks, openDrawer, openHelp, openPop, setPage, setPriority, setView, skipTask, toast, toggleDone, closeHook, editChecklist, editNotes, pickAttachments, setFollowing } from './actions';
 import { openInbox } from './inbox';
 import { openMove } from './components/rows';
 import { curNav, focusLater, focusNav, navEls, trapTab } from './focus';
@@ -115,7 +115,9 @@ export function onKeyDown(e: KeyboardEvent) {
   if (gPending && Date.now() - gPending < 1200 && (k === 't' || k === 'p' || ((k === 'u' || k === 's') && isAdmin(s.me!)))) {
     gPending = 0;
     e.preventDefault();
-    setPage(k === 'p' ? 'projects' : k === 'u' ? 'team' : k === 's' ? 'settings' : 'tasks');
+    // G T: your week. G P: the project you last looked at.
+    if (k === 't') goHome();
+    else setPage(k === 'p' ? 'projects' : k === 'u' ? 'team' : 'settings');
     return;
   }
   if (gPending && Date.now() - gPending < 1200 && k === 'i') {

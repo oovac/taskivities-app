@@ -113,7 +113,7 @@ export interface Task {
   checklist: ChecklistItem[];
   /** Files attached to the task, oldest first. */
   attachments: AttachmentInfo[];
-  /** Archived tasks are hidden everywhere except the Projects page's Archived section. */
+  /** Archived tasks are hidden everywhere except a project view's Archived section. */
   archivedAt: string | null;
   archivedBy: string | null;
   /** People following it (the creator, unless they stopped, and anyone who followed, was added or commented). Whoever has it always hears about it too. */

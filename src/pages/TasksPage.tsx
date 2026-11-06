@@ -40,7 +40,7 @@ export function TasksPage() {
         </div>
       )}
       <div className="phead">
-        <button className="who" data-act="person" onClick={(e) => openPop({ type: 'person' }, e.currentTarget)}>
+        <button className="who" data-act="person" title="Switch to another person or project  (P)" onClick={(e) => openPop({ type: 'person' }, e.currentTarget)}>
           <Avatar user={person} size={40} />
           <span>
             <span className="h1">{isMe ? (TD ? 'My day' : 'My week') : `${firstName(person)}'s ${TD ? 'day' : 'week'}`} {I.chev()}</span>

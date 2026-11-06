@@ -56,7 +56,7 @@ export function ProjectsPage() {
   return (
     <>
       <div className="phead">
-        <button className="who" data-act="proj-pick" title={project?.description || undefined} onClick={(e) => openPop({ type: 'projpick' }, e.currentTarget)}>
+        <button className="who" data-act="proj-pick" title={`${project?.description ? `${project.description}\n\n` : ''}Switch to another project or person  (P)`} onClick={(e) => openPop({ type: 'projpick' }, e.currentTarget)}>
           <ProjBadge project={project ?? 'all'} />
           <span>
             <span className="h1">{name} {I.chev()}</span>

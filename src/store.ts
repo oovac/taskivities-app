@@ -6,6 +6,7 @@ import type { Release } from './updates';
 import type { Repeat } from '../shared/repeat';
 import { type ThemePref, themePref } from './theme';
 
+/** 'tasks' and 'projects' are one screen to people: a person's view or a project's, picked from the switcher. */
 export type Page = 'tasks' | 'projects' | 'team' | 'settings';
 export type View = 'today' | 'list' | 'board';
 export type PopType = 'move' | 'assign' | 'prio' | 'proj' | 'person' | 'projpick' | 'urole' | 'uproj' | 'udisable' | 'uenable' | 'notify' | 'update' | 'inbox' | 'followers' | 'account' | 'repeat' | 'taskmenu' | 'pages';
@@ -112,7 +113,7 @@ export interface State {
   projSel: string; // project id or 'all'
   projDay: string;
   projOpen: boolean;
-  /** Projects page: archived tasks of the selected project (null = not loaded), and whether the section is open. */
+  /** A project's view: archived tasks of the selected project (null = not loaded), and whether the section is open. */
   archived: { project: string; tasks: Task[] } | null;
   archOpen: boolean;
   /** Team page: archived projects (null = not loaded) and disabled people, each in a section that starts collapsed. */
@@ -186,7 +187,7 @@ export const useStore = create<State>()(() => ({
   draft: emptyDraft(),
   invite: null,
   projEdit: null,
-  projSel: 'all',
+  projSel: localStorage.getItem('tv:proj') || 'all', // a project that's gone falls back to 'all' (ProjectsPage)
   projDay: '',
   projOpen: true,
   archived: null,

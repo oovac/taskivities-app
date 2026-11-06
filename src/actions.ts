@@ -382,10 +382,13 @@ export function viewPerson(userId: string) {
   set({ viewUser: userId, page: 'tasks', drawer: null, pop: null, draft: { ...S().draft, assigneeId: null } });
   history.replaceState(null, '', '/');
 }
-/** A project's view (or 'all'), keeping the same Today / Week / Board choice. */
+/** Home: your own week (the logo and G T). */
+export const goHome = () => viewPerson(S().me!.id);
+/** A project's view (or 'all'), keeping the same Today / Week / Board choice. Remembered, for G P and the next visit. */
 export function viewProject(projectId: string) {
   const s = S();
   set({ projSel: projectId, page: 'projects', drawer: null, pop: null, projDay: s.projDay || s.today });
+  localStorage.setItem('tv:proj', projectId);
   history.replaceState(null, '', '/projects');
 }
 export function setView(view: State['view']) {
@@ -839,7 +842,7 @@ export async function resetIcon() {
 }
 
 // ---------- archive (instead of delete) ----------
-/** Archives a task: it leaves every list at once (Undo brings it back). Restoring is on the Projects page. */
+/** Archives a task: it leaves every list at once (Undo brings it back). Restoring is in the project's view. */
 export async function archiveTask(id: string) {
   const t = S().tasks[id];
   if (!t) return;
@@ -878,7 +881,7 @@ export async function restoreTask(id: string) {
   }
 }
 
-/** The Projects page's Archived section ('all' = every project you can see). */
+/** A project view's Archived section ('all' = every project you can see). */
 export async function loadArchived(project: string) {
   try {
     const { tasks } = await api.get<{ tasks: Task[] }>(`/api/archived?project=${encodeURIComponent(project)}`);

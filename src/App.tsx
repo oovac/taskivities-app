@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
-import { boot, closePop, openConnect, openHelp, openPop, openTask, setPage, sync } from './actions';
+import { boot, closePop, goHome, openConnect, openHelp, openPop, openTask, sync } from './actions';
 import { updateBadge } from './push';
 import { checkForUpdate, updateSeen } from './updates';
 import { openInbox } from './inbox';
@@ -83,12 +83,13 @@ export function App() {
     <div className="app">
       <div className="topbar">
         <button className="skip" onClick={() => focusNav(navEls().find((n) => n.tabIndex === 0) || navEls()[0])}>Skip to tasks</button>
-        {/* The logo goes home (Tasks); the other pages are in the ⋯ menu next to it. */}
-        <button className="logo" data-act="home" aria-label={`${appName(s.settings)}: go to Tasks`} title="Tasks  (G T)" onClick={() => setPage('tasks')}>
+        {/* The logo goes home (your week); admins' other pages are in the ⋯ menu next to it. People and projects are
+            both picked from the switcher on the page itself. */}
+        <button className="logo" data-act="home" aria-label={`${appName(s.settings)}: go to my week`} title="My week  (G T)" onClick={goHome}>
           <LogoMark version={s.settings.logoVersion} /><Wordmark />
         </button>
-        <button className={`icon-btn pages-btn${s.pop?.type === 'pages' ? ' on' : ''}`} data-act="pages" aria-label="Pages" aria-haspopup="menu" title="Projects, Team, Settings"
-          onClick={(e) => openPop({ type: 'pages' }, e.currentTarget)}>{I.dots()}</button>
+        {admin && <button className={`icon-btn pages-btn${s.pop?.type === 'pages' ? ' on' : ''}`} data-act="pages" aria-label="Pages" aria-haspopup="menu" title="Team, Settings"
+          onClick={(e) => openPop({ type: 'pages' }, e.currentTarget)}>{I.dots()}</button>}
         <div className="spacer" />
         <button className="ai-btn" data-act="connect" title="MCP: connect Claude or another AI assistant" onClick={openConnect}>{I.bolt(14)}<span>MCP</span></button>
         <button className="icon-btn kb-btn" title="Keyboard shortcuts  (?)" aria-label="Keyboard shortcuts" onClick={openHelp}>{I.kbd()}</button>
@@ -105,7 +106,7 @@ export function App() {
         </button>
       </div>
       <div className="app-scroll">
-        <div className={`page ${s.page === 'tasks' && s.view === 'board' ? 'wide' : ''}`}>
+        <div className={`page ${(s.page === 'tasks' || s.page === 'projects') && s.view === 'board' ? 'wide' : ''}`}>
           {s.page === 'settings' ? <SettingsPage /> : s.page === 'team' ? <TeamPage /> : s.page === 'projects' ? <ProjectsPage /> : <TasksPage />}
         </div>
       </div>

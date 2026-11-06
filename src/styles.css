@@ -772,7 +772,7 @@ a.att-n:hover{color:var(--accent);text-decoration:underline}
 .opt-hint svg{flex:none;margin-top:2px}
 .opt-hint b{color:var(--text-2);font-weight:600}
 
-/* ---------- archived tasks (Projects page) ---------- */
+/* ---------- archived tasks (a project's view) ---------- */
 .arch-row{display:flex;align-items:center;gap:12px;padding:10px 12px 10px 14px;border-top:1px solid var(--line2);font-size:13px}
 .arch-row:first-child{border-top:0}
 .arch-main{flex:1;min-width:0}

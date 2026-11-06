@@ -273,7 +273,7 @@ export function ProjectEditor({ pe, s }: { pe: ProjEdit; s: State }) {
     upd({ busy: true, err: null });
     const r = await saveProject({ id: pe.id, name: pe.name.trim(), color: pe.color, description: pe.description.trim(), members: pe.members });
     if ('error' in r) { upd({ busy: false, err: r.error }); focusLater('#pe-name'); return; }
-    // A new project shows up where it was asked for: picked on the Projects page, or in the quick-add.
+    // A new project shows up where it was asked for: picked in a project's view, or in the quick-add.
     const fresh = !pe.id;
     set((st) => ({
       projEdit: null,
