@@ -181,6 +181,7 @@ function ProjectWeek({ s, w, pid, name, inP, all }: {
         <Day key={d} s={s} d={d} k={`p:${pid}`} pool={pool} carried={carried} TD={false} ctx="proj" showProject={all}
           previews={previews.filter((x) => x.date === d)} />
       ))}
+      <div className="empty-sec empty-week">Nothing in these days.</div>
     </section>
   );
 }

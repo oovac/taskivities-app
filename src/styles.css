@@ -140,6 +140,8 @@ b{font-weight:600}
 .collapsed .sum{margin-left:auto;display:flex;gap:10px;align-items:center}
 .collapsed .sum .c{color:var(--carry-ink)}
 .collapsed svg{color:var(--faint)}
+/* Days with nothing in them aren't shown; when no day is, the week says so. */
+.day ~ .empty-week{display:none}
 /* A coming day with nothing on it: a dashed row; hovering (or focusing) shows that clicking adds a task that day. */
 .collapsed.empty{background:transparent;border:1px dashed var(--line-strong);color:var(--faint)}
 .collapsed.empty:hover{background:var(--fill)}

@@ -9,6 +9,8 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+- **Empty days are hidden:** in Week views, days with nothing done or planned are no longer shown, so the list is shorter. Today always shows. A week with nothing at all says so.
+
 ## v0.5.1 (2026-11-06)
 
 - **Copy what got done:** each task now says the day it was done (left out when the copy covers a single day) and, in views of several people or a project, the initials of whoever ticked it. A person's copy is titled with their initials.

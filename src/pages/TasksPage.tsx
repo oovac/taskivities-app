@@ -68,6 +68,7 @@ export function TasksPage() {
           <section className="sec">
             <div className="sec-h"><h2>Assigned to {isMe ? 'me' : firstName(person)}</h2><span className="cnt">{openN} open {TD ? 'today' : 'this week'}</span></div>
             {(TD ? [s.today] : w.days).map((d) => <Day key={d} s={s} d={d} k={u} pool={mine} carried={carried} TD={TD} previews={previews.filter((x) => x.date === d)} />)}
+            {!TD && <div className="empty-sec empty-week">Nothing in these days.</div>}
             {TD && <Peek s={s} mine={mine} we={w.we} />}
           </section>
           <section className="sec">
@@ -129,6 +130,7 @@ export function Day({ s, d, k: who, pool, carried, TD, previews, ctx = 'to', sho
     const done = sortRows(mine.filter((t) => t.status === 'done' && shownOn(t, s.today) === d));
     const ghosts = mine.filter((t) => isLate(t, s.today) && t.dueDate === d);
     const key = `${who}:${d}`;
+    if (!done.length && !ghosts.length) return null; // nothing happened that day: no row at all, to save space
     // Your own week folds past days away, so it stays clean. Someone else's week, or a project's, is a report of
     // their work: every day starts open, except days with nothing in them. Either way a day you open or fold stays that way.
     const folds = (ctx === 'to' && who === s.me!.id && s.weekOffset >= 0) || (!done.length && !ghosts.length);
@@ -173,7 +175,8 @@ export function Day({ s, d, k: who, pool, carried, TD, previews, ctx = 'to', sho
       <div className="rows">{carried.map((t) => <TaskRow key={t.id} t={t} ctx={carriedCtx} showProject={showProject} />)}</div>
     </div>
   );
-  // A day with nothing on it: one dashed row (like a folded day), which adds a task on that day.
+  // A coming day with nothing on it isn't shown (saves space); today keeps one dashed row, which adds a task.
+  if (!TD && !carriedBlock && list.length + previews.length === 0 && !isT) return null;
   if (!TD && !carriedBlock && list.length + previews.length === 0)
     return (
       <div className="day">
