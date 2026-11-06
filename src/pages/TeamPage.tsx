@@ -2,9 +2,9 @@ import { useEffect, useRef } from 'react';
 import { fmt } from '../../shared/dates';
 import { EMAIL_RE, isAdmin } from '../../shared/rules';
 import { DESCRIPTION_MAX, PROJECT_COLORS, type Role } from '../../shared/types';
-import { addPeople, archiveProject, connectGmail, copyInviteLink, loadArchivedProjects, openPop, resendInvite, restoreProject, saveProject } from '../actions';
+import { addPeople, archiveProject, connectGmail, copyInviteLink, loadArchivedProjects, openPop, resendInvite, restoreProject, saveProject, setManageTab } from '../actions';
 import { activeSelector, focusLater } from '../focus';
-import { S, set, useStore, type ProjEdit, type State } from '../store';
+import { S, set, useStore, type ManageTab, type ProjEdit, type State } from '../store';
 import { displayName, people } from '../util';
 import { Avatar, I } from '../components/ui';
 
@@ -36,25 +36,54 @@ export function TeamPage() {
   const disabled = Object.values(s.users).filter((u) => u.status === 'disabled')
     .sort((a, b) => (b.disabledAt ?? '').localeCompare(a.disabledAt ?? '') || displayName(a).localeCompare(displayName(b)));
 
+  const tab = s.manageTab;
+  const tabs: { id: ManageTab; label: string; n: number }[] = [
+    { id: 'people', label: 'People', n: list.length },
+    { id: 'projects', label: 'Projects', n: projects.length },
+  ];
+  // Tabs: ← → move between them (and switch), like other tab lists.
+  const onTabKey = (e: React.KeyboardEvent) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    const next = tabs[(tabs.findIndex((t) => t.id === tab) + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length].id;
+    setManageTab(next);
+    focusLater(`[data-act="mtab"][data-tab="${next}"]`);
+  };
+
   return (
     <>
       <div className="phead">
         <div>
           <div className="h1 team-h">People &amp; projects</div>
-          <div className="sub">{list.length} people · {admins} admin{admins === 1 ? '' : 's'}{invited > 0 && ` · ${invited} invited`} · {projects.length} project{projects.length === 1 ? '' : 's'}</div>
+          <div className="sub">
+            {tab === 'people'
+              ? <>{list.length} people · {admins} admin{admins === 1 ? '' : 's'}{invited > 0 && ` · ${invited} invited`}</>
+              : <>{projects.length} project{projects.length === 1 ? '' : 's'} · who's on each one</>}
+          </div>
         </div>
-        <div className="weeknav">
-          {!s.invite && (
+        {/* Just the tab's main action (no week controls), so no bar around it on phones. */}
+        <div className="weeknav page-act">
+          {tab === 'people' ? !s.invite && (
             <button className="btn-primary" data-act="inv-open"
               onClick={() => { set({ invite: { emails: '', role: 'member', projects: [], err: null } }); focusLater('#inv-emails'); }}>
               {I.plus(14)} Add people
             </button>
+          ) : (
+            <button className="btn-primary" data-act="pe-new" onClick={() => openProjEdit(null)}>{I.plus(14)} New project</button>
           )}
         </div>
       </div>
-      {s.invite && <InviteForm s={s} />}
-      <section className="sec">
-        <div className="sec-h"><h2>People</h2><span className="cnt">their role and projects</span></div>
+      <div className="mtabs" role="tablist" aria-label="People and projects" onKeyDown={onTabKey}>
+        {tabs.map((t) => (
+          <button key={t.id} role="tab" id={`mtab-${t.id}`} aria-controls={`mpanel-${t.id}`} aria-selected={tab === t.id} tabIndex={tab === t.id ? 0 : -1}
+            className={tab === t.id ? 'on' : ''} data-act="mtab" data-tab={t.id} onClick={() => setManageTab(t.id)}>
+            {t.label}<span className="n">{t.n}</span>
+          </button>
+        ))}
+      </div>
+      {tab === 'people' ? (
+        <section className="sec" role="tabpanel" id="mpanel-people" aria-labelledby="mtab-people">
+          {s.invite && <InviteForm s={s} />}
         <div className="card team">
           <div className="trow th"><div>Person</div><div>Role</div><div>Projects</div><div>Status</div><div /></div>
           {list.map((u) => {
@@ -106,12 +135,11 @@ export function TeamPage() {
             );
           })}
         </div>
-        {disabled.length > 0 && <DisabledPeople s={s} list={disabled} />}
-        <p className="fine">Admins see every project and manage people. Members see and work on tasks only in their projects, and can only assign tasks to people on the same project.</p>
-      </section>
-      <section className="sec">
-        <div className="sec-h"><h2>Projects</h2><span className="cnt">who's on each one</span>
-          <button className="link" style={{ marginLeft: 'auto' }} data-act="pe-new" onClick={() => openProjEdit(null)}>+ New project</button></div>
+          {disabled.length > 0 && <DisabledPeople s={s} list={disabled} />}
+          <p className="fine">Admins see every project and manage people. Members see and work on tasks only in their projects, and can only assign tasks to people on the same project.</p>
+        </section>
+      ) : (
+        <section className="sec" role="tabpanel" id="mpanel-projects" aria-labelledby="mtab-projects">
         <div className="card">
           {projects.map((p) => {
             const ppl = people(s).filter((u) => u.status === 'active' && !isAdmin(u) && u.projects.includes(p.id));
@@ -131,8 +159,9 @@ export function TeamPage() {
           })}
           {!projects.length && <div className="prow"><span className="n">No projects yet. Create the first one.</span></div>}
         </div>
-        <ArchivedProjects s={s} />
-      </section>
+          <ArchivedProjects s={s} />
+        </section>
+      )}
     </>
   );
 }

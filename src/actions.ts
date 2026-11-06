@@ -8,7 +8,7 @@ import { PRIORITIES } from '../shared/types';
 import { api, ApiError } from './api';
 import { applyBrand } from './brand';
 import { activeSelector, focusLater, selFor } from './focus';
-import { type Page, type Pop, type PopType, type State, S, emptyDraft, set } from './store';
+import { type ManageTab, type Page, type Pop, type PopType, type State, S, emptyDraft, set } from './store';
 import { syncPush } from './push';
 import { checkForUpdate } from './updates';
 import { loadInbox } from './inbox';
@@ -372,11 +372,17 @@ export function closeHelp() {
   focusLater(helpReturn);
 }
 
+const manageUrl = (tab: ManageTab) => (tab === 'projects' ? '/manage/projects' : '/manage');
+/** The People & projects page's tab. */
+export function setManageTab(tab: ManageTab) {
+  set({ manageTab: tab });
+  if (S().page === 'team') history.replaceState(null, '', manageUrl(tab));
+}
 export function setPage(page: Page) {
   const s = S();
   if ((page === 'team' || page === 'settings') && s.me?.role !== 'admin') return;
   set({ page, drawer: null, pop: null, invite: null, projDay: s.projDay || s.today });
-  history.replaceState(null, '', page === 'tasks' ? '/' : page === 'team' ? '/manage' : `/${page}`);
+  history.replaceState(null, '', page === 'tasks' ? '/' : page === 'team' ? manageUrl(s.manageTab) : `/${page}`);
 }
 export function viewPerson(userId: string) {
   set({ viewUser: userId, page: 'tasks', drawer: null, pop: null, draft: { ...S().draft, assigneeId: null } });

@@ -9,6 +9,7 @@ import { type ThemePref, themePref } from './theme';
 /** 'tasks' and 'projects' are one screen to people: a person's view or a project's, picked from the switcher. */
 /** 'team' is the People & projects page (admins; at /manage, and the old /team). */
 export type Page = 'tasks' | 'projects' | 'team' | 'settings';
+export type ManageTab = 'people' | 'projects';
 export type View = 'today' | 'list' | 'board';
 export type PopType = 'move' | 'assign' | 'prio' | 'proj' | 'person' | 'projpick' | 'urole' | 'uproj' | 'udisable' | 'uenable' | 'notify' | 'update' | 'inbox' | 'followers' | 'account' | 'repeat' | 'taskmenu' | 'pages';
 
@@ -121,6 +122,8 @@ export interface State {
   archivedProjects: ArchivedProject[] | null;
   archProjOpen: boolean;
   disabledOpen: boolean;
+  /** People & projects page: which tab (/manage or /manage/projects). */
+  manageTab: ManageTab;
 }
 
 const pageFromPath = (): Page => {
@@ -196,6 +199,7 @@ export const useStore = create<State>()(() => ({
   archivedProjects: null,
   archProjOpen: false,
   disabledOpen: false,
+  manageTab: location.pathname.startsWith('/manage/projects') ? 'projects' : 'people',
 }));
 
 export const S = () => useStore.getState();

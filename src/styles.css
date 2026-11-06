@@ -225,6 +225,14 @@ button.peek:hover{border-style:solid;border-color:var(--accent-line);background:
 .btn-danger{width:100%;padding:8px 12px;border-radius:9px;background:var(--danger-soft);color:var(--danger-ink);font-weight:600;font-size:13px;border:1px solid var(--danger-line)}
 .btn-danger:hover{background:var(--danger-soft)}
 .team-h{font-size:24px;font-weight:700;letter-spacing:-.02em}
+/* People & projects: page tabs */
+.mtabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:-4px 0 18px}
+.mtabs button{position:relative;display:inline-flex;align-items:center;gap:7px;padding:9px 12px 11px;font-size:14px;font-weight:600;color:var(--muted)}
+.mtabs button:hover{color:var(--text)}
+.mtabs button.on{color:var(--text)}
+.mtabs button.on::after{content:'';position:absolute;left:8px;right:8px;bottom:-1px;height:2px;border-radius:2px;background:var(--accent)}
+.mtabs .n{font-size:11.5px;font-weight:600;color:var(--faint);background:var(--fill-strong);border-radius:999px;padding:1px 7px;font-variant-numeric:tabular-nums}
+.mtabs button.on .n{color:var(--text)}
 .team .trow{display:grid;grid-template-columns:minmax(200px,1.5fr) 110px minmax(180px,2fr) 120px 72px;align-items:center;gap:12px;padding:10px 12px 10px 14px;border-top:1px solid var(--line2);font-size:13px}
 .team .trow:first-child{border-top:0}
 .team .trow.th{font-size:11px;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;padding-top:9px;padding-bottom:9px;background:var(--sunken)}
@@ -461,6 +469,7 @@ kbd{display:inline-grid;place-items:center;min-width:21px;height:21px;padding:0 
   .who .h1{font-size:21px}
   .phead{gap:8px;margin-bottom:14px}
   .weeknav{margin-left:0;width:100%;justify-content:space-between;padding-top:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px}
+  .weeknav.page-act{width:auto;background:none;border:0;padding:0}
   .weeknav .btn-ghost{display:none}
   .qa{padding:6px 6px 8px 12px}
   .qa-more{padding-left:0}
