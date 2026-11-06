@@ -9,6 +9,8 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+## v0.5.0 (2026-11-06)
+
 - **See several people or projects together:** turn on **Several** in the switcher and tick people and projects. Several people show all their tasks together; several projects show those projects together; people and projects together show those people's tasks in those projects. Today, Week and Board all work with it, each tick changes the view at once, and it's remembered after a reload. Ticking just one person or one project goes back to their usual view.
 - **Copy what got done:** a copy button next to the week controls copies every task done in the days shown as one Markdown list, with the total effort where projects track it. It works for your week, anyone's, a project's, and several people or projects together.
 
