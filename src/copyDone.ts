@@ -3,10 +3,15 @@ import { EFFORT_ORDER, effortFor, effortLabel, effortTotal } from '../shared/eff
 import { PRIORITIES, type Task } from '../shared/types';
 import { toast } from './actions';
 import type { State } from './store';
-import { firstName } from './util';
+import { MONS, parseDate } from '../shared/dates';
 
 /** Keeps Markdown from reading a title's own * _ ` [ ] as formatting. */
 const md = (x: string) => x.replace(/([\\`*_[\]])/g, '\\$1');
+
+/** "Nov 5". */
+const shortDay = (d: string) => { const x = parseDate(d); return `${MONS[x.getMonth()]} ${x.getDate()}`; };
+/** "Jordan Lee" → "JL". */
+export const initials = (name: string) => name.split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
 
 /** Effort of these tasks, each counted the way its own project measures it: "6h 15m", or "6h 15m · 13 pts" when mixed. */
 export function effortSummary(s: State, tasks: Task[]): string {
@@ -16,11 +21,13 @@ export function effortSummary(s: State, tasks: Task[]): string {
 
 /**
  * Copies the tasks in `tasks` that were done between `from` and `to` (by the day they were done), as one list.
- * `who`: say whose each task is (views of several people or a project). `project`: say which project.
+ * Each task says the day it was done (unless it's a single day) and, with `who` (views of several people or a project),
+ * the initials of whoever ticked it. `project`: say which project.
  */
 export async function copyDone(s: State, o: { title: string; span: string; tasks: Task[]; from: string; to: string; who: boolean; project: boolean }) {
   const done = o.tasks.filter((t) => t.status === 'done' && t.doneOn && t.doneOn >= o.from && t.doneOn <= o.to);
   if (!done.length) { toast('Nothing was done in these days yet.', undefined, true); return; }
+  const oneDay = o.from === o.to;
   // Oldest first, by the day it was done, then priority.
   const list = done.sort((a, b) => a.doneOn!.localeCompare(b.doneOn!) || a.priority - b.priority || (a.doneAt ?? '').localeCompare(b.doneAt ?? ''));
   const total = effortSummary(s, list);
@@ -28,8 +35,10 @@ export async function copyDone(s: State, o: { title: string; span: string; tasks
   for (const t of list) {
     const p = s.projects[t.projectId];
     const eff = p?.effort ? effortFor(t.effort, p.effort) : null;
+    const by = s.users[t.doneBy ?? t.assigneeId];
     const meta = [
-      o.who ? firstName(s.users[t.assigneeId]) : '',
+      oneDay ? '' : shortDay(t.doneOn!),
+      o.who && by ? initials(by.name || by.email) : '',
       o.project && p ? p.name : '',
       p?.effort && eff ? effortLabel(p.effort, eff) : '',
     ].filter(Boolean);

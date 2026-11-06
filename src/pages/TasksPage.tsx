@@ -4,7 +4,7 @@ import { isLate, shownOn } from '../../shared/rules';
 import type { Task } from '../../shared/types';
 import { ensureRange, moveTasks, openPop, setBoardWeeks, setView, viewPerson } from '../actions';
 import { QuickAdd } from '../components/QuickAdd';
-import { copyDone } from '../copyDone';
+import { copyDone, initials } from '../copyDone';
 import { PreviewCard, PreviewRow, TaskCard, TaskRow, drag, openMove } from '../components/rows';
 import { Avatar, I } from '../components/ui';
 import { BOARD_WEEKS_MAX, set, useStore, type State } from '../store';
@@ -47,7 +47,6 @@ export function TasksPage() {
             <span className="h1">{isMe ? (TD ? 'My day' : 'My week') : `${firstName(person)}'s ${TD ? 'day' : 'week'}`} {I.chev()}</span>
             <span className="sub">
               {openN} open{TD ? ' today' : ''}
-              {s.weekOffset === 0 && carried.length > 0 && <> · <span className="lt">{carried.length} carried over</span></>}
               {' · '}{byTasks.filter((t) => t.status === 'open').length} assigned to others
             </span>
           </span>
@@ -56,7 +55,7 @@ export function TasksPage() {
           <ViewSeg s={s} />
           {TD ? <div className="wk"><b>Today</b><span>{fmt(s.today)}</span></div> : <WeekControls s={s} w={w} />}
           <CopyDone onClick={() => void copyDone(s, {
-            title: displayName(person), span: TD ? fmt(s.today) : w.span, tasks: mine,
+            title: initials(displayName(person)), span: TD ? fmt(s.today) : w.span, tasks: mine,
             from: TD ? s.today : w.ws, to: TD ? s.today : w.we, who: false, project: true,
           })} />
         </div>

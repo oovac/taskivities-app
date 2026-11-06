@@ -17,6 +17,7 @@
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:seed:local": "wrangler d1 execute DB --local --file=seed/dev.sql",
     "db:reset:local": "rm -rf .wrangler/state && npm run db:migrate:local && npm run db:seed:local",
+    "db:stress:local": "rm -rf .wrangler/state && npm run db:migrate:local && node scripts/stress-seed.mjs && wrangler d1 execute DB --local --file=seed/stress.sql && wrangler r2 object put taskivities-local-files/stress/sample.pdf --local --file=demo/samples/sample.pdf && wrangler r2 object put taskivities-local-files/stress/sample.png --local --file=demo/samples/sample.png",
     "db:migrate:remote": "node scripts/tenant.mjs migrate",
     "cf-typegen": "wrangler types"
   },

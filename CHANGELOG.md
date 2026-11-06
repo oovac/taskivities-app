@@ -9,6 +9,10 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+- **Copy what got done:** each task now says the day it was done (left out when the copy covers a single day) and, in views of several people or a project, the initials of whoever ticked it. A person's copy is titled with their initials.
+- **Simpler summary:** the line under a person's or project's name no longer repeats the carried-over count; the open count already includes them, and the Carried over block below still lists them.
+- **Stress-test data (for developers):** `npm run db:stress:local` loads about 1,000 tasks for 24 people over two and a half months, with notes, comments, checklists, attachments, followers and effort, relative to today (`scripts/stress-seed.mjs`).
+
 ## v0.5.0 (2026-11-06)
 
 - **See several people or projects together:** turn on **Several** in the switcher and tick people and projects. Several people show all their tasks together; several projects show those projects together; people and projects together show those people's tasks in those projects. Today, Week and Board all work with it, each tick changes the view at once, and it's remembered after a reload. Ticking just one person or one project goes back to their usual view.

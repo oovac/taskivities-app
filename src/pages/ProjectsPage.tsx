@@ -153,14 +153,13 @@ export function ProjectsPage() {
 function WeekSub({ s, w, inP, et }: { s: State; w: ReturnType<typeof weekInfo>; inP: (t: Task) => boolean; et: EffortType | null }) {
   const tasks = Object.values(s.tasks).filter(inP);
   const openTasks = tasks.filter((t) => t.status === 'open' && inRange(shownOn(t, s.today), w.ws, w.we));
-  const late = tasks.filter((t) => isLate(t, s.today)).length;
   const span = w.weeks > 1 ? 'shown' : s.weekOffset === 0 ? 'this week' : 'that week';
   // Effort: what got done in these days, and for estimates (sizes, points) what's still planned.
   const doneE = et ? effortTotal(et, tasks.filter((t) => t.status === 'done' && t.doneOn && inRange(t.doneOn, w.ws, w.we)).map((t) => t.effort)) : '';
   const openE = et && et !== 'time' ? effortTotal(et, openTasks.map((t) => t.effort)) : '';
   return (
     <>
-      {openTasks.length} open {span}{s.weekOffset === 0 && late > 0 && <> · <span className="lt">{late} carried over</span></>}
+      {openTasks.length} open {span}
       {doneE && <> · <span title="Effort of tasks done in these days">{doneE} done</span></>}
       {openE && <> · <span title="Effort of open tasks in these days">{openE} planned</span></>}
     </>
