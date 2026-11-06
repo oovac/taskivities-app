@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { diffDays, isDate } from '../shared/dates';
 import { isLate, shownOn } from '../shared/rules';
 import { describe as describeRepeat } from '../shared/repeat';
+import { EFFORT_TYPES, effortFor, effortFromInput, effortLabel, effortTotal } from '../shared/effort';
 import { COMMENT_MAX, DESCRIPTION_MAX, PRIORITIES, TITLE_MAX, type Priority, type Project, type Task, type User } from '../shared/types';
 import {
   type Env, type ProjectRow, type TaskRow, type UserRow, type Viewer,
@@ -83,9 +84,23 @@ function findUser(dir: Directory, v: Viewer, input: string): User {
   throw bad(`No one called "${input}" is on Taskivities. Use list_projects to see who is on each project.`);
 }
 
+/** What an assistant sent as effort ("1h 30m", "M", "5") for a task in `p`; "" clears it (null). */
+function toEffort(p: Project, input: string): string | null {
+  if (input.trim() === '') return null;
+  if (!p.effort) throw bad(`${p.name} doesn't track effort.`);
+  const v = effortFromInput(p.effort, input);
+  if (!v) throw bad(`${p.name} tracks effort as ${EFFORT_TYPES[p.effort].name.toLowerCase()}: ${EFFORT_TYPES[p.effort].hint}. "${input}" isn't one.`);
+  return v;
+}
+const effortArg = z.string().describe(
+  'Only for projects that track effort (list_projects shows how): a time like "1h 30m" or "45m", a size like "M", or story points like "5".',
+);
+
 const userLabel = (dir: Directory, id: string | null) => (id ? (dir.users.get(id)?.name ?? 'Former member') : null);
 
 function describeTask(t: Task, dir: Directory, t0: string) {
+  const p = dir.projects.find((x) => x.id === t.projectId);
+  const effort = p?.effort ? effortFor(t.effort, p.effort) : null;
   return {
     id: t.id,
     title: t.title,
@@ -99,6 +114,7 @@ function describeTask(t: Task, dir: Directory, t0: string) {
     ...(isLate(t, t0) ? { days_late: diffDays(t0, t.dueDate) } : {}),
     ...(t.status === 'done' ? { done_on: t.doneOn, done_by: userLabel(dir, t.doneBy) } : {}),
     ...(t.notes ? { notes: t.notes } : {}),
+    ...(p?.effort ? { effort: effort ? effortLabel(p.effort, effort) : null } : {}),
     ...(t.series?.active ? { repeats: describeRepeat(t.series.rule, t.series.anchor) } : {}),
     ...(t.comments ? { comments: t.comments } : {}),
     ...(t.followers.some((f) => f !== t.assigneeId) ? { followers: t.followers.filter((f) => f !== t.assigneeId).map((f) => userLabel(dir, f)) } : {}),
@@ -195,6 +211,7 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
             name: p.name,
             description: p.description,
             color: p.color,
+            ...(p.effort ? { effort: { tracks: EFFORT_TYPES[p.effort].name, values: EFFORT_TYPES[p.effort].hint, required_to_finish: p.effortRequired } } : {}),
             members: (dir.assignable.get(p.id) ?? []).map((id) => {
               const u = dir.users.get(id)!;
               return { name: u.name, email: u.email, ...(u.role === 'admin' ? { role: 'admin' } : {}), ...(u.status === 'invited' ? { status: 'invited' } : {}) };
@@ -268,6 +285,7 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
           priority: z.enum(PRIORITY_NAMES).describe('urgent: drop everything · high: do first · normal: the default · low: when there is time.'),
           notes: z.string().optional().describe('Optional details.'),
           repeat: repeatArg.optional(),
+          effort: effortArg.optional(),
         },
       },
       (args) =>
@@ -277,6 +295,7 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
           const task = await createTask(this.env, v, {
             title: args.title, notes: args.notes, projectId: project.id, assigneeId: assignee.id,
             dueDate: args.due_date, priority: toPriority(args.priority), repeat: args.repeat ? toRepeat(args.repeat) : undefined,
+            effort: args.effort !== undefined ? toEffort(project, args.effort) : undefined,
           }, this.via);
           return { created: describeTask(task, dir, t0) };
         }),
@@ -304,15 +323,21 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
           repeat: repeatArg.optional().describe('Repeating tasks only: the new rule.'),
           stop_repeating: z.boolean().optional().describe("Stop repeating for good. The current copy stays as a normal task. Can't be undone."),
           skip: z.boolean().optional().describe('Repeating tasks: skip this copy. Pass on its own.'),
+          effort: effortArg.optional().describe('Effort, for projects that track it (list_projects): "1h 30m", "M" or "5". Pass "" to clear it.'),
         },
       },
       (args) =>
         this.run(async (v, dir, t0) => {
           if (args.repeat && args.stop_repeating) throw bad('Pass repeat or stop_repeating, not both.');
+          const newProject = args.project !== undefined ? findProject(dir, args.project) : null;
+          const curProject = args.effort !== undefined && !newProject ? (await loadVisibleTask(this.env.DB, v, args.id)).project_id : null;
+          const effortProject = args.effort === undefined ? null : newProject ?? dir.projects.find((p) => p.id === curProject) ?? null;
+          if (args.effort !== undefined && !effortProject) throw bad('That task is in a project you can no longer see.');
           const { task, next } = await updateTaskWithNext(this.env, v, args.id, {
             title: args.title,
             notes: args.notes,
-            projectId: args.project !== undefined ? findProject(dir, args.project).id : undefined,
+            projectId: newProject?.id,
+            effort: effortProject ? toEffort(effortProject, args.effort!) : undefined,
             dueDate: args.due_date,
             priority: args.priority ? toPriority(args.priority) : undefined,
             status: args.status,
@@ -509,13 +534,25 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
       'complete_task',
       {
         title: 'Complete a task',
-        description: 'Mark a task as done (today, in your time zone). For a repeating task this also creates the next copy, returned as next_copy.',
-        inputSchema: { id: z.string().describe('Task id from list_tasks.') },
+        description:
+          'Mark a task as done (today, in your time zone). For a repeating task this also creates the next copy, returned as next_copy. ' +
+          'Some projects need the effort before a task is done (list_projects: effort.required_to_finish): ask the person and pass it as effort.',
+        inputSchema: {
+          id: z.string().describe('Task id from list_tasks.'),
+          effort: effortArg.optional().describe('The effort to record as it is finished ("1h 30m", "M" or "5"), for projects that track it.'),
+        },
         annotations: { idempotentHint: true },
       },
       (args) =>
         this.run(async (v, dir, t0) => {
-          const { task, next } = await updateTaskWithNext(this.env, v, args.id, { status: 'done' }, this.via);
+          let effort: string | null | undefined;
+          if (args.effort !== undefined) {
+            const t = await loadVisibleTask(this.env.DB, v, args.id);
+            const p = dir.projects.find((x) => x.id === t.project_id);
+            if (!p) throw bad('That task is in a project you can no longer see.');
+            effort = toEffort(p, args.effort);
+          }
+          const { task, next } = await updateTaskWithNext(this.env, v, args.id, { status: 'done', effort }, this.via);
           return { completed: describeTask(task, dir, t0), ...(next ? { next_copy: describeTask(next, dir, t0) } : {}) };
         }),
     );
@@ -599,6 +636,7 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
             project: project.name,
             date: day,
             done: done.map((t) => describeTask(t, dir, t0)),
+            ...(project.effort ? { effort_done: effortTotal(project.effort, done.map((t) => t.effort)) || null } : {}),
             still_open: open.map((t) => describeTask(t, dir, t0)),
           };
         }),

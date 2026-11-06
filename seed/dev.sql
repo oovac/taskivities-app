@@ -95,3 +95,11 @@ INSERT INTO task_events (id, task_id, actor_id, via, type, from_value, to_value,
 VALUES ('ef_t37', 't37', 'u_sara', NULL, 'follower_added', NULL, 'u_jordan', NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 hours'));
 
 UPDATE meta SET value = 1 WHERE key = 'version';
+
+-- Effort (migration 0016): Acme Corp tracks time spent and needs it before a task is done; Mobile App uses story points.
+UPDATE projects SET effort = 'time', effort_required = 1 WHERE id = 'p_acme';
+UPDATE projects SET effort = 'fibo' WHERE id = 'p_app';
+UPDATE tasks SET effort = CASE id
+  WHEN 't02' THEN 'fibo:3' WHEN 't06' THEN 'fibo:5' WHEN 't11' THEN 'fibo:8' WHEN 't13' THEN 'fibo:3'
+  WHEN 't14' THEN 'fibo:5' WHEN 't15' THEN 'fibo:2' WHEN 't31' THEN 'fibo:1' WHEN 't32' THEN 'fibo:2' END
+WHERE id IN ('t02', 't06', 't11', 't13', 't14', 't15', 't31', 't32');

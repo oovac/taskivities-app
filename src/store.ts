@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { AppSettings, ArchivedProject, InboxItem, NotifyPrefs, Priority, Project, Role, Task, TaskEvent, User, WebhookInfo } from '../shared/types';
+import type { EffortType } from '../shared/effort';
 import { NORMAL, NOTIFY_DEFAULTS } from '../shared/types';
 import type { PushState } from './push';
 import type { Release } from './updates';
@@ -12,7 +13,7 @@ export type Page = 'tasks' | 'projects' | 'team' | 'settings';
 export type ManageTab = 'people' | 'projects';
 export const BOARD_WEEKS_MAX = 52;
 export type View = 'today' | 'list' | 'board';
-export type PopType = 'move' | 'assign' | 'prio' | 'proj' | 'person' | 'projpick' | 'urole' | 'uproj' | 'udisable' | 'uenable' | 'notify' | 'update' | 'inbox' | 'followers' | 'account' | 'repeat' | 'taskmenu' | 'pages';
+export type PopType = 'move' | 'assign' | 'prio' | 'proj' | 'person' | 'projpick' | 'urole' | 'uproj' | 'udisable' | 'uenable' | 'notify' | 'update' | 'inbox' | 'followers' | 'account' | 'repeat' | 'taskmenu' | 'pages' | 'effort';
 
 export interface Pop {
   type: PopType;
@@ -26,6 +27,8 @@ export interface Pop {
   returnSel: string | null;
   month?: string;
   q?: string;
+  /** effort: mark the task done once the effort is chosen (it was required). */
+  thenDone?: boolean;
 }
 
 export interface InboxState {
@@ -44,6 +47,7 @@ export interface Draft { title: string; notes: string; open: boolean; projectId:
 export interface InviteDraft { emails: string; role: Role; projects: string[]; err: string | null; busy?: boolean }
 export interface ProjEdit {
   id: string | null; name: string; color: string; description: string; members: string[]; err: string | null; returnSel: string | null; busy?: boolean;
+  effort: EffortType | null; effortRequired: boolean;
   /** Showing the "Archive this project?" confirmation. */
   archiving?: boolean;
   /** Opened from the quick-add's project menu: a new project becomes the draft's project. */

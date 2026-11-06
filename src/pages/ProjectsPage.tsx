@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { DOW, addDays, fmt, parseDate } from '../../shared/dates';
 import { isAdmin, isLate } from '../../shared/rules';
-import { PRIORITIES, type Task } from '../../shared/types';
+import { PRIORITIES, type Project, type Task } from '../../shared/types';
+import { effortFor, effortLabel, effortTotal } from '../../shared/effort';
 import { ensureRange, loadArchived, openPop, restoreTask, toast } from '../actions';
 import { QuickAdd } from '../components/QuickAdd';
 import { TaskRow } from '../components/rows';
@@ -38,12 +39,16 @@ export function ProjectsPage() {
   const { done, open } = projectDayData(s, pid, day);
   const name = all ? (isAdmin(s.me!) ? 'All projects' : 'All my projects') : project!.name;
   const inP = (t: Task) => (all ? !!s.projects[t.projectId] : t.projectId === pid);
+  // Effort (a single project that tracks it): the day's total, and each task's in the copied summary.
+  const et = project?.effort ?? null;
+  const doneEffort = et ? effortTotal(et, done.map((t) => t.effort)) : '';
+  const effortOf = (t: Task) => { const v = et ? effortFor(t.effort, et) : null; return et && v ? ` · ${effortLabel(et, v)}` : ''; };
   const goDay = (n: number) => set({ projDay: n === 0 ? s.today : addDays(day, n) > s.today ? s.today : addDays(day, n) });
 
   const copy = async () => {
     const lines = [
-      `${name}: done on ${fmt(day)} (${done.length})`,
-      ...done.map((t) => `• ${t.priority !== 3 ? `[${PRIORITIES[t.priority].name}] ` : ''}${t.title}: ${displayName(s.users[t.assigneeId])}${all ? ` (${s.projects[t.projectId]?.name})` : ''}`),
+      `${name}: done on ${fmt(day)} (${done.length}${doneEffort ? ` · ${doneEffort}` : ''})`,
+      ...done.map((t) => `• ${t.priority !== 3 ? `[${PRIORITIES[t.priority].name}] ` : ''}${t.title}: ${displayName(s.users[t.assigneeId])}${all ? ` (${s.projects[t.projectId]?.name})` : ''}${effortOf(t)}`),
     ];
     try {
       await navigator.clipboard.writeText(lines.join('\n'));
@@ -60,7 +65,7 @@ export function ProjectsPage() {
           <ProjBadge project={project ?? 'all'} />
           <span>
             <span className="h1">{name} {I.chev()}</span>
-            <span className="sub">{mode === 'today' ? <>{done.length} done{open.length > 0 && ` · ${open.length} not finished`}</> : <WeekSub s={s} w={w} inP={inP} />}</span>
+            <span className="sub">{mode === 'today' ? <>{done.length} done{doneEffort && ` · ${doneEffort}`}{open.length > 0 && ` · ${open.length} not finished`}</> : <WeekSub s={s} w={w} inP={inP} project={project} />}</span>
           </span>
         </button>
         <div className="weeknav">
@@ -106,11 +111,22 @@ export function ProjectsPage() {
 }
 
 /** "12 open this week · 3 carried over" for a project's week and board. */
-function WeekSub({ s, w, inP }: { s: State; w: ReturnType<typeof weekInfo>; inP: (t: Task) => boolean }) {
+function WeekSub({ s, w, inP, project }: { s: State; w: ReturnType<typeof weekInfo>; inP: (t: Task) => boolean; project: Project | null }) {
   const tasks = Object.values(s.tasks).filter(inP);
-  const openN = tasks.filter((t) => t.status === 'open' && inRange(shownOn(t, s.today), w.ws, w.we)).length;
+  const openTasks = tasks.filter((t) => t.status === 'open' && inRange(shownOn(t, s.today), w.ws, w.we));
   const late = tasks.filter((t) => isLate(t, s.today)).length;
-  return <>{openN} open {s.weekOffset === 0 ? 'this week' : 'that week'}{s.weekOffset === 0 && late > 0 && <> · <span className="lt">{late} carried over</span></>}</>;
+  const span = w.weeks > 1 ? 'shown' : s.weekOffset === 0 ? 'this week' : 'that week';
+  // Effort: what got done in these days, and for estimates (sizes, points) what's still planned.
+  const et = project?.effort ?? null;
+  const doneE = et ? effortTotal(et, tasks.filter((t) => t.status === 'done' && t.doneOn && inRange(t.doneOn, w.ws, w.we)).map((t) => t.effort)) : '';
+  const openE = et && et !== 'time' ? effortTotal(et, openTasks.map((t) => t.effort)) : '';
+  return (
+    <>
+      {openTasks.length} open {span}{s.weekOffset === 0 && late > 0 && <> · <span className="lt">{late} carried over</span></>}
+      {doneE && <> · <span title="Effort of tasks done in these days">{doneE} done</span></>}
+      {openE && <> · <span title="Effort of open tasks in these days">{openE} planned</span></>}
+    </>
+  );
 }
 
 /** A project's week: every day, everyone's tasks in it (each row says whose it is). */

@@ -1,6 +1,7 @@
 // Task rules shared by the REST API (worker/api.ts) and the MCP tools (worker/mcp.ts).
 // Every check about who may see or change a task lives here, so the two can't drift apart.
 import { addDays, isDate } from '../shared/dates';
+import { EFFORT_TYPES, type EffortType, effortFor, effortValue, isEffortType } from '../shared/effort';
 import { type Repeat, cleanRepeat, describe, firstDate, nextDate, sameRule } from '../shared/repeat';
 import { CHECK_ITEMS_MAX, CHECK_TEXT_MAX, COMMENT_MAX, NOTES_MAX, TITLE_MAX, type Priority, type Task } from '../shared/types';
 import {
@@ -71,7 +72,30 @@ export interface NewTask {
   priority: number;
   /** Makes it a repeating task (see shared/repeat.ts). The first copy lands on the first scheduled date on or after dueDate. */
   repeat?: unknown;
+  /** Effort, stored form ('tshirt:M'; shared/effort.ts), if the project tracks it. */
+  effort?: string | null;
 }
+
+/** How a project tracks effort (type null: it doesn't). */
+export async function projectEffort(db: D1Database, projectId: string): Promise<{ type: EffortType | null; required: boolean }> {
+  const r = await db.prepare('SELECT effort, effort_required FROM projects WHERE id = ?').bind(projectId).first<{ effort: string | null; effort_required: number }>();
+  const type = isEffortType(r?.effort) ? r.effort : null;
+  return { type, required: !!type && !!r?.effort_required };
+}
+
+/** Checks a stored effort value ('<type>:<value>') against the project's type. null / '' clear it. */
+function checkEffort(type: EffortType | null, stored: unknown): string | null {
+  if (stored === null || stored === '') return null;
+  if (!type) throw bad("This task's project doesn't track effort.");
+  if (typeof stored !== 'string') throw bad('Invalid effort.');
+  const i = stored.indexOf(':');
+  if (stored.slice(0, i) !== type) throw bad(`This project tracks effort as ${EFFORT_TYPES[type].name.toLowerCase()}.`);
+  const v = effortValue(type, stored.slice(i + 1));
+  if (!v) throw bad(`That isn't a valid ${EFFORT_TYPES[type].name.toLowerCase()} (${EFFORT_TYPES[type].hint}).`);
+  return v;
+}
+const effortMissing = (type: EffortType) =>
+  bad(`This project needs the effort (${EFFORT_TYPES[type].name.toLowerCase()}) before a task is marked done.`);
 
 /**
  * Validates and inserts a task as `v`. `via` names the AI assistant that made it (null from the app).
@@ -95,6 +119,7 @@ export async function createTask(env: Env, v: Viewer, b: NewTask, via: string | 
   const rule = b.repeat != null ? parseRule(b.repeat) : null;
   const due = rule ? firstDate(rule, b.dueDate) : b.dueDate;
   if (rule?.until && rule.until < due) throw bad('The repeat ends before the first date.');
+  const effort = b.effort != null && b.effort !== '' ? checkEffort((await projectEffort(db, b.projectId)).type, b.effort) : null;
 
   const id = uid();
   const seriesId = rule ? uid() : null;
@@ -103,15 +128,16 @@ export async function createTask(env: Env, v: Viewer, b: NewTask, via: string | 
   if (rule) stmts.push(insertSeries(db, seriesId!, rule, due, { title, notes, projectId: b.projectId, assigneeId: b.assigneeId, priority: b.priority }, v.id, now));
   stmts.push(
     db.prepare(
-      `INSERT INTO tasks (id, title, notes, project_id, assignee_id, created_by, assigned_by, due_date, priority, status, created_at, updated_at, version, series_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ${CURRENT_VERSION}, ?)`,
-    ).bind(id, title, notes, b.projectId, b.assigneeId, v.id, v.id, due, b.priority, now, now, seriesId),
+      `INSERT INTO tasks (id, title, notes, project_id, assignee_id, created_by, assigned_by, due_date, priority, status, created_at, updated_at, version, series_id, effort)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ${CURRENT_VERSION}, ?, ?)`,
+    ).bind(id, title, notes, b.projectId, b.assigneeId, v.id, v.id, due, b.priority, now, now, seriesId, effort),
     eventStmt(db, {
       taskId: id, actorId: v.id, via, type: 'created', at: now,
       to: JSON.stringify({ assignee: b.assigneeId, due, priority: b.priority, project: b.projectId }),
     }),
   );
   if (rule) stmts.push(eventStmt(db, { taskId: id, actorId: v.id, via, type: 'repeat_set', to: describe(rule, due), at: now }));
+  if (effort) stmts.push(eventStmt(db, { taskId: id, actorId: v.id, via, type: 'effort_set', to: effort, at: now }));
   await db.batch(stmts);
   notify(env, [{ to: b.assigneeId, kind: 'assigned', actorId: v.id, via, taskId: id, isNew: true }]);
   return mapTask((await loadTask(db, id))!);
@@ -121,6 +147,8 @@ export async function createTask(env: Env, v: Viewer, b: NewTask, via: string | 
 export interface Patch {
   title?: string; notes?: string; projectId?: string; assigneeId?: string; dueDate?: string; priority?: number;
   status?: 'open' | 'done';
+  /** Effort, stored form ('time:90', 'tshirt:M'; shared/effort.ts), or null to clear it. */
+  effort?: string | null;
   /** Optional message attached to a transfer. */
   note?: string;
   /** Undo of your own last date move: allows putting a past due date back. */
@@ -199,6 +227,19 @@ export async function applyPatch(env: Env, v: Viewer, id: string, b: Patch, via:
     undidSkip = isUndo && last!.type === 'skipped';
     set('due_date', b.dueDate);
     ev({ type: 'date_moved', from: t.due_date, to: b.dueDate });
+  }
+  // Effort is checked against the project the task ends up in.
+  let pe: Awaited<ReturnType<typeof projectEffort>> | null = null;
+  const effortOf = async () => (pe ??= await projectEffort(db, project));
+  let effortNow = t.effort ?? null;
+  if (b.effort !== undefined) {
+    const val = checkEffort((await effortOf()).type, b.effort);
+    if (val !== effortNow) { set('effort', val); ev({ type: 'effort_set', from: effortNow, to: val }); }
+    effortNow = val;
+  }
+  if (b.status === 'done' && t.status !== 'done') {
+    const { type, required } = await effortOf();
+    if (required && type && !effortFor(effortNow, type)) throw effortMissing(type);
   }
   if (b.status !== undefined && b.status !== t.status) {
     if (b.status === 'done') {

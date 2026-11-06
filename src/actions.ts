@@ -2,6 +2,7 @@
 import { addDays, rel, weekStart } from '../shared/dates';
 import { type Repeat, describe } from '../shared/repeat';
 import { onProject } from '../shared/rules';
+import { type EffortType, effortFor, storedEffortLabel } from '../shared/effort';
 import { ATTACH_MAX_BYTES } from '../shared/types';
 import type { AppSettings, ArchivedProject, Bootstrap, InviteEmailResult, WebhookInfo, WebhookRequestInfo, Priority, Project, Role, SyncResponse, Task, TaskEvent, User } from '../shared/types';
 import { PRIORITIES } from '../shared/types';
@@ -162,7 +163,7 @@ export async function loadEvents(id: string) {
 }
 
 // ---------- task edits ----------
-type Changes = Partial<Pick<Task, 'title' | 'notes' | 'projectId' | 'assigneeId' | 'dueDate' | 'priority' | 'status'>>;
+type Changes = Partial<Pick<Task, 'title' | 'notes' | 'projectId' | 'assigneeId' | 'dueDate' | 'priority' | 'status' | 'effort'>>;
 
 const putTask = (t: Task) => set((s) => ({ tasks: { ...s.tasks, [t.id]: t }, events: { ...s.events, [t.id]: undefined } }));
 
@@ -205,11 +206,26 @@ function undo(prev: Task, c: Changes) {
   void patchTask(prev.id, back, { restore: true });
 }
 
-export const toggleDone = (id: string) => {
-  const t = S().tasks[id];
+/** Ticks a task done (or not). If its project needs the effort first and it has none, asks for it (then ticks it). */
+export const toggleDone = (id: string, anchor?: HTMLElement | null) => {
+  const s = S();
+  const t = s.tasks[id];
   if (!t) return;
   const done = t.status !== 'done';
+  const p = s.projects[t.projectId];
+  if (done && p?.effort && p.effortRequired && !effortFor(t.effort, p.effort)) {
+    const a = anchor ?? (s.drawer === id ? document.querySelector<HTMLElement>('.drawer [data-act="toggle"]') : null)
+      ?? document.querySelector<HTMLElement>(`[data-nav="task:${id}"] [data-act="toggle"]`) ?? document.querySelector<HTMLElement>(`[data-nav="task:${id}"]`);
+    if (a) { openPop({ type: 'effort', id, thenDone: true }, a); return; }
+  }
   void patchTask(id, { status: done ? 'done' : 'open' }, done ? { toast: `Done: ${t.title}` } : {});
+};
+/** Sets a task's effort (stored form, or null), and marks it done too when `thenDone`. */
+export const setEffort = (id: string, effort: string | null, thenDone = false) => {
+  const t = S().tasks[id];
+  if (!t) return;
+  void patchTask(id, thenDone ? { effort, status: 'done' } : { effort },
+    { toast: thenDone ? `Done: ${t.title}` : effort ? `Effort: ${storedEffortLabel(effort)}` : 'Effort cleared' });
 };
 export const transfer = (id: string, to: string, note?: string, thisOnly?: boolean) =>
   patchTask(id, { assigneeId: to }, { note, thisOnly, toast: `Transferred to ${firstName(S().users[to])}${thisOnly ? ' (just this one)' : ''}` });
@@ -534,8 +550,8 @@ export async function enableUser(id: string, projects?: string[]) {
   }
 }
 /** Creates or saves a project. Returns an error message to show in the editor, or the project's id. */
-export async function saveProject(p: { id: string | null; name: string; color: string; description: string; members: string[] }): Promise<{ error: string } | { id: string }> {
-  const body = { name: p.name, color: p.color, description: p.description, members: p.members };
+export async function saveProject(p: { id: string | null; name: string; color: string; description: string; members: string[]; effort: EffortType | null; effortRequired: boolean }): Promise<{ error: string } | { id: string }> {
+  const body = { name: p.name, color: p.color, description: p.description, members: p.members, effort: p.effort, effortRequired: p.effortRequired };
   try {
     let id = p.id;
     if (id) await api.patch(`/api/admin/projects/${id}`, body);

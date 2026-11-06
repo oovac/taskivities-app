@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { fmt } from '../../shared/dates';
 import { EMAIL_RE, isAdmin } from '../../shared/rules';
 import { DESCRIPTION_MAX, PROJECT_COLORS, type Role } from '../../shared/types';
+import { EFFORT_ORDER, EFFORT_TYPES, type EffortType } from '../../shared/effort';
 import { addPeople, archiveProject, connectGmail, copyInviteLink, loadArchivedProjects, openPop, resendInvite, restoreProject, saveProject, setManageTab } from '../actions';
 import { activeSelector, focusLater } from '../focus';
 import { S, set, useStore, type ManageTab, type ProjEdit, type State } from '../store';
@@ -19,6 +20,7 @@ export function openProjEdit(id: string | null, opts: { forDraft?: boolean } = {
     projEdit: {
       id, forDraft: opts.forDraft, name: p?.name ?? '', color: p?.color ?? PROJECT_COLORS[Object.keys(s.projects).length % PROJECT_COLORS.length],
       description: p?.description ?? '',
+      effort: p?.effort ?? null, effortRequired: p?.effortRequired ?? false,
       members: id ? people(s).filter((u) => !isAdmin(u) && u.projects.includes(id)).map((u) => u.id) : [],
       err: null, returnSel: activeSelector(),
     },
@@ -301,7 +303,7 @@ export function ProjectEditor({ pe, s }: { pe: ProjEdit; s: State }) {
   const save = async () => {
     if (!pe.name.trim()) { upd({ err: 'Give the project a name.' }); focusLater('#pe-name'); return; }
     upd({ busy: true, err: null });
-    const r = await saveProject({ id: pe.id, name: pe.name.trim(), color: pe.color, description: pe.description.trim(), members: pe.members });
+    const r = await saveProject({ id: pe.id, name: pe.name.trim(), color: pe.color, description: pe.description.trim(), members: pe.members, effort: pe.effort, effortRequired: pe.effortRequired });
     if ('error' in r) { upd({ busy: false, err: r.error }); focusLater('#pe-name'); return; }
     // A new project shows up where it was asked for: picked in a project's view, or in the quick-add.
     const fresh = !pe.id;
@@ -348,6 +350,27 @@ export function ProjectEditor({ pe, s }: { pe: ProjEdit; s: State }) {
             <span>{I.bolt()} Assistants connected over MCP (like Claude) read this to decide which project a new task belongs in and what a project is about. People see it as a tooltip.</span>
             <span className="pe-count">{pe.description.length}/{DESCRIPTION_MAX}</span>
           </div>
+          <div className="lbl" id="pe-effort-l">Effort <span className="muted">· how this project measures the work in a task</span></div>
+          <div className="pchips" role="radiogroup" aria-labelledby="pe-effort-l">
+            {([null, ...EFFORT_ORDER] as (EffortType | null)[]).map((k) => (
+              <button key={k ?? 'none'} className={`pchip ${pe.effort === k ? 'on' : ''}`} role="radio" aria-checked={pe.effort === k} data-act="pe-effort" data-e={k ?? 'none'}
+                onClick={() => upd({ effort: k, ...(k ? {} : { effortRequired: false }) })}>
+                {k ? EFFORT_TYPES[k].name : 'Not tracked'}
+              </button>
+            ))}
+          </div>
+          {pe.effort && (
+            <div className="pe-effort">
+              <span className="muted-s">{EFFORT_TYPES[pe.effort].hint}.</span>
+              <label className="pe-req">
+                <input type="checkbox" data-act="pe-effort-req" checked={pe.effortRequired} onChange={(e) => upd({ effortRequired: e.target.checked })} />
+                Required before a task is marked done
+              </label>
+            </div>
+          )}
+          {pe.id && s.projects[pe.id]?.effort && pe.effort !== s.projects[pe.id]?.effort && (
+            <div className="muted-s pe-effort">Effort already recorded as {EFFORT_TYPES[s.projects[pe.id].effort!].name.toLowerCase()} is kept, and shows again if you switch back.</div>
+          )}
           <div className="lbl">Members <span className="muted">· admins are on every project</span></div>
           <div className="pchips">
             {members.map((u) => {

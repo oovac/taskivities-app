@@ -164,6 +164,18 @@ export function Day({ s, d, k: who, pool, carried, TD, previews, ctx = 'to', sho
       <div className="rows">{carried.map((t) => <TaskRow key={t.id} t={t} ctx={carriedCtx} showProject={showProject} />)}</div>
     </div>
   );
+  // A day with nothing on it: one dashed row (like a folded day), which adds a task on that day.
+  if (!TD && !carriedBlock && list.length + previews.length === 0)
+    return (
+      <div className="day">
+        <button className={`collapsed empty${isT ? ' today' : ''}`} data-act="add-day" data-d={d} data-nav={`add:${d}`} tabIndex={-1}
+          aria-label={`Nothing planned on ${fmt(d)}. Add a task`}
+          onClick={() => { set((st) => ({ draft: { ...st.draft, dueDate: d, open: true } })); setTimeout(() => document.getElementById('qa-input')?.focus(), 0); }}>
+          <span className="dn">{isT ? 'Today' : DOW[dd.getDay()]}</span> {label}
+          <span className="sum">Nothing planned<span className="add">{I.plus(12)} Add</span></span>
+        </button>
+      </div>
+    );
   return (
     <div className="day">
       {!TD && (

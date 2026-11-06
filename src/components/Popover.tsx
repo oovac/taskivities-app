@@ -5,9 +5,10 @@ import { isAdmin, onProject } from '../../shared/rules';
 import { PRIORITIES, type NotifyPrefs, type Priority, type Task } from '../../shared/types';
 import {
   assignable, closePop, defaultDraftDate, moveTasks, openConnect, openPop, viewProject, disableUser, enableUser, setPage, setPriority, setProject, setRepeat, signOut, switchablePeople, transfer,
-  updateUser, viewPerson, editNotes, editChecklist, pickAttachments, archiveTask, setFollowing,
+  updateUser, viewPerson, editNotes, editChecklist, pickAttachments, archiveTask, setFollowing, setEffort,
 } from '../actions';
 import { focusLater } from '../focus';
+import { EFFORT_TYPES, effortFor, effortFromInput, fmtTime } from '../../shared/effort';
 import { type ThemePref, setThemePref } from '../theme';
 import { installApp, isInstalled, isIOS } from '../install';
 import { setNotifyPrefs, testPush, turnOffPush, turnOnPush } from '../push';
@@ -76,6 +77,7 @@ function Content({ p, s }: { p: Pop; s: State }) {
     case 'move': return <MovePop p={p} s={s} />;
     case 'assign': return <AssignPop p={p} s={s} />;
     case 'prio': return <PrioPop p={p} s={s} />;
+    case 'effort': return <EffortPop p={p} s={s} />;
     case 'proj': return <ProjPop p={p} s={s} />;
     case 'person': case 'projpick': return <SwitchPop p={p} s={s} />;
     case 'urole': return <RolePop p={p} s={s} />;
@@ -207,6 +209,53 @@ function PrioPop({ p, s }: { p: Pop; s: State }) {
         </button>
       ))}
     </>
+  );
+}
+
+/** A task's effort, the way its project measures it: a time (typed, or a quick pick), a size or story points. */
+function EffortPop({ p, s }: { p: Pop; s: State }) {
+  const t = s.tasks[p.id!];
+  const proj = t ? s.projects[t.projectId] : null;
+  const type = proj?.effort ?? null;
+  const cur = t && type ? effortFor(t.effort, type) : null;
+  const [text, setText] = useState(cur && type === 'time' ? fmtTime(Number(cur)) : '');
+  const [err, setErr] = useState('');
+  if (!t || !proj || !type) return <div className="pop-foot">This project doesn't track effort.</div>;
+  const pick = (stored: string | null) => {
+    closePop(true);
+    if (stored === (t.effort ?? null) && !p.thenDone) return;
+    setEffort(t.id, stored, p.thenDone);
+  };
+  const saveTime = () => {
+    const v = effortFromInput('time', text);
+    if (!v) { setErr('Try 45m, 1h 30m, 1:30 or 1.5 (hours).'); return; }
+    pick(v);
+  };
+  return (
+    <div className="effort-pop">
+      <div className="pop-h">{p.thenDone ? `Add the ${EFFORT_TYPES[type].name.toLowerCase()} to finish` : EFFORT_TYPES[type].name}</div>
+      {type === 'time' ? (
+        <>
+          <form className="ef-time" onSubmit={(e) => { e.preventDefault(); saveTime(); }}>
+            <input className="pin" id="pop-q" value={text} placeholder="e.g. 1h 30m" autoComplete="off" aria-label="Time spent"
+              aria-invalid={!!err} onChange={(e) => { setText(e.target.value); setErr(''); }} />
+            <button className="btn-primary sm" type="submit" data-act="effort-save">{p.thenDone ? 'Done' : 'Save'}</button>
+          </form>
+          {err && <div className="ef-err" role="alert">{err}</div>}
+          <div className="ef-quick">
+            {[15, 30, 60, 120, 240].map((m) => (
+              <button key={m} className="chip" data-act="effort-pick" data-v={`time:${m}`} onClick={() => pick(`time:${m}`)}>{fmtTime(m)}</button>
+            ))}
+          </div>
+        </>
+      ) : EFFORT_TYPES[type].values!.map((v) => (
+        <button key={v} className={`opt ${v === cur ? 'cur' : ''}`} data-act="effort-pick" data-v={`${type}:${v}`} onClick={() => pick(`${type}:${v}`)}>
+          <span className="ef-v">{v}</span>{type === 'fibo' ? `point${v === '1' ? '' : 's'}` : ''}<span className="r">{v === cur ? 'current' : ''}</span>
+        </button>
+      ))}
+      {cur && !p.thenDone && <><div className="pop-sep" /><button className="opt" data-act="effort-clear" onClick={() => pick(null)}>{I.x(14)}Clear</button></>}
+      {p.thenDone && <div className="pop-foot">{proj.name} needs this before a task is marked done.</div>}
+    </div>
   );
 }
 

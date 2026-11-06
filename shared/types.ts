@@ -1,5 +1,6 @@
 // Types shared by the Worker (API) and the browser app.
 import type { SeriesInfo } from './repeat';
+import type { EffortType } from './effort';
 
 export type Role = 'admin' | 'member';
 /** Disabled people can't sign in, but stay on the People & projects page (and in every task's history) and can be enabled again. */
@@ -31,6 +32,9 @@ export interface Project {
   /** Written mainly for AI assistants (MCP clients): what belongs here, what doesn't, naming conventions. */
   description: string;
   archived: boolean;
+  /** How the project measures effort on its tasks (null: it doesn't), and whether a task needs it before it's done. */
+  effort: EffortType | null;
+  effortRequired: boolean;
 }
 
 /** What a person is notified about on their devices (Web Push). */
@@ -118,6 +122,8 @@ export interface Task {
   archivedBy: string | null;
   /** People following it (the creator, unless they stopped, and anyone who followed, was added or commented). Whoever has it always hears about it too. */
   followers: string[];
+  /** '<type>:<value>' (shared/effort.ts), or null. Only counts when its type is what the project tracks now. */
+  effort: string | null;
 }
 
 export type EventType =
@@ -125,6 +131,8 @@ export type EventType =
   | 'transferred'
   | 'date_moved'
   | 'priority_changed'
+  /** Effort set, changed or cleared: from/to are stored values ('time:90', 'tshirt:M'; null: none). */
+  | 'effort_set'
   | 'project_changed'
   | 'renamed'
   | 'notes_edited'

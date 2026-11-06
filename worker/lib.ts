@@ -2,6 +2,7 @@ import type { OAuthHelpers } from '@cloudflare/workers-oauth-provider';
 import type { Context } from 'hono';
 import type { Project, Task, TaskEvent, User } from '../shared/types';
 import type { SeriesInfo } from '../shared/repeat';
+import { isEffortType } from '../shared/effort';
 import { todayIn } from '../shared/dates';
 
 export interface Env {
@@ -108,7 +109,7 @@ export const sha256hex = async (s: string) =>
 // ---------- row mapping ----------
 // Always selected FROM tasks (no alias): the last column folds in the task's series, if any.
 export const TASK_COLS =
-  'id, title, notes, project_id, assignee_id, created_by, assigned_by, due_date, priority, status, done_at, done_on, done_by, created_at, updated_at, version, series_id, archived_at, archived_by, ' +
+  'id, title, notes, project_id, assignee_id, created_by, assigned_by, due_date, priority, status, done_at, done_on, done_by, created_at, updated_at, version, series_id, archived_at, archived_by, effort, ' +
   "(SELECT json_object('id', s.id, 'rule', json(s.rule), 'anchor', s.starts_on, 'active', s.active, 'made', s.made, 'assigneeId', s.assignee_id, 'title', s.title) " +
   'FROM series s WHERE s.id = tasks.series_id) AS series_json, ' +
   "(SELECT COUNT(*) FROM task_events e WHERE e.task_id = tasks.id AND e.type = 'comment') AS comment_count, " +
@@ -121,7 +122,7 @@ export const TASK_COLS =
 export interface TaskRow {
   id: string; title: string; notes: string; project_id: string; assignee_id: string; created_by: string; assigned_by: string;
   due_date: string; priority: number; status: 'open' | 'done'; done_at: string | null; done_on: string | null; done_by: string | null;
-  created_at: string; updated_at: string; version: number; series_id: string | null; archived_at: string | null; archived_by: string | null; series_json: string | null; comment_count: number; checklist_json: string | null; attachments_json: string | null; followers_json?: string | null;
+  created_at: string; updated_at: string; version: number; series_id: string | null; archived_at: string | null; archived_by: string | null; effort?: string | null; series_json: string | null; comment_count: number; checklist_json: string | null; attachments_json: string | null; followers_json?: string | null;
 }
 const parseSeries = (j: string | null): SeriesInfo | null => {
   if (!j) return null;
@@ -139,6 +140,7 @@ export const mapTask = (r: TaskRow): Task => ({
   archivedBy: r.archived_by ?? null,
   checklist: (JSON.parse(r.checklist_json || '[]') as { id: string; text: string; done: number }[]).map((c) => ({ id: c.id, text: c.text, done: !!c.done })),
   followers: followersFrom(r.created_by, r.followers_json),
+  effort: r.effort ?? null,
 });
 
 /** The creator follows unless they stopped (a row with following = 0); everyone else follows with a row (migrations/0015). */
@@ -162,8 +164,12 @@ export const mapUser = (r: UserRow, projects: string[]): User => ({
 
 export interface ProjectRow {
   id: string; name: string; color: string; description: string; archived: number; created_at: string; archived_at: string | null; archived_by: string | null;
+  effort: string | null; effort_required: number;
 }
-export const mapProject = (r: ProjectRow): Project => ({ id: r.id, name: r.name, color: r.color, description: r.description, archived: !!r.archived });
+export const mapProject = (r: ProjectRow): Project => ({
+  id: r.id, name: r.name, color: r.color, description: r.description, archived: !!r.archived,
+  effort: isEffortType(r.effort) ? r.effort : null, effortRequired: isEffortType(r.effort) && !!r.effort_required,
+});
 
 export interface EventRow { id: string; task_id: string; actor_id: string; via: string | null; type: string; from_value: string | null; to_value: string | null; note: string | null; at: string }
 export const mapEvent = (r: EventRow): TaskEvent => ({

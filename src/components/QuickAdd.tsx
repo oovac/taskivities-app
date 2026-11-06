@@ -29,8 +29,13 @@ export function QuickAdd() {
     el.style.height = Math.min(el.scrollHeight, 240) + 'px';
   }, [d.notes, open]);
 
+  // Safari doesn't focus a button you click, so clicking a chip blurs the title (focus goes nowhere) before the chip's
+  // click runs. While a press inside the form is under way, wait for it to finish (the click opens the chip's menu) and
+  // decide then.
+  const pressing = useRef(false);
   const collapseIfIdle = () =>
     setTimeout(() => {
+      if (pressing.current) return;
       const a = document.activeElement;
       if (box.current?.contains(a) || document.querySelector('.pop')?.contains(a) || S().pop?.mode === 'qa') return;
       const dd = S().draft;
@@ -53,7 +58,17 @@ export function QuickAdd() {
   return (
     <div className={`qa ${open ? 'open' : ''}`} id="qa" ref={box}
       onFocus={() => !S().draft.open && setDraft({ open: true })} onBlur={collapseIfIdle}
-      onMouseDown={() => !S().draft.open && setDraft({ open: true })}>
+      onPointerDown={() => {
+        if (!S().draft.open) setDraft({ open: true });
+        pressing.current = true;
+        const up = () => {
+          window.removeEventListener('pointerup', up, true);
+          window.removeEventListener('pointercancel', up, true);
+          setTimeout(() => { pressing.current = false; collapseIfIdle(); }, 0); // after the click
+        };
+        window.addEventListener('pointerup', up, true);
+        window.addEventListener('pointercancel', up, true);
+      }}>
       <div className="qa-top">
         <span className="plus">{I.plus()}</span>
         <input id="qa-input" ref={titleRef} placeholder={placeholder} autoComplete="off" aria-label="Task title" value={d.title}

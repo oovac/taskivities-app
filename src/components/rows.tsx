@@ -1,4 +1,5 @@
 import type { DragEvent } from 'react';
+import { EFFORT_TYPES, effortFor, effortLabel } from '../../shared/effort';
 import { diffDays, fmt, rel } from '../../shared/dates';
 import { isLate, shownOn } from '../../shared/rules';
 import { describe } from '../../shared/repeat';
@@ -77,7 +78,7 @@ export function TaskRow({ t, ctx, showProject = false }: { t: Task; ctx: RowCtx;
         onClick={() => (ghost ? openDrawer(t.id) : toggleDone(t.id))}>{I.check()}</button>
       <div className="row-main" data-act="open" onClick={() => openDrawer(t.id)}>
         {(!done || report) && <PrioTag p={t.priority} />}
-        <div className="row-title">{t.title}{!done && t.series?.active && <RepeatMark t={t} />}{t.checklist.length > 0 && <CheckMark t={t} />}{t.attachments.length > 0 && <span className="clipmark" title={`${t.attachments.length} attachment${t.attachments.length > 1 ? 's' : ''}`} aria-label={`${t.attachments.length} attachments`}>{I.clip(11)}{t.attachments.length}</span>}{t.comments > 0 && <CommentMark n={t.comments} />}</div>
+        <div className="row-title">{t.title}{!done && t.series?.active && <RepeatMark t={t} />}{t.checklist.length > 0 && <CheckMark t={t} />}{t.attachments.length > 0 && <span className="clipmark" title={`${t.attachments.length} attachment${t.attachments.length > 1 ? 's' : ''}`} aria-label={`${t.attachments.length} attachments`}>{I.clip(11)}{t.attachments.length}</span>}{t.comments > 0 && <CommentMark n={t.comments} />}<EffortMark t={t} /></div>
       </div>
       <div className="meta">{meta}</div>
       {!done && !ghost && (
@@ -117,7 +118,7 @@ export function TaskCard({ t, side, hideProject = false }: { t: Task; side: 'to'
       data-nav={`task:${t.id}`} tabIndex={-1} aria-label={ariaFor(t, today)} draggable={!done} onDragStart={onDragStart} onDragEnd={onDragEnd}>
       <button className="chk" tabIndex={-1} data-act="toggle" title={done ? 'Mark not done' : 'Mark done'} onClick={() => toggleDone(t.id)}>{I.check()}</button>
       <div className="tc-body" data-act="open" onClick={() => openDrawer(t.id)}>
-        <div className="tc-title">{!done && <PrioTag p={t.priority} />}{t.title}{!done && t.series?.active && <RepeatMark t={t} />}{t.checklist.length > 0 && <CheckMark t={t} />}{t.attachments.length > 0 && <span className="clipmark" title={`${t.attachments.length} attachment${t.attachments.length > 1 ? 's' : ''}`} aria-label={`${t.attachments.length} attachments`}>{I.clip(11)}{t.attachments.length}</span>}{t.comments > 0 && <CommentMark n={t.comments} />}</div>
+        <div className="tc-title">{!done && <PrioTag p={t.priority} />}{t.title}{!done && t.series?.active && <RepeatMark t={t} />}{t.checklist.length > 0 && <CheckMark t={t} />}{t.attachments.length > 0 && <span className="clipmark" title={`${t.attachments.length} attachment${t.attachments.length > 1 ? 's' : ''}`} aria-label={`${t.attachments.length} attachments`}>{I.clip(11)}{t.attachments.length}</span>}{t.comments > 0 && <CommentMark n={t.comments} />}<EffortMark t={t} /></div>
         <div className="tc-meta">
           {!hideProject && <span className="tc-proj"><i style={{ background: p?.color }} />{p?.name}</span>}
           {late && <LateBadge t={t} today={today} />}
@@ -135,6 +136,15 @@ const CheckMark = ({ t }: { t: Task }) => {
     <span className={`ckmark ${done === n ? 'all' : ''}`} title={`Checklist: ${done} of ${n} done`} aria-label={`Checklist ${done} of ${n} done`}>{I.check(11)}{done}/{n}</span>
   );
 };
+
+/** The task's effort, if its project tracks it and it has one: "M", "5 pts", "1h 30m". */
+function EffortMark({ t }: { t: Task }) {
+  const p = useStore().projects[t.projectId];
+  const v = p?.effort ? effortFor(t.effort, p.effort) : null;
+  if (!p?.effort || !v) return null;
+  const label = effortLabel(p.effort, v);
+  return <span className="efmark" title={`${EFFORT_TYPES[p.effort].name}: ${label}`} aria-label={`Effort ${label}`}>{label}</span>;
+}
 
 const CommentMark = ({ n }: { n: number }) => (
   <span className="cmark" title={`${n} comment${n > 1 ? 's' : ''}`} aria-label={`${n} comment${n > 1 ? 's' : ''}`}>{I.chat(11)}{n}</span>

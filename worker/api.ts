@@ -94,7 +94,7 @@ api.get('/sync', async (c) => {
 // ---------- create ----------
 api.post('/tasks', async (c) => {
   const v = c.get('viewer');
-  const b = await c.req.json<{ title?: string; notes?: string; projectId?: string; assigneeId?: string; dueDate?: string; priority?: number; repeat?: unknown }>();
+  const b = await c.req.json<{ title?: string; notes?: string; projectId?: string; assigneeId?: string; dueDate?: string; priority?: number; repeat?: unknown; effort?: string | null }>();
   // The app's defaults: assigned to me, due today, Normal priority.
   const task = await createTask(c.env, v, {
     title: b.title ?? '',
@@ -104,6 +104,7 @@ api.post('/tasks', async (c) => {
     dueDate: b.dueDate ?? today(v),
     priority: b.priority ?? 3,
     repeat: b.repeat,
+    effort: b.effort,
   });
   return c.json({ task }, 201);
 });

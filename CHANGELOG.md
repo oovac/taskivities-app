@@ -9,6 +9,10 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+- **Safari:** changing the project (or date, priority, assignee) in a new task before typing its title no longer closes the form.
+- **Empty days fold to one row:** in a week, a coming day with nothing planned is a single dashed row instead of a heading and an empty box. Click it to add a task on that day.
+- **Effort:** a project can now track effort on its tasks, as **time spent** (like 1h 30m), **T-shirt sizes** (XS–XL) or **story points** (1–21), chosen in the project's editor. It can be required before a task is marked done: ticking it asks for the effort first. Set it in the task panel; it shows as a small badge on the task. A project's day report, Copy summary and week show totals ("1 done · 1h 30m", "13 pts planned"). Assistants can read and set it too (`effort` on `create_task`, `update_task` and `complete_task`).
+
 - **Board, more than a week:** show as many weeks as you like on the Board, side by side, and scroll sideways. Use − / + above it or the *Next week* column at its end. Drag a card near the edge and the board scrolls with you, so you can move a task from Friday to next Tuesday, or weeks ahead. The Board remembers how many weeks you chose on each device.
 
 ## v0.3.2 (2026-11-06)

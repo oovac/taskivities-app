@@ -140,6 +140,14 @@ b{font-weight:600}
 .collapsed .sum{margin-left:auto;display:flex;gap:10px;align-items:center}
 .collapsed .sum .c{color:var(--carry-ink)}
 .collapsed svg{color:var(--faint)}
+/* A coming day with nothing on it: a dashed row; hovering (or focusing) shows that clicking adds a task that day. */
+.collapsed.empty{background:transparent;border:1px dashed var(--line-strong);color:var(--faint)}
+.collapsed.empty:hover{background:var(--fill)}
+.collapsed.empty .dn{color:var(--text-2)}
+.collapsed.empty.today .dn{color:var(--accent)}
+.collapsed.empty .add{display:inline-flex;align-items:center;gap:4px;color:var(--accent);font-weight:600;opacity:0;transition:opacity .12s}
+.collapsed.empty:hover .add,.collapsed.empty:focus-visible .add{opacity:1}
+.collapsed.empty .add svg{color:var(--accent)}
 
 /* carried */
 .carried{border:1px solid var(--carry-line);background:var(--carry);border-radius:var(--r);margin-bottom:10px;overflow:hidden}
@@ -769,6 +777,17 @@ a.att-n:hover{color:var(--accent);text-decoration:underline}
 .att-bar i{display:block;height:100%;background:var(--accent);transition:width .15s}
 .dr-drop{position:absolute;inset:8px;z-index:5;border:2px dashed var(--accent);border-radius:14px;background:color-mix(in srgb,var(--panel) 85%,transparent);display:flex;align-items:center;justify-content:center;gap:8px;font-weight:600;color:var(--accent);pointer-events:none}
 .clipmark{display:inline-flex;align-items:center;gap:2px;margin-left:7px;font-size:11px;font-weight:500;color:var(--faint);vertical-align:1px}
+/* Effort (projects that track it): a small pill after the title, and the picker */
+.efmark{display:inline-block;margin-left:7px;padding:0 6px;border-radius:999px;background:var(--fill-strong);font-size:10.5px;font-weight:600;line-height:16px;color:var(--muted);vertical-align:1px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.effort-pop{min-width:230px}
+.ef-time{display:flex;gap:6px;align-items:center;padding:0 4px}
+.ef-time .pin{margin:2px 0!important;flex:1}
+.ef-err{padding:2px 8px 4px;font-size:12px;color:var(--danger-ink)}
+.ef-quick{display:flex;flex-wrap:wrap;gap:5px;padding:6px 4px 4px}
+.effort-pop .ef-v{display:inline-block;min-width:26px;font-weight:650;font-variant-numeric:tabular-nums}
+.fields .ph{color:var(--faint)}
+.pe-effort{display:flex;flex-direction:column;gap:8px;margin:8px 0 6px}
+.pe-req{display:flex;align-items:center;gap:8px;font-size:13px}
 
 /* App icon preview (Settings) */
 .icon-prev{width:auto;align-items:center}

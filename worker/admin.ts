@@ -1,6 +1,7 @@
 // Admin-only: people, roles, project access, projects, app settings.
 import { Hono } from 'hono';
 import { EMAIL_RE } from '../shared/rules';
+import { isEffortType } from '../shared/effort';
 import { DESCRIPTION_MAX, PROJECT_COLORS, USER_COLORS, type Role } from '../shared/types';
 import { disconnect, sendInvites, type SendResult } from './gmail';
 import { checkIcons, checkName, checkSvg, loadSettings, saveIcons, saveLogo, saveName, saveWordmark } from './settings';
@@ -218,7 +219,7 @@ admin.post('/users/:id/enable', async (c) => {
 });
 
 // ---------- projects ----------
-interface ProjectBody { name?: string; color?: string; description?: string; members?: string[] }
+interface ProjectBody { name?: string; color?: string; description?: string; members?: string[]; effort?: string | null; effortRequired?: boolean }
 
 async function validateProject(db: D1Database, b: ProjectBody, selfId?: string) {
   const name = (b.name ?? '').trim();
@@ -229,7 +230,10 @@ async function validateProject(db: D1Database, b: ProjectBody, selfId?: string) 
   const color = b.color && PROJECT_COLORS.includes(b.color) ? b.color : PROJECT_COLORS[0];
   const description = (b.description ?? '').trim();
   if (description.length > DESCRIPTION_MAX) throw bad(`Descriptions can be at most ${DESCRIPTION_MAX} characters.`);
-  return { name, color, description };
+  if (b.effort != null && !isEffortType(b.effort)) throw bad('Unknown way of tracking effort.');
+  const effort = b.effort ?? null;
+  const effortRequired = !!effort && !!b.effortRequired;
+  return { name, color, description, effort, effortRequired };
 }
 
 admin.post('/projects', async (c) => {
@@ -239,7 +243,8 @@ admin.post('/projects', async (c) => {
   const p = await validateProject(db, b);
   const id = uid();
   const stmts = [
-    db.prepare('INSERT INTO projects (id, name, color, description, archived, created_at) VALUES (?, ?, ?, ?, 0, ?)').bind(id, p.name, p.color, p.description, nowIso()),
+    db.prepare('INSERT INTO projects (id, name, color, description, effort, effort_required, archived, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?)')
+      .bind(id, p.name, p.color, p.description, p.effort, p.effortRequired ? 1 : 0, nowIso()),
     ...(b.members ?? []).map((u) => db.prepare("INSERT OR IGNORE INTO project_members (user_id, project_id) SELECT id, ? FROM users WHERE id = ? AND role = 'member' AND status != 'disabled'").bind(id, u)),
     auditStmt(db, v.id, 'project_created', id, p),
     bumpDirectory(db),
@@ -255,8 +260,14 @@ admin.patch('/projects/:id', async (c) => {
   const cur = await db.prepare('SELECT * FROM projects WHERE id = ? AND archived = 0').bind(id).first<ProjectRow>();
   if (!cur) throw notFound('Project not found.');
   const b = await c.req.json<ProjectBody>();
-  const p = await validateProject(db, { name: b.name ?? cur.name, color: b.color ?? cur.color, description: b.description ?? cur.description }, id);
-  const stmts: D1PreparedStatement[] = [db.prepare('UPDATE projects SET name = ?, color = ?, description = ? WHERE id = ?').bind(p.name, p.color, p.description, id)];
+  const p = await validateProject(db, {
+    name: b.name ?? cur.name, color: b.color ?? cur.color, description: b.description ?? cur.description,
+    effort: b.effort !== undefined ? b.effort : cur.effort, effortRequired: b.effortRequired ?? !!cur.effort_required,
+  }, id);
+  const stmts: D1PreparedStatement[] = [
+    db.prepare('UPDATE projects SET name = ?, color = ?, description = ?, effort = ?, effort_required = ? WHERE id = ?')
+      .bind(p.name, p.color, p.description, p.effort, p.effortRequired ? 1 : 0, id),
+  ];
   if (b.members) {
     // Disabled people keep their place on the project (for when they're enabled again); the editor doesn't list them.
     const { results } = await db.prepare(

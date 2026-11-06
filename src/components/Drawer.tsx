@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { EFFORT_TYPES, effortFor, effortLabel, storedEffortLabel } from '../../shared/effort';
 import { addDays, fmt } from '../../shared/dates';
 import { isLate, shownOn } from '../../shared/rules';
 import { describe } from '../../shared/repeat';
@@ -26,6 +27,7 @@ export function Drawer() {
   const late = isLate(t, s.today);
   const creator = s.users[t.createdBy];
   const p = s.projects[t.projectId];
+  const eff = p?.effort ? effortFor(t.effort, p.effort) : null;
   const B = ({ children }: { children: ReactNode }) => <b>{children}</b>;
   const showNotes = !!(t.notes || notes || s.notesOpen);
   const showList = t.checklist.length > 0 || s.checklistOpen;
@@ -92,6 +94,12 @@ export function Drawer() {
             <dt>Priority</dt>
             <dd><button className="field" data-act="prio" onClick={(e) => openPop({ type: 'prio', mode: 'task', id: t.id }, e.currentTarget)}>
               <PrioIcon p={t.priority} s={15} /> {PRIORITIES[t.priority].name} <span className="c">{I.chev()}</span></button></dd>
+            {p?.effort && <>
+              <dt>Effort</dt>
+              <dd><button className="field" data-act="effort" title={EFFORT_TYPES[p.effort].hint} onClick={(e) => openPop({ type: 'effort', mode: 'task', id: t.id }, e.currentTarget)}>
+                {I.gauge(15)} {eff ? effortLabel(p.effort, eff) : <span className="ph">{p.effortRequired && t.status === 'open' ? 'Needed to finish' : 'Add'}</span>}
+                <span className="c">{I.chev()}</span></button></dd>
+            </>}
             <dt>Project</dt>
             <dd><button className="field" data-act="proj" title={p?.description} onClick={(e) => openPop({ type: 'proj', mode: 'task', id: t.id }, e.currentTarget)}>
               <Dot color={p?.color ?? '#A0A0AB'} />{p?.name} <span className="c">{I.chev()}</span></button></dd>
@@ -192,6 +200,9 @@ function EventText({ e, s }: { e: TaskEvent; s: State }) {
     }
     case 'transferred': return <>transferred from <b>{name(e.fromValue)}</b> to <b>{name(e.toValue)}</b></>;
     case 'date_moved': return <>moved date <b>{e.fromValue ? fmt(e.fromValue) : '?'}</b> → <b>{e.toValue ? fmt(e.toValue) : '?'}</b></>;
+    case 'effort_set': return e.toValue
+      ? (e.fromValue ? <>changed effort <b>{storedEffortLabel(e.fromValue)}</b> → <b>{storedEffortLabel(e.toValue)}</b></> : <>set effort to <b>{storedEffortLabel(e.toValue)}</b></>)
+      : <>cleared effort (was <b>{storedEffortLabel(e.fromValue)}</b>)</>;
     case 'priority_changed': return <>changed priority <b>{PRIORITIES[Number(e.fromValue) as Priority]?.name}</b> → <b>{PRIORITIES[Number(e.toValue) as Priority]?.name}</b></>;
     case 'project_changed': return <>moved to <b>{proj(e.toValue)}</b> from <b>{proj(e.fromValue)}</b></>;
     case 'renamed': return <>renamed to “{e.toValue}”</>;
