@@ -376,7 +376,7 @@ export function setPage(page: Page) {
   const s = S();
   if ((page === 'team' || page === 'settings') && s.me?.role !== 'admin') return;
   set({ page, drawer: null, pop: null, invite: null, projDay: s.projDay || s.today });
-  history.replaceState(null, '', page === 'tasks' ? '/' : `/${page}`);
+  history.replaceState(null, '', page === 'tasks' ? '/' : page === 'team' ? '/manage' : `/${page}`);
 }
 export function viewPerson(userId: string) {
   set({ viewUser: userId, page: 'tasks', drawer: null, pop: null, draft: { ...S().draft, assigneeId: null } });
@@ -497,7 +497,7 @@ export async function updateUser(id: string, body: { role?: Role; projects?: str
     toastError(e);
   }
 }
-/** Disables someone (after giving their open tasks to `transferTo`). They stay on the Team page and can be enabled again. */
+/** Disables someone (after giving their open tasks to `transferTo`). They stay on the People & projects page and can be enabled again. */
 export async function disableUser(id: string, transferTo?: string) {
   const u = S().users[id];
   try {
@@ -891,7 +891,7 @@ export async function loadArchived(project: string) {
   }
 }
 
-// ---------- archived projects (admins, Team page) ----------
+// ---------- archived projects (admins, People & projects page) ----------
 export async function loadArchivedProjects() {
   try {
     const { projects } = await api.get<{ projects: ArchivedProject[] }>('/api/admin/projects/archived');

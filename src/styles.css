@@ -781,7 +781,7 @@ a.att-n:hover{color:var(--accent);text-decoration:underline}
 .arch-main span{display:block;font-size:12px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pop .opt.danger{color:var(--danger-ink)}
 .pop .opt.danger:hover,.pop .opt.danger:focus-visible{background:var(--danger-soft)}
-/* Team page: disabled people and archived projects (collapsed sections under each card) */
+/* People & projects page: disabled people and archived projects (collapsed sections under each card) */
 .sub-sec{margin-top:10px}
 .arch-dot{width:10px;height:10px;border-radius:3px;flex:none}
 .arch-row.flash,.prow.flash{animation:flash 2.6s ease-out}

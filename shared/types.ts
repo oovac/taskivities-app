@@ -2,7 +2,7 @@
 import type { SeriesInfo } from './repeat';
 
 export type Role = 'admin' | 'member';
-/** Disabled people can't sign in, but stay on the Team page (and in every task's history) and can be enabled again. */
+/** Disabled people can't sign in, but stay on the People & projects page (and in every task's history) and can be enabled again. */
 export type UserStatus = 'invited' | 'active' | 'disabled';
 export type Priority = 1 | 2 | 3 | 4; // 1 Urgent · 2 High · 3 Normal (default) · 4 Low
 
@@ -77,7 +77,7 @@ export interface InboxPage {
 }
 export const INBOX_PAGE = 50;
 
-/** An archived project, as the Team page lists it. */
+/** An archived project, as the People & projects page lists it. */
 export interface ArchivedProject extends Project {
   archivedAt: string | null;
   archivedBy: string | null;

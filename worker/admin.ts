@@ -143,7 +143,7 @@ admin.patch('/users/:id', async (c) => {
 
 /**
  * Disable someone. Nothing about them is deleted: they can't sign in (their sessions, assistant connections and Gmail
- * connection end), but they stay on the Team page, in every task's history, and on their projects, ready to be enabled again.
+ * connection end), but they stay on the People & projects page, in every task's history, and on their projects, ready to be enabled again.
  * Their open tasks go to `transferTo` first, in the same batch, each transfer logged; their repeating tasks go with them.
  */
 admin.post('/users/:id/disable', async (c) => {
@@ -309,7 +309,7 @@ async function setProjectArchived(c: Ctx, archive: boolean) {
 admin.post('/projects/:id/archive', (c) => setProjectArchived(c, true));
 admin.post('/projects/:id/restore', (c) => setProjectArchived(c, false));
 
-/** Archived projects, newest first, with how much is in each. Only the Team page asks for these. */
+/** Archived projects, newest first, with how much is in each. Only the People & projects page asks for these. */
 admin.get('/projects/archived', async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT p.*,

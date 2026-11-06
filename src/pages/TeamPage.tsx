@@ -40,8 +40,8 @@ export function TeamPage() {
     <>
       <div className="phead">
         <div>
-          <div className="h1 team-h">Team</div>
-          <div className="sub">{list.length} people · {admins} admin{admins === 1 ? '' : 's'}{invited > 0 && ` · ${invited} invited`}</div>
+          <div className="h1 team-h">People &amp; projects</div>
+          <div className="sub">{list.length} people · {admins} admin{admins === 1 ? '' : 's'}{invited > 0 && ` · ${invited} invited`} · {projects.length} project{projects.length === 1 ? '' : 's'}</div>
         </div>
         <div className="weeknav">
           {!s.invite && (
@@ -54,6 +54,7 @@ export function TeamPage() {
       </div>
       {s.invite && <InviteForm s={s} />}
       <section className="sec">
+        <div className="sec-h"><h2>People</h2><span className="cnt">their role and projects</span></div>
         <div className="card team">
           <div className="trow th"><div>Person</div><div>Role</div><div>Projects</div><div>Status</div><div /></div>
           {list.map((u) => {
@@ -255,7 +256,7 @@ function InviteForm({ s }: { s: State }) {
         <span className="muted-s inv-mail">
           {s.gmail
             ? <>{I.mail(13)} We'll email them an invite from {s.gmail.email}.</>
-            : <>They sign in with Google using exactly this address. <button className="linkish" data-act="gmail-connect" onClick={() => connectGmail('/team')}>Connect Gmail</button> to email invites automatically.</>}
+            : <>They sign in with Google using exactly this address. <button className="linkish" data-act="gmail-connect" onClick={() => connectGmail('/manage')}>Connect Gmail</button> to email invites automatically.</>}
         </span>
         <button className="btn-ghost" onClick={close}>Cancel</button>
         <button className="btn-primary" disabled={inv.busy} onClick={() => void submit()}>{inv.busy ? 'Adding…' : 'Add'}</button>
@@ -338,7 +339,7 @@ export function ProjectEditor({ pe, s }: { pe: ProjEdit; s: State }) {
         {pe.archiving ? (
           <div className="inv-foot sheet-f pe-arch" role="alert">
             <span className="muted-s">
-              Archive {pe.name || 'this project'}? It's hidden from everyone{openHere ? `, with its ${openHere} open task${openHere > 1 ? 's' : ''}` : ''}, until you restore it {s.page === 'team' ? 'from this page' : 'on the Team page'}. Nothing is deleted.
+              Archive {pe.name || 'this project'}? It's hidden from everyone{openHere ? `, with its ${openHere} open task${openHere > 1 ? 's' : ''}` : ''}, until you restore it {s.page === 'team' ? 'from this page' : 'on the People & projects page'}. Nothing is deleted.
             </span>
             <button className="btn-ghost" onClick={() => { upd({ archiving: false }); focusLater('[data-act="pe-archive"]'); }}>Cancel</button>
             <button className="btn-danger" data-act="pe-archive-yes" disabled={pe.busy} onClick={() => void archive()}>{pe.busy ? 'Archiving…' : 'Archive'}</button>

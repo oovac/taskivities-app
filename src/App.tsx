@@ -88,7 +88,7 @@ export function App() {
         <button className="logo" data-act="home" aria-label={`${appName(s.settings)}: go to my week`} title="My week  (G T)" onClick={goHome}>
           <LogoMark version={s.settings.logoVersion} /><Wordmark />
         </button>
-        {admin && <button className={`icon-btn pages-btn${s.pop?.type === 'pages' ? ' on' : ''}`} data-act="pages" aria-label="Pages" aria-haspopup="menu" title="Team, Settings"
+        {admin && <button className={`icon-btn pages-btn${s.pop?.type === 'pages' ? ' on' : ''}`} data-act="pages" aria-label="Pages" aria-haspopup="menu" title="People & projects, Settings"
           onClick={(e) => openPop({ type: 'pages' }, e.currentTarget)}>{I.dots()}</button>}
         <div className="spacer" />
         <button className="ai-btn" data-act="connect" title="MCP: connect Claude or another AI assistant" onClick={openConnect}>{I.bolt(14)}<span>MCP</span></button>

@@ -412,7 +412,7 @@ function DisablePop({ p, s }: { p: Pop; s: State }) {
       <div className="pop-h">Disable {displayName(u)}?</div>
       <div className="pop-body">
         {u.status === 'invited' ? 'Their invite stops working and the address can\'t sign in.' : 'They can\'t sign in, and their assistants lose access.'}
-        {' '}Their work and history stay, and you can enable them again from the Team page.
+        {' '}Their work and history stay, and you can enable them again from the People & projects page.
       </div>
       {open.length ? (
         <>
@@ -754,10 +754,10 @@ function CustomRepeat({ init, base, onBack, onSave }: { init: Repeat; base: stri
 function PagesPop({ s }: { s: State }) {
   const admin = isAdmin(s.me!);
   const pages = [
-    // Back to tasks from Team or Settings (the logo goes there too). People and projects are in the switcher.
+    // Back to tasks from People & projects or Settings (the logo goes there too). People and projects are in the switcher.
     ...(s.page === 'team' || s.page === 'settings' ? [{ pg: 'tasks' as const, label: 'Tasks', icon: I.check(14), key: 'G T' }] : []),
     ...(admin ? [
-      { pg: 'team' as const, label: 'Team', icon: I.users(15), key: 'G U' },
+      { pg: 'team' as const, label: 'People & projects', icon: I.users(15), key: 'G U' },
       { pg: 'settings' as const, label: 'Settings', icon: I.gear(15), key: 'G S' },
     ] : []),
   ];
