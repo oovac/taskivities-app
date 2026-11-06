@@ -9,6 +9,8 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+## v0.5.1 (2026-11-06)
+
 - **Copy what got done:** each task now says the day it was done (left out when the copy covers a single day) and, in views of several people or a project, the initials of whoever ticked it. A person's copy is titled with their initials.
 - **Simpler summary:** the line under a person's or project's name no longer repeats the carried-over count; the open count already includes them, and the Carried over block below still lists them.
 - **Stress-test data (for developers):** `npm run db:stress:local` loads about 1,000 tasks for 24 people over two and a half months, with notes, comments, checklists, attachments, followers and effort, relative to today (`scripts/stress-seed.mjs`).
