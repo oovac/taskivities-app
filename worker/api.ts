@@ -8,6 +8,7 @@ import {
 import { gmailStatus } from './gmail';
 import { loadSettings } from './settings';
 import { prefsOf, pushKeys } from './push';
+import { inboxUnread } from './inbox';
 import { type ChecklistChange, type Patch, addComment, applyPatch, changeChecklist, setArchived, commit, createTask, loadVisibleTask, updateTaskWithNext, visible } from './tasks';
 
 export const api = new Hono<AppEnv>();
@@ -50,10 +51,12 @@ api.get('/bootstrap', async (c) => {
   // Disabled people stay in the list (history still names them); only admins see their email.
   const list = all.map((u) => (u.status === 'disabled' && v.role !== 'admin' ? { ...u, email: '' } : u));
   const keys = pushKeys(c.env);
+  const myRow = users.results.find((u) => u.id === v.id);
   const body: Bootstrap = {
     me, users: list, projects: visibleProjects.map(mapProject), today: today(v), tz: v.tz, ...meta, settings, gmail, attachments: !!c.env.FILES,
-    push: keys ? { publicKey: keys.publicKey } : null, notify: prefsOf(users.results.find((u) => u.id === v.id)?.notify),
+    push: keys ? { publicKey: keys.publicKey } : null, notify: prefsOf(myRow?.notify),
     updates: v.role === 'admin' ? updateRepo(c.env.UPDATE_REPO) : null,
+    inboxUnread: await inboxUnread(db, v, myRow?.inbox_read_at ?? null),
   };
   return c.json(body);
 });
@@ -84,7 +87,8 @@ api.get('/sync', async (c) => {
   const shown = (r: TaskRow) => canSeeProject(v, r.project_id) && !r.archived_at;
   const tasks = results.filter(shown).map(mapTask);
   const gone = results.filter((r) => !shown(r)).map((r) => r.id);
-  return c.json({ changed: true, ...base, tasks, gone } satisfies SyncResponse);
+  // Every change moves the version on, so the inbox count only needs checking when something changed.
+  return c.json({ changed: true, ...base, tasks, gone, inboxUnread: await inboxUnread(c.env.DB, v) } satisfies SyncResponse);
 });
 
 // ---------- create ----------

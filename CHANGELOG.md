@@ -9,6 +9,8 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+- **Inbox:** a bell in the top bar lists what needs you: tasks given to you, comments on your tasks, and handovers, with a count of what's new. It works whether or not notifications are on, and on every device. It's read from the task history, so nothing extra is stored. **G I** opens it.
+
 ## v0.2.0 (2026-11-05)
 
 The first published release: everything Taskivities does so far.

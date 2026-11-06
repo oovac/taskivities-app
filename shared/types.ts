@@ -44,6 +44,36 @@ export interface NotifyPrefs {
 }
 export const NOTIFY_DEFAULTS: NotifyPrefs = { assigned: true, comments: true, morning: true };
 
+/**
+ * One entry in someone's inbox (the bell): read from the task history, never stored separately.
+ * new: a task made for you · assigned: a task handed to you · comment: on a task you have or created.
+ */
+export type InboxKind = 'new' | 'assigned' | 'comment';
+export interface InboxItem {
+  /** The history entry's id. */
+  id: string;
+  kind: InboxKind;
+  taskId: string;
+  /** The task as it is now. */
+  title: string;
+  done: boolean;
+  projectId: string;
+  actorId: string;
+  /** The assistant or webhook that made the change for the actor. */
+  via: string | null;
+  /** The comment, or the note sent with a handover. */
+  note: string | null;
+  at: string;
+}
+export interface InboxPage {
+  items: InboxItem[];
+  /** Pass as `before` for the next (older) page; null when there are no older entries. */
+  next: string | null;
+  /** When I last opened the inbox, before this visit: newer items are unread. */
+  readAt: string | null;
+}
+export const INBOX_PAGE = 50;
+
 /** An archived project, as the Team page lists it. */
 export interface ArchivedProject extends Project {
   archivedAt: string | null;
@@ -172,6 +202,8 @@ export interface Bootstrap {
   notify: NotifyPrefs;
   /** Admins: the GitHub repository whose releases tell them an update is available (null: not shown, or turned off). */
   updates: { repo: string } | null;
+  /** Inbox entries I haven't seen yet (at most 100). */
+  inboxUnread: number;
 }
 
 /** A webhook as admins see it (Settings → Webhooks; worker/webhooks.ts). */
@@ -218,6 +250,8 @@ export interface SyncResponse {
   tasks?: Task[];
   /** Tasks that changed but are no longer visible to you (e.g. moved to a project you're not on). */
   gone?: string[];
+  /** Sent when something changed: inbox entries I haven't seen yet. */
+  inboxUnread?: number;
 }
 
 export const NORMAL: Priority = 3;

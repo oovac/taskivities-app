@@ -142,7 +142,7 @@ export const mapTask = (r: TaskRow): Task => ({
 export interface UserRow {
   id: string; email: string; name: string; avatar_url: string | null; color: string; role: 'admin' | 'member';
   status: 'invited' | 'active' | 'disabled'; added_by: string | null; added_at: string; last_seen_at: string | null; time_zone: string | null;
-  disabled_at: string | null; disabled_by: string | null; notify?: string | null; morning_sent_on?: string | null;
+  disabled_at: string | null; disabled_by: string | null; notify?: string | null; morning_sent_on?: string | null; inbox_read_at?: string | null;
 }
 export const mapUser = (r: UserRow, projects: string[]): User => ({
   id: r.id, email: r.email, name: r.name || r.email.split('@')[0], avatarUrl: r.avatar_url, color: r.color, role: r.role,

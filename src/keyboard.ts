@@ -4,6 +4,7 @@ import { isAdmin } from '../shared/rules';
 import type { Priority } from '../shared/types';
 import {
   closeConnect, closeDrawer, closeHelp, closePop, moveTasks, openDrawer, openHelp, openPop, setPage, setPriority, setView, skipTask, toast, toggleDone, closeHook, editChecklist, editNotes, pickAttachments } from './actions';
+import { openInbox } from './inbox';
 import { openMove } from './components/rows';
 import { curNav, focusLater, focusNav, navEls, trapTab } from './focus';
 import { S, set } from './store';
@@ -114,6 +115,13 @@ export function onKeyDown(e: KeyboardEvent) {
     gPending = 0;
     e.preventDefault();
     setPage(k === 'p' ? 'projects' : k === 'u' ? 'team' : k === 's' ? 'settings' : 'tasks');
+    return;
+  }
+  if (gPending && Date.now() - gPending < 1200 && k === 'i') {
+    gPending = 0;
+    e.preventDefault();
+    const b = document.querySelector<HTMLElement>('[data-act="inbox"]');
+    if (b) openInbox(b);
     return;
   }
   if (k === 'g') { gPending = Date.now(); return; }

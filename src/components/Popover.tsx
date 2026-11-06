@@ -17,6 +17,7 @@ import { displayName, draftEffective, firstName, isLate, myProjects, shownOn } f
 import { projectDayData } from '../pages/ProjectsPage';
 import { openProjEdit } from '../pages/TeamPage';
 import { Avatar, Dot, I, PrioIcon, ProjBadge } from './ui';
+import { InboxPop } from './InboxPop';
 
 const setDraft = (p: Partial<State['draft']>) => set((s) => ({ draft: { ...s.draft, ...p } }));
 const updatePop = (p: Partial<Pop>) => set((s) => (s.pop ? { pop: { ...s.pop, ...p } } : {}));
@@ -70,6 +71,7 @@ function Content({ p, s }: { p: Pop; s: State }) {
     case 'uenable': return <EnablePop p={p} s={s} />;
     case 'notify': return <NotifyPop s={s} />;
     case 'update': return <UpdatePop s={s} />;
+    case 'inbox': return <InboxPop s={s} />;
     case 'account': return <AccountPop s={s} />;
     case 'taskmenu': return <TaskMenu p={p} s={s} />;
     case 'repeat': return <RepeatPop p={p} s={s} />;

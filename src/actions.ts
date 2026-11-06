@@ -11,6 +11,7 @@ import { activeSelector, focusLater, selFor } from './focus';
 import { type Page, type Pop, type PopType, type State, S, emptyDraft, set } from './store';
 import { syncPush } from './push';
 import { checkForUpdate } from './updates';
+import { loadInbox } from './inbox';
 import { displayName, draftEffective, firstName, myProjects, sharesWith } from './util';
 
 const pending = new Set<string>(); // tasks with an edit in flight (ignore sync for them)
@@ -54,7 +55,7 @@ function applyDirectory(b: Bootstrap): Partial<State> {
   applyBrand(b.settings);
   return {
     me: b.me, users, projects, today: b.today, tz: b.tz, dirVersion: b.directoryVersion, settings: b.settings, gmail: b.gmail, attachmentsOn: b.attachments, viewUser, page,
-    pushKey: b.push?.publicKey ?? null, notify: b.notify, updateRepo: b.updates?.repo ?? null,
+    pushKey: b.push?.publicKey ?? null, notify: b.notify, updateRepo: b.updates?.repo ?? null, inboxUnread: b.inboxUnread ?? 0,
     projSel: s.projSel === 'all' || projects[s.projSel] ? s.projSel : 'all',
     projDay: s.projDay || b.today,
   };
@@ -105,6 +106,11 @@ export async function sync() {
     }
     const patch: Partial<State> = { lastSync: Date.now(), offline: false };
     if (r.today !== s.today) patch.today = r.today;
+    if (r.inboxUnread !== undefined && r.inboxUnread !== s.inboxUnread) {
+      patch.inboxUnread = r.inboxUnread;
+      // Something new while the inbox is open: show it (and it's seen).
+      if (r.inboxUnread > 0 && s.pop?.type === 'inbox') setTimeout(() => void loadInbox(), 0);
+    }
     if (r.changed && r.tasks) {
       const tasks = { ...S().tasks };
       const events = { ...S().events };
