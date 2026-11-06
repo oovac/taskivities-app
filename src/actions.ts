@@ -8,7 +8,7 @@ import { PRIORITIES } from '../shared/types';
 import { api, ApiError } from './api';
 import { applyBrand } from './brand';
 import { activeSelector, focusLater, selFor } from './focus';
-import { type ManageTab, type Page, type Pop, type PopType, type State, S, emptyDraft, set } from './store';
+import { BOARD_WEEKS_MAX, type ManageTab, type Page, type Pop, type PopType, type State, S, emptyDraft, set } from './store';
 import { syncPush } from './push';
 import { checkForUpdate } from './updates';
 import { loadInbox } from './inbox';
@@ -396,6 +396,12 @@ export function viewProject(projectId: string) {
   set({ projSel: projectId, page: 'projects', drawer: null, pop: null, projDay: s.projDay || s.today });
   localStorage.setItem('tv:proj', projectId);
   history.replaceState(null, '', '/projects');
+}
+/** How many weeks the Board shows (1 to BOARD_WEEKS_MAX). */
+export function setBoardWeeks(n: number) {
+  const v = Math.min(BOARD_WEEKS_MAX, Math.max(1, Math.round(n)));
+  set({ boardWeeks: v });
+  localStorage.setItem('tv:boardWeeks', String(v));
 }
 export function setView(view: State['view']) {
   set({ view, ...(view === 'today' ? { weekOffset: 0 } : {}) });

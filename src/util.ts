@@ -29,17 +29,20 @@ export const sortRows = (arr: Task[]) =>
   arr.sort((a, b) => (a.status === b.status ? 0 : a.status === 'open' ? -1 : 1) || a.priority - b.priority || a.createdAt.localeCompare(b.createdAt));
 export const byPrioThenOldest = (a: Task, b: Task) => a.priority - b.priority || a.dueDate.localeCompare(b.dueDate);
 
+/** The days in view: a week, or on the Board as many weeks as it's set to show (starting with the week picked). */
 export const weekInfo = (s: State) => {
   const ws = addDays(weekStart(s.today), s.weekOffset * 7);
-  const days = [...Array(7)].map((_, i) => addDays(ws, i));
-  const we = days[6];
+  const weeks = s.view === 'board' ? s.boardWeeks : 1;
+  const days = [...Array(7 * weeks)].map((_, i) => addDays(ws, i));
+  const we = days[days.length - 1];
   const [a, b] = [ws, we].map((d) => new Date(d + 'T00:00'));
-  const range = a.getMonth() === b.getMonth()
+  const span = a.getMonth() === b.getMonth()
     ? `${MONS[a.getMonth()]} ${a.getDate()} – ${b.getDate()}, ${b.getFullYear()}`
     : `${MONS[a.getMonth()]} ${a.getDate()} – ${MONS[b.getMonth()]} ${b.getDate()}`;
+  const range = weeks > 1 ? `${weeks} weeks · ${span}` : span;
   const o = s.weekOffset;
   const label = o === 0 ? 'This week' : o === 1 ? 'Next week' : o === -1 ? 'Last week' : o > 0 ? `In ${o} weeks` : `${-o} weeks ago`;
-  return { ws, we, days, range, label };
+  return { ws, we, days, weeks, range, label };
 };
 export const inRange = (d: string, from: string, to: string) => d >= from && d <= to;
 

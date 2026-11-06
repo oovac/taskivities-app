@@ -10,6 +10,7 @@ import { type ThemePref, themePref } from './theme';
 /** 'team' is the People & projects page (admins; at /manage, and the old /team). */
 export type Page = 'tasks' | 'projects' | 'team' | 'settings';
 export type ManageTab = 'people' | 'projects';
+export const BOARD_WEEKS_MAX = 52;
 export type View = 'today' | 'list' | 'board';
 export type PopType = 'move' | 'assign' | 'prio' | 'proj' | 'person' | 'projpick' | 'urole' | 'uproj' | 'udisable' | 'uenable' | 'notify' | 'update' | 'inbox' | 'followers' | 'account' | 'repeat' | 'taskmenu' | 'pages';
 
@@ -78,6 +79,8 @@ export interface State {
   viewUser: string;
   weekOffset: number;
   boardSide: 'to' | 'by';
+  /** How many weeks the Board shows side by side (it scrolls sideways past one). Remembered on this device. */
+  boardWeeks: number;
   drawer: string | null;
   /** Empty notes are collapsed to an "Add notes" button; this opens the box (button or ⇧N). Reset per task. */
   notesOpen: boolean;
@@ -165,6 +168,7 @@ export const useStore = create<State>()(() => ({
   viewUser: '',
   weekOffset: 0,
   boardSide: 'to',
+  boardWeeks: Math.min(BOARD_WEEKS_MAX, Math.max(1, Number(localStorage.getItem('tv:boardWeeks')) || 1)),
   drawer: null,
   notesOpen: false,
   checklistOpen: false,

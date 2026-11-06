@@ -9,6 +9,8 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+- **Board, more than a week:** show as many weeks as you like on the Board, side by side, and scroll sideways. Use − / + above it or the *Next week* column at its end. Drag a card near the edge and the board scrolls with you, so you can move a task from Friday to next Tuesday, or weeks ahead. The Board remembers how many weeks you chose on each device.
+
 ## v0.3.2 (2026-11-06)
 
 - **People and projects on one screen:** there's no separate Projects page anymore. Pick a person or a project from the switcher at the top of the page; everything a project's view had (the day report, Not finished, Archived) is still there. The logo and **G T** go to your week, and **G P** to the project you last looked at, even after a reload. The ⋯ menu next to the logo is now just People & projects and Settings, for admins.

@@ -1,12 +1,12 @@
-import { useEffect, type DragEvent, type ReactNode } from 'react';
+import { useEffect, useRef, type CSSProperties, type DragEvent, type ReactNode } from 'react';
 import { DOW, MONS, addDays, fmt, parseDate } from '../../shared/dates';
 import { isLate, shownOn } from '../../shared/rules';
 import type { Task } from '../../shared/types';
-import { ensureRange, moveTasks, openPop, setView, viewPerson } from '../actions';
+import { ensureRange, moveTasks, openPop, setBoardWeeks, setView, viewPerson } from '../actions';
 import { QuickAdd } from '../components/QuickAdd';
 import { PreviewCard, PreviewRow, TaskCard, TaskRow, drag, openMove } from '../components/rows';
 import { Avatar, I } from '../components/ui';
-import { set, useStore, type State } from '../store';
+import { BOARD_WEEKS_MAX, set, useStore, type State } from '../store';
 import { type Preview, byPrioThenOldest, displayName, firstName, inRange, lateDays, previewsFor, sortRows, weekInfo } from '../util';
 
 export function TasksPage() {
@@ -263,14 +263,39 @@ export function WeekBoard({ s, w, pool, side, previews, bar, hideProject = false
     const t = id ? s.tasks[id] : null;
     if (t && shownOn(t, s.today) !== d) void moveTasks([t.id], d);
   };
+  // More than fits on screen: the board scrolls sideways, and while you drag a card near either edge it scrolls by itself
+  // (faster the closer you get), so a card can go to any day shown.
+  const boardRef = useRef<HTMLDivElement>(null);
+  const edgeScroll = (e: DragEvent<HTMLDivElement>) => {
+    const b = boardRef.current;
+    if (!drag.id || !b || b.scrollWidth <= b.clientWidth) return;
+    const r = b.getBoundingClientRect();
+    const EDGE = 90;
+    const into = e.clientX < r.left + EDGE ? -(r.left + EDGE - e.clientX) : e.clientX > r.right - EDGE ? e.clientX - (r.right - EDGE) : 0;
+    if (into) b.scrollLeft += Math.sign(into) * Math.min(36, 4 + Math.abs(into) / 3);
+  };
+  // Another week at the end, scrolled into view.
+  const moreWeeks = () => {
+    const first = addDays(w.ws, 7 * w.weeks);
+    setBoardWeeks(w.weeks + 1);
+    requestAnimationFrame(() => boardRef.current?.querySelector(`[data-day="${first}"]`)?.scrollIntoView({ inline: 'start', block: 'nearest', behavior: 'smooth' }));
+  };
+  const more = w.weeks < BOARD_WEEKS_MAX;
 
   return (
     <>
       <div className="board-bar">
         {bar}
         <span className="hint">Drag a card to another day, or select it and press <kbd>⇧</kbd><kbd>←</kbd> <kbd>⇧</kbd><kbd>→</kbd>. Past days are read-only.</span>
+        <div className="bweeks" role="group" aria-label="Weeks shown">
+          <button className="icon-btn" data-act="board-weeks" data-dir="-1" disabled={w.weeks <= 1} title="Show one week fewer" aria-label="Show one week fewer"
+            onClick={() => setBoardWeeks(w.weeks - 1)}>{I.minus(14)}</button>
+          <span aria-live="polite">{w.weeks} week{w.weeks === 1 ? '' : 's'}</span>
+          <button className="icon-btn" data-act="board-weeks" data-dir="1" disabled={!more} title="Show one more week" aria-label="Show one more week"
+            onClick={moreWeeks}>{I.plus(14)}</button>
+        </div>
       </div>
-      <div className="board">
+      <div className={`board${w.weeks > 1 ? ' multi' : ''}`} ref={boardRef} style={{ '--days': w.days.length } as CSSProperties} onDragOver={edgeScroll}>
         {w.days.map((d) => {
           const dd = parseDate(d);
           const past = d < s.today;
@@ -309,6 +334,11 @@ export function WeekBoard({ s, w, pool, side, previews, bar, hideProject = false
             </div>
           );
         })}
+        {more && (
+          <button className="col-more" data-act="board-more" title="Show the next week too" aria-label="Show one more week" onClick={moreWeeks}>
+            {I.plus(16)}<span>Next week</span>
+          </button>
+        )}
       </div>
     </>
   );
