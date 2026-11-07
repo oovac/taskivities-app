@@ -929,3 +929,4 @@ a.att-n:hover{color:var(--accent);text-decoration:underline}
 .sw-src{display:flex;align-items:center;gap:6px}
 .sw-src i{width:8px;height:8px;border-radius:2px;flex:none}
 .sw-src span{font-weight:500;color:var(--faint)}
+.sw-src i.home{background:var(--accent)}

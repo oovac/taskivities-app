@@ -3,7 +3,7 @@ import { feedParts, isFeed, localProjects, localUsers, localUsersOf, myProjectsE
 import { DOW, MONL, addDays, fmt, parseDate, toDate, weekStart } from '../../shared/dates';
 import { type Freq, type Repeat, cleanRepeat, describe, presets, sameRule } from '../../shared/repeat';
 import { isAdmin, onProject } from '../../shared/rules';
-import { PRIORITIES, type NotifyPrefs, type Priority, type Project, type Task, type User } from '../../shared/types';
+import { PRIORITIES, appName, type NotifyPrefs, type Priority, type Project, type Task, type User } from '../../shared/types';
 import {
   assignable, closePop, defaultDraftDate, moveTasks, openConnect, openPop, viewProject, disableUser, enableUser, setPage, setPriority, setProject, setRepeat, signOut, switchablePeople, transfer,
   updateUser, viewPerson, editNotes, editChecklist, pickAttachments, archiveTask, setFollowing, setEffort, currentSel, setMultiPick, viewMulti,
@@ -366,15 +366,18 @@ function SwitchPop({ p, s }: { p: Pop; s: State }) {
     </button>
   );
 
+  // With other instances connected, this one's sections are named too, like theirs.
+  const home = s.sources.length ? appName(s.settings) : null;
+  const head = (label: string) => (home ? <div className="pop-h sw-src"><i className="home" />{home}<span>· {label}</span></div> : <div className="pop-h">{label}</div>);
   const peopleSec = people.length > 0 && (
     <div key="people" data-sec="people">
-      <div className="pop-h">People</div>
+      {head('People')}
       {people.map(personBtn)}
     </div>
   );
   const projectsSec = (showAll || projects.length > 0) && (
     <div key="projects" data-sec="projects">
-      <div className="pop-h">Projects</div>
+      {head('Projects')}
       {showAll && (
         <button className={`opt ${!several && curProj === 'all' ? 'cur' : ''}`} data-p="all"
           {...(several ? { role: 'menuitemcheckbox', 'aria-checked': !picked.projects.length } : {})}
@@ -431,14 +434,15 @@ function SwitchPop({ p, s }: { p: Pop; s: State }) {
       {/* Big teams: jump straight to a section instead of scrolling past the other one. */}
       {!q && people.length + projects.length + remote.reduce((n, x) => n + x.ppl.length + x.prj.length, 0) > 12 && (
         <div className="sw-jump">
-          {(projFirst ? (['projects', 'people'] as const) : (['people', 'projects'] as const)).map((k) => (
+          {/* One button per instance once others are connected (this one's goes to its first section). */}
+          {(home ? [projFirst ? 'projects' as const : 'people' as const] : projFirst ? (['projects', 'people'] as const) : (['people', 'projects'] as const)).map((k) => (
             <button key={k} className="no-arrow" data-act={`jump-${k}`}
               onClick={() => {
                 const list = document.querySelector<HTMLElement>('.pop .sw-list');
                 const sec = list?.querySelector<HTMLElement>(`[data-sec="${k}"]`);
                 if (list && sec) list.scrollTo({ top: sec.offsetTop - 4, behavior: 'smooth' });
               }}>
-              {k === 'people' ? 'People' : 'Projects'} <span>{k === 'people' ? people.length : projects.length}</span>
+              {home ? <>{home} <span>{people.length + projects.length}</span></> : <>{k === 'people' ? 'People' : 'Projects'} <span>{k === 'people' ? people.length : projects.length}</span></>}
             </button>
           ))}
           {remote.map(({ src, ppl, prj }) => (
