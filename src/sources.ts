@@ -31,6 +31,8 @@ export interface Conn {
   color: string;
   /** Who I am there. One connection per instance: reconnecting has to be as the same person. */
   user?: { id: string; name: string };
+  /** The relay home runs for it (notifications), registered there again on each load in case it was dropped. */
+  relay?: string;
 }
 const KEY = 'tv:sources';
 const loadConns = (): Conn[] => { try { return JSON.parse(localStorage.getItem(KEY) || '[]') as Conn[]; } catch { return []; } };
@@ -303,6 +305,8 @@ async function loadSource(c: Conn) {
     };
   });
   applyFeedDir();
+  // Notifications: registering the relay again is harmless there, and brings it back if it was dropped.
+  if (c.relay) void srcCall(c.id, 'POST', '/push-relays', { url: c.relay }, true).catch(() => {});
   const r = S().range;
   const t = await srcCall<{ tasks: Task[]; version: number }>(c.id, 'GET', `/tasks${r ? `?from=${r.from}&to=${r.to}` : ''}`);
   set((s) => ({
@@ -461,7 +465,7 @@ export async function finishConnect(): Promise<{ ok: boolean; message: string }>
     const old = connByOrigin(pending.origin);
     const used = new Set(loadConns().map((c) => c.color));
     const c: Conn = {
-      id: old?.id ?? randomStr(6).replace(/[-_]/g, 'x'), origin: pending.origin, clientId: pending.clientId, ...t, user,
+      id: old?.id ?? randomStr(6).replace(/[-_]/g, 'x'), origin: pending.origin, clientId: pending.clientId, ...t, user, relay,
       color: old?.color ?? PROJECT_COLORS.find((x) => !used.has(x)) ?? PROJECT_COLORS[0],
     };
     putConn(c);
