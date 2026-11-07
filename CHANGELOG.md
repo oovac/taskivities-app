@@ -9,6 +9,8 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+## v0.7.0 (2026-11-07)
+
 ### Added
 
 - **AI assistants can manage projects and invite people:** admins can ask Claude (or another assistant) to create a project, rename it, change its description, colour or effort tracking, add or remove members, archive or restore it, and invite people by email (`create_project`, `update_project`, `archive_project`, `invite_people`). The same rules apply as on the People & projects page.
