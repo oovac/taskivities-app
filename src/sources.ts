@@ -34,8 +34,9 @@ const KEY = 'tv:sources';
 const loadConns = (): Conn[] => { try { return JSON.parse(localStorage.getItem(KEY) || '[]') as Conn[]; } catch { return []; } };
 const saveConns = (cs: Conn[]) => localStorage.setItem(KEY, JSON.stringify(cs));
 export const conns = () => loadConns();
-const connById = (id: string) => loadConns().find((c) => c.id === id) ?? null;
+export const connById = (id: string) => loadConns().find((c) => c.id === id) ?? null;
 export const connByOrigin = (origin: string) => loadConns().find((c) => c.origin === origin) ?? null;
+export const connByHost = (host: string) => loadConns().find((c) => new URL(c.origin).host === host) ?? null;
 const putConn = (c: Conn) => saveConns([...loadConns().filter((x) => x.id !== c.id), c]);
 
 /** What the app shows about a connection. */
@@ -46,7 +47,7 @@ export interface SourceInfo { id: string; origin: string; name: string; color: s
 // =====================================================================================================================
 const SEP = '~';
 export const isFeed = (id: string | null | undefined) => !!id && id.startsWith(`f${SEP}`);
-const nsId = (src: string, id: string) => `f${SEP}${src}${SEP}${id}`;
+export const nsId = (src: string, id: string) => `f${SEP}${src}${SEP}${id}`;
 /** "f~<source>~<their id>" → its parts. */
 export const feedParts = (id: string) => { const [, src, ...rest] = id.split(SEP); return { src, rid: rest.join(SEP) }; };
 export const sourceOf = (s: State, id: string) => (isFeed(id) ? s.sources.find((x) => x.id === feedParts(id).src) ?? null : null);

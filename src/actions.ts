@@ -2,7 +2,8 @@
 import { addDays, rel, weekStart } from '../shared/dates';
 import { type Repeat, describe } from '../shared/repeat';
 import { onProject } from '../shared/rules';
-import { applyFeedDir, clientFor, connByOrigin, feedParts, finishConnect, isFeed, srcCall, loadSources, localUsers, moveOnSources, sourcesRange, syncSources, taskFromSource, uploadTarget } from './sources';
+import { applyUrl, startRouter } from './router';
+import { applyFeedDir, clientFor, feedParts, finishConnect, isFeed, srcCall, loadSources, localUsers, moveOnSources, sourcesRange, syncSources, taskFromSource, uploadTarget } from './sources';
 import { type EffortType, effortFor, storedEffortLabel } from '../shared/effort';
 import { ATTACH_MAX_BYTES } from '../shared/types';
 import type { AppSettings, ArchivedProject, Bootstrap, InviteEmailResult, WebhookInfo, WebhookRequestInfo, Priority, Project, Role, SyncResponse, Task, TaskEvent, User } from '../shared/types';
@@ -48,17 +49,16 @@ function applyDirectory(b: Bootstrap): Partial<State> {
   const s = S();
   const users = byId(b.users);
   const projects = byId(b.projects);
-  const viewUser = s.viewUser && users[s.viewUser] && users[s.viewUser].status === 'active' ? s.viewUser : b.me.id;
+  // Someone on another instance stays (their people aren't in this directory).
+  const viewUser = s.viewUser && (isFeed(s.viewUser) || (users[s.viewUser] && users[s.viewUser].status === 'active')) ? s.viewUser : b.me.id;
   let page = s.page;
-  if ((page === 'team' || page === 'settings') && b.me.role !== 'admin') {
-    page = 'tasks';
-    history.replaceState(null, '', '/');
-  }
+  if ((page === 'team' || page === 'settings') && b.me.role !== 'admin') page = 'tasks';
   applyBrand(b.settings);
   return {
     me: b.me, users, projects, today: b.today, tz: b.tz, dirVersion: b.directoryVersion, settings: b.settings, gmail: b.gmail, attachmentsOn: b.attachments, viewUser, page,
     pushKey: b.push?.publicKey ?? null, notify: b.notify, updateRepo: b.updates?.repo ?? null, inboxUnread: b.inboxUnread ?? 0,
-    projSel: s.projSel === 'all' || s.projSel === 'multi' || projects[s.projSel] ? s.projSel : 'all',
+    // Another instance's project stays (its projects aren't in this directory).
+    projSel: s.projSel === 'all' || s.projSel === 'multi' || isFeed(s.projSel) || projects[s.projSel] ? s.projSel : 'all',
     projDay: s.projDay || b.today,
   };
 }
@@ -68,34 +68,17 @@ export async function boot() {
     const b = await api.get<Bootstrap>('/api/bootstrap');
     const t = await api.get<{ from: string; to: string; tasks: Task[]; version: number }>('/api/tasks');
     set({ ...applyDirectory(b), tasks: byId(t.tasks), version: t.version, range: { from: t.from, to: t.to }, ready: true, lastSync: Date.now() });
-    // Other instances connected on this device (src/sources.ts); and back from connecting one, or a notification from one.
+    gmailReturn(); // reads its ?gmail= result before the router tidies the address
+    // Other instances connected on this device (src/sources.ts), then the address: what to show (src/router.ts).
     const sourcesReady = loadSources();
     if (location.pathname === '/oauth/done') {
       void finishConnect().then((r) => { set({ instancesOpen: true }); toast(r.message, undefined, !r.ok); });
-    } else {
-      const q0 = new URLSearchParams(location.search);
-      const open = q0.get('open');
-      if (open) {
-        const rid = q0.get('task');
-        history.replaceState(null, '', '/');
-        const c = connByOrigin(open);
-        if (!c) set({ instancesOpen: open });
-        else if (rid) void sourcesReady.then(() => openTask(`f~${c.id}~${rid}`));
-      }
-    }
+    } else applyUrl(location, sourcesReady, (id) => void openTask(id), true);
+    startRouter(sourcesReady, (id) => void openTask(id));
     const last = localStorage.getItem('tv:lastProject');
     set((s) => ({ draft: { ...s.draft, projectId: last && myProjects(s).some((p) => p.id === last) ? last : myProjects(s)[0]?.id ?? null } }));
-    gmailReturn();
     void syncPush();
     void checkForUpdate();
-    // Opened from a notification (a new window): /?task=<id>.
-    const q = new URLSearchParams(location.search);
-    const task = q.get('task');
-    if (task) {
-      q.delete('task');
-      history.replaceState(null, '', `${location.pathname}${q.size ? `?${q}` : ''}`);
-      void openTask(task);
-    }
   } catch (e) {
     if (!(e instanceof ApiError && e.status === 401)) set({ bootError: e instanceof Error ? e.message : 'Could not load.' });
   }
@@ -418,21 +401,17 @@ export function closeHelp() {
   focusLater(helpReturn);
 }
 
-const manageUrl = (tab: ManageTab) => (tab === 'projects' ? '/manage/projects' : '/manage');
 /** The People & projects page's tab. */
 export function setManageTab(tab: ManageTab) {
   set({ manageTab: tab });
-  if (S().page === 'team') history.replaceState(null, '', manageUrl(tab));
 }
 export function setPage(page: Page) {
   const s = S();
   if ((page === 'team' || page === 'settings') && s.me?.role !== 'admin') return;
   set({ page, drawer: null, pop: null, invite: null, projDay: s.projDay || s.today });
-  history.replaceState(null, '', page === 'tasks' ? '/' : page === 'team' ? manageUrl(s.manageTab) : `/${page}`);
 }
 export function viewPerson(userId: string) {
   set({ viewUser: userId, page: 'tasks', drawer: null, pop: null, draft: { ...S().draft, assigneeId: null } });
-  history.replaceState(null, '', '/');
 }
 /** Home: your own week (the logo and G T). */
 export const goHome = () => viewPerson(S().me!.id);
@@ -441,7 +420,6 @@ export function viewProject(projectId: string) {
   const s = S();
   set({ projSel: projectId, page: 'projects', drawer: null, pop: null, projDay: s.projDay || s.today });
   localStorage.setItem('tv:proj', projectId);
-  history.replaceState(null, '', '/projects');
 }
 /**
  * Shows several people and/or projects at once (the switcher's "Select several"). One person or one project alone is
@@ -453,14 +431,12 @@ export function viewMulti(sel: MultiSel) {
   const common = { drawer: null, projDay: s.projDay || s.today };
   if (m.people.length === 1 && !m.projects.length) {
     set({ ...common, viewUser: m.people[0], page: 'tasks', draft: { ...s.draft, assigneeId: null } });
-    history.replaceState(null, '', '/');
     return;
   }
   const projSel = !m.people.length && m.projects.length <= 1 ? (m.projects[0] ?? 'all') : 'multi';
   set({ ...common, projSel, page: 'projects', ...(projSel === 'multi' ? { multi: m } : {}) });
   localStorage.setItem('tv:proj', projSel);
   if (projSel === 'multi') localStorage.setItem('tv:multi', JSON.stringify(m));
-  history.replaceState(null, '', '/projects');
 }
 export function setMultiPick(on: boolean) {
   set({ multiPick: on });
