@@ -3,9 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#F7F7F9" />
+    <meta name="theme-color" content="#0E0E13" />
     <!-- Light / dark theme before anything draws (same rule as src/theme.ts), so there's no flash. -->
-    <script>try{var t=localStorage.getItem('tv:theme');if(t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.dataset.theme='dark'}catch(e){}</script>
+    <script>var t;try{t=localStorage.getItem('tv:theme')}catch(e){}if(t!=='light'&&!(t==='system'&&!matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.dataset.theme='dark'</script>
     <link rel="icon" href="/logo.svg" type="image/svg+xml" />
     <!-- Installing to a phone's home screen: manifest + icons (served by the Worker; admins can upload a PNG icon). -->
     <link rel="manifest" href="/manifest.webmanifest" />

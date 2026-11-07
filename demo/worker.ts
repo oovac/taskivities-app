@@ -64,10 +64,10 @@ function loginPage(req: Request) {
   const people = ACCOUNTS.map((a) => `
     <a class="acct" href="/auth/demo-login?as=${a.key}${esc(q)}"><b>${esc(a.name)}</b><span class="role">${a.role}</span><span class="about">${esc(a.about)}</span></a>`).join('');
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Try Taskivities</title><link rel="icon" href="/logo.svg" type="image/svg+xml"><meta name="color-scheme" content="light dark">
+<title>Try Taskivities</title><link rel="icon" href="/logo.svg" type="image/svg+xml"><meta name="color-scheme" content="dark"><meta name="theme-color" content="#0E0E13">
 <style>
-:root{--bg:#F7F7F9;--panel:#fff;--line:#E6E6EB;--text:#16161D;--muted:#6B6B78;--accent:#28407D;--accent-soft:#EEF2FA;--accent-line:#B9C8E6}
-@media (prefers-color-scheme:dark){:root{--bg:#0E0E13;--panel:#17171D;--line:#2B2B35;--text:#ECECF1;--muted:#9A9AA8;--accent:#9DB2DE;--accent-soft:rgba(95,125,186,.16);--accent-line:rgba(143,166,211,.55)}}
+/* Dark, like the app's default theme. */
+:root{--bg:#0E0E13;--panel:#17171D;--line:#2B2B35;--text:#ECECF1;--muted:#9A9AA8;--accent:#9DB2DE;--accent-soft:rgba(95,125,186,.16);--accent-line:rgba(143,166,211,.55)}
 *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:var(--bg);color:var(--text);font:14px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif}
 .card{width:100%;max-width:400px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:32px 28px;box-shadow:0 1px 2px rgba(16,16,29,.04),0 8px 24px rgba(16,16,29,.08);text-align:center}
 .card img{width:52px;height:52px;display:block;margin:0 auto 16px}

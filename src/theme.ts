@@ -1,5 +1,5 @@
-// Light / dark theme. The choice is per browser (localStorage); "system" follows the OS setting, live.
-// index.html applies it before the page draws, so there's no flash of the wrong theme.
+// Light / dark theme. Dark is the default; the choice is per browser (localStorage), and "system" follows the OS
+// setting, live. index.html applies it before the page draws, so there's no flash of the wrong theme.
 export type ThemePref = 'system' | 'light' | 'dark';
 
 const KEY = 'tv:theme';
@@ -7,7 +7,7 @@ const media = window.matchMedia('(prefers-color-scheme: dark)');
 
 export function themePref(): ThemePref {
   const v = localStorage.getItem(KEY);
-  return v === 'light' || v === 'dark' ? v : 'system';
+  return v === 'light' || v === 'system' ? v : 'dark';
 }
 
 export function applyTheme(pref: ThemePref = themePref()) {
@@ -17,7 +17,7 @@ export function applyTheme(pref: ThemePref = themePref()) {
 }
 
 export function setThemePref(pref: ThemePref) {
-  if (pref === 'system') localStorage.removeItem(KEY);
+  if (pref === 'dark') localStorage.removeItem(KEY);
   else localStorage.setItem(KEY, pref);
   applyTheme(pref);
 }
