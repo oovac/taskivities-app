@@ -1,6 +1,6 @@
-// Sign-in (Google, and optionally WorkOS AuthKit) and cookie sessions. Both only prove an email address: whoever it is
-// gets in through signIn(), which lets in only emails that exist in `users` (added by an admin). On a brand-new install the first person
-// to sign in becomes the admin. ADMIN_EMAILS (optional) names extra addresses that are always let in as admins.
+// Sign-in (Google, and optionally Microsoft 365 and WorkOS AuthKit) and cookie sessions. Each only proves an email address:
+// whoever it is gets in through signIn(), which lets in only emails that exist in `users` (added by an admin). On a brand-new
+// install the first person to sign in becomes the admin. ADMIN_EMAILS (optional) names extra addresses that are always let in as admins.
 import { Hono, type MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { USER_COLORS, appName } from '../shared/types';
@@ -19,29 +19,63 @@ const redirectUri = (c: Ctx) => `${new URL(c.req.url).origin}/auth/callback`;
 const safeNext = (next: string | undefined | null) => (next && next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\') ? next : '/');
 const NEXT_COOKIE = 'tv_next';
 
-export const authRoutes = new Hono<AppEnv>();
-
-authRoutes.get('/login', async (c) => {
-  if (!c.env.GOOGLE_CLIENT_ID || !c.env.GOOGLE_CLIENT_SECRET) {
-    return c.text('Google sign-in is not configured yet: set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.', 500);
-  }
+// ---------- The parts every provider's sign-in shares ----------
+/**
+ * Starts a sign-in with a provider: remembers a fresh state and PKCE verifier (and `mode`, if any) in `cookie` for
+ * 10 minutes, and where to go afterwards. Returns the parameters to add to the provider's authorize URL.
+ */
+async function beginOAuth(c: Ctx, cookie: string, next: string, mode?: string) {
   const state = randomToken(16);
   const verifier = randomToken(32);
-  const challenge = b64url(await sha256(verifier));
-  setCookie(c, 'tv_oauth', `${state}.${verifier}`, { ...cookieBase(c), path: '/auth', maxAge: 600 });
-  const next = safeNext(c.req.query('next'));
+  setCookie(c, cookie, [state, verifier, mode].filter(Boolean).join('.'), { ...cookieBase(c), path: '/auth', maxAge: 600 });
   if (next !== '/') setCookie(c, NEXT_COOKIE, next, { ...cookieBase(c), path: '/auth', maxAge: 600 });
   else deleteCookie(c, NEXT_COOKIE, { path: '/auth' });
-  const u = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  return { state, code_challenge: b64url(await sha256(verifier)), code_challenge_method: 'S256' };
+}
+
+/** Reads back (and clears) what beginOAuth saved. `state` is empty when the cookie is gone (expired, or another browser). */
+function endOAuth(c: Ctx, cookie: string) {
+  const saved = getCookie(c, cookie);
+  const next = safeNext(getCookie(c, NEXT_COOKIE));
+  deleteCookie(c, cookie, { path: '/auth' });
+  deleteCookie(c, NEXT_COOKIE, { path: '/auth' });
+  const [state = '', verifier = '', mode = ''] = (saved ?? '').split('.');
+  return { state, verifier, mode, next };
+}
+
+/** Trades an authorization code for tokens at a provider's token endpoint; null if it refused or couldn't be reached. */
+async function redeemCode<T>(url: string, params: Record<string, string>): Promise<T | null> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'authorization_code', ...params }),
+  }).catch(() => null);
+  return res?.ok ? res.json<T>().catch(() => null) : null;
+}
+
+/** GETs a provider's JSON API with an access token; null on any failure. */
+const getJson = <T>(url: string, token: string): Promise<T | null> =>
+  fetch(url, { headers: { authorization: `Bearer ${token}` } }).then((r) => (r.ok ? r.json<T>() : null)).catch(() => null);
+
+export const authRoutes = new Hono<AppEnv>();
+
+// ---------- Google ----------
+const GOOGLE_AUTHORIZE = 'https://accounts.google.com/o/oauth2/v2/auth';
+const GOOGLE_TOKEN = 'https://oauth2.googleapis.com/token';
+const GOOGLE_USERINFO = 'https://openidconnect.googleapis.com/v1/userinfo';
+const googleOn = (c: Ctx) => !!(c.env.GOOGLE_CLIENT_ID && c.env.GOOGLE_CLIENT_SECRET);
+
+authRoutes.get('/login', async (c) => {
+  if (!googleOn(c)) return c.text('Google sign-in is not configured yet: set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.', 500);
+  const pkce = await beginOAuth(c, 'tv_oauth', safeNext(c.req.query('next')));
+  const u = new URL(GOOGLE_AUTHORIZE);
   u.search = new URLSearchParams({
-    client_id: c.env.GOOGLE_CLIENT_ID,
+    client_id: c.env.GOOGLE_CLIENT_ID!,
     redirect_uri: redirectUri(c),
     response_type: 'code',
     scope: 'openid email profile',
-    state,
-    code_challenge: challenge,
-    code_challenge_method: 'S256',
     prompt: 'select_account',
+    ...pkce,
   }).toString();
   return c.redirect(u.toString());
 });
@@ -55,14 +89,11 @@ authRoutes.get('/gmail', async (c) => {
   const user = await currentUser(c);
   if (!user) return c.redirect(`/login?next=${encodeURIComponent(back)}`);
   if (user.role !== 'admin') return c.redirect(withGmail(back, 'forbidden'));
-  if (!c.env.GOOGLE_CLIENT_ID || !c.env.GOOGLE_CLIENT_SECRET) return c.redirect(withGmail(back, 'unavailable'));
-  const state = randomToken(16);
-  const verifier = randomToken(32);
-  setCookie(c, 'tv_oauth', `${state}.${verifier}.gmail`, { ...cookieBase(c), path: '/auth', maxAge: 600 });
-  setCookie(c, NEXT_COOKIE, back, { ...cookieBase(c), path: '/auth', maxAge: 600 });
-  const u = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  if (!googleOn(c)) return c.redirect(withGmail(back, 'unavailable'));
+  const pkce = await beginOAuth(c, 'tv_oauth', back, 'gmail');
+  const u = new URL(GOOGLE_AUTHORIZE);
   u.search = new URLSearchParams({
-    client_id: c.env.GOOGLE_CLIENT_ID,
+    client_id: c.env.GOOGLE_CLIENT_ID!,
     redirect_uri: redirectUri(c), // the same callback as sign-in, so no extra redirect URI to register
     response_type: 'code',
     // Send only. Never gmail.readonly: the app doesn't read mail.
@@ -71,9 +102,7 @@ authRoutes.get('/gmail', async (c) => {
     prompt: 'consent', // Google only returns a refresh token on a fresh consent
     include_granted_scopes: 'true',
     login_hint: user.email,
-    state,
-    code_challenge: b64url(await sha256(verifier)),
-    code_challenge_method: 'S256',
+    ...pkce,
   }).toString();
   return c.redirect(u.toString());
 });
@@ -83,23 +112,16 @@ async function gmailCallback(c: Ctx, code: string | undefined, error: string | u
   if (!user) return c.redirect('/login');
   if (user.role !== 'admin') return c.redirect(withGmail(back, 'forbidden'));
   if (error || !code) return c.redirect(withGmail(back, 'cancelled'));
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      code, client_id: c.env.GOOGLE_CLIENT_ID!, client_secret: c.env.GOOGLE_CLIENT_SECRET!,
-      redirect_uri: redirectUri(c), grant_type: 'authorization_code', code_verifier: verifier,
-    }),
-  }).catch(() => null);
-  if (!res?.ok) return c.redirect(withGmail(back, 'failed'));
-  const t = await res.json<{ access_token: string; refresh_token?: string; scope?: string }>();
+  const t = await redeemCode<{ access_token: string; refresh_token?: string; scope?: string }>(GOOGLE_TOKEN, {
+    code, client_id: c.env.GOOGLE_CLIENT_ID!, client_secret: c.env.GOOGLE_CLIENT_SECRET!, redirect_uri: redirectUri(c), code_verifier: verifier,
+  });
+  if (!t?.access_token) return c.redirect(withGmail(back, 'failed'));
   const revoke = () => fetch('https://oauth2.googleapis.com/revoke', {
     method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ token: t.refresh_token || t.access_token }),
   }).catch(() => undefined);
   // Google lets people untick individual permissions: without "send email" there's nothing to store.
   if (!(t.scope ?? '').split(' ').includes(GMAIL_SEND)) { await revoke(); return c.redirect(withGmail(back, 'no_permission')); }
-  const info = await fetch('https://openidconnect.googleapis.com/v1/userinfo', { headers: { authorization: `Bearer ${t.access_token}` } })
-    .then((r) => (r.ok ? r.json<{ email?: string }>() : null)).catch(() => null);
+  const info = await getJson<{ email?: string }>(GOOGLE_USERINFO, t.access_token);
   // Invites go out from the address they sign in with, so it must be the same Google account.
   if (!info?.email || info.email.toLowerCase() !== user.email.toLowerCase()) { await revoke(); return c.redirect(withGmail(back, 'wrong_account')); }
   if (!t.refresh_token) return c.redirect(withGmail(back, 'failed'));
@@ -110,37 +132,21 @@ async function gmailCallback(c: Ctx, code: string | undefined, error: string | u
 
 authRoutes.get('/callback', async (c) => {
   const { code, state, error } = c.req.query();
-  const saved = getCookie(c, 'tv_oauth');
-  const next = safeNext(getCookie(c, NEXT_COOKIE));
-  deleteCookie(c, 'tv_oauth', { path: '/auth' });
-  deleteCookie(c, NEXT_COOKIE, { path: '/auth' });
-  const [savedState, verifier, mode] = (saved ?? '').split('.');
-  if (mode === 'gmail') {
-    if (savedState !== state) return c.redirect(withGmail(next, 'expired'));
-    return gmailCallback(c, code, error, verifier, next);
+  const saved = endOAuth(c, 'tv_oauth');
+  if (saved.mode === 'gmail') {
+    if (saved.state !== state) return c.redirect(withGmail(saved.next, 'expired'));
+    return gmailCallback(c, code, error, saved.verifier, saved.next);
   }
-  if (error || !code || !saved) return c.redirect('/login?error=cancelled');
-  if (savedState !== state) return c.redirect('/login?error=expired');
-
-  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      code,
-      client_id: c.env.GOOGLE_CLIENT_ID!,
-      client_secret: c.env.GOOGLE_CLIENT_SECRET!,
-      redirect_uri: redirectUri(c),
-      grant_type: 'authorization_code',
-      code_verifier: verifier,
-    }),
+  if (error || !code || !saved.state) return c.redirect('/login?error=cancelled');
+  if (saved.state !== state) return c.redirect('/login?error=expired');
+  const t = await redeemCode<{ access_token?: string }>(GOOGLE_TOKEN, {
+    code, client_id: c.env.GOOGLE_CLIENT_ID!, client_secret: c.env.GOOGLE_CLIENT_SECRET!, redirect_uri: redirectUri(c), code_verifier: saved.verifier,
   });
-  if (!tokenRes.ok) return c.redirect('/login?error=google');
-  const { access_token } = await tokenRes.json<{ access_token: string }>();
-  const infoRes = await fetch('https://openidconnect.googleapis.com/v1/userinfo', { headers: { authorization: `Bearer ${access_token}` } });
-  if (!infoRes.ok) return c.redirect('/login?error=google');
-  const info = await infoRes.json<{ email?: string; email_verified?: boolean; name?: string; picture?: string }>();
+  if (!t?.access_token) return c.redirect('/login?error=google');
+  const info = await getJson<{ email?: string; email_verified?: boolean; name?: string; picture?: string }>(GOOGLE_USERINFO, t.access_token);
+  if (!info) return c.redirect('/login?error=google');
   if (!info.email || !info.email_verified) return c.redirect('/login?error=unverified');
-  return signIn(c, info.email, info.name ?? '', info.picture ?? null, next);
+  return signIn(c, info.email, info.name ?? '', info.picture ?? null, saved.next);
 });
 
 // ---------- WorkOS AuthKit (optional; on when WORKOS_CLIENT_ID and WORKOS_API_KEY are set) ----------
@@ -149,22 +155,19 @@ authRoutes.get('/callback', async (c) => {
 // WorkOS session is ended right away: signing out here really signs out, and the next sign-in asks again.
 const WORKOS = 'https://api.workos.com/user_management';
 const workosOn = (c: Ctx) => !!(c.env.WORKOS_CLIENT_ID && c.env.WORKOS_API_KEY);
-const googleOn = (c: Ctx) => !!(c.env.GOOGLE_CLIENT_ID && c.env.GOOGLE_CLIENT_SECRET);
 const workosRedirect = (c: Ctx) => `${new URL(c.req.url).origin}/auth/workos/callback`;
 
 /** What the sign-in page needs: which buttons to show, and the team's name and wordmark. */
 authRoutes.get('/methods', async (c) => {
   const st = await loadSettings(c.env.DB);
-  return c.json({ google: googleOn(c), workos: workosOn(c), microsoft: msOn(c), name: appName(st), wordmark: st.customWordmark ? st.wordmarkVersion : null });
+  if (c.env.MS_CLIENT_ID && !msTenant(c)) console.warn(MS_TENANT_HELP);
+  return c.json({ google: googleOn(c), microsoft: msOn(c), workos: workosOn(c), name: appName(st), wordmark: st.customWordmark ? st.wordmarkVersion : null });
 });
 
-authRoutes.get('/workos', (c) => {
+authRoutes.get('/workos', async (c) => {
   if (!workosOn(c)) return c.text('Email sign-in is not configured: set WORKOS_CLIENT_ID and WORKOS_API_KEY.', 500);
-  const state = randomToken(16);
-  setCookie(c, 'tv_workos', state, { ...cookieBase(c), path: '/auth', maxAge: 600 });
-  const next = safeNext(c.req.query('next'));
-  if (next !== '/') setCookie(c, NEXT_COOKIE, next, { ...cookieBase(c), path: '/auth', maxAge: 600 });
-  else deleteCookie(c, NEXT_COOKIE, { path: '/auth' });
+  // AuthKit is used without PKCE (the API key authenticates the exchange), so only the state goes along.
+  const { state } = await beginOAuth(c, 'tv_workos', safeNext(c.req.query('next')));
   const u = new URL(`${WORKOS}/authorize`);
   u.search = new URLSearchParams({
     client_id: c.env.WORKOS_CLIENT_ID!, redirect_uri: workosRedirect(c), response_type: 'code', provider: 'authkit', state,
@@ -174,13 +177,10 @@ authRoutes.get('/workos', (c) => {
 
 authRoutes.get('/workos/callback', async (c) => {
   const { code, state, error } = c.req.query();
-  const saved = getCookie(c, 'tv_workos');
-  const next = safeNext(getCookie(c, NEXT_COOKIE));
-  deleteCookie(c, 'tv_workos', { path: '/auth' });
-  deleteCookie(c, NEXT_COOKIE, { path: '/auth' });
+  const saved = endOAuth(c, 'tv_workos');
   if (!workosOn(c)) return c.redirect('/login');
   if (error || !code) return c.redirect(`/login?error=${error === 'access_denied' || !error ? 'cancelled' : 'workos'}`);
-  if (!saved || saved !== state) return c.redirect('/login?error=expired');
+  if (!saved.state || saved.state !== state) return c.redirect('/login?error=expired');
   const res = await fetch(`${WORKOS}/authenticate`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -205,7 +205,7 @@ authRoutes.get('/workos/callback', async (c) => {
   const u = r.user;
   if (!u?.email || u.email_verified === false) return c.redirect('/login?error=unverified');
   const name = [u.first_name, u.last_name].filter(Boolean).join(' ');
-  return signIn(c, u.email, name, u.profile_picture_url || null, next);
+  return signIn(c, u.email, name, u.profile_picture_url || null, saved.next);
 });
 
 /** The WorkOS session id ("sid") inside its access token. The token came straight from WorkOS, so it isn't re-verified. */
@@ -222,64 +222,62 @@ function sessionIdOf(token: string | undefined): string | null {
 }
 
 // ---------- Microsoft 365 / Entra ID (optional; on when MS_CLIENT_ID, MS_CLIENT_SECRET and MS_TENANT_ID are set) ----------
-// Locked to one organization's tenant: the authorize and token endpoints are tenant-specific, so only that tenant
-// issues codes here. The email comes from Microsoft Graph (/me), not from a token claim another tenant's admin could
-// set to anything (the "nOAuth" problem) — that's the verified-email requirement for this provider.
-const msOn = (c: Ctx) => !!(c.env.MS_CLIENT_ID && c.env.MS_CLIENT_SECRET && c.env.MS_TENANT_ID);
+// Locked to one organization's tenant: the authorize and token endpoints are tenant-specific, so only that tenant's
+// people (and guests it invited) can sign in. The email comes from Microsoft Graph (/me), not from a token claim another
+// tenant's admin could set to anything (the "nOAuth" problem). That makes this tenant's admins trusted to say who's who:
+// they can set an account's `mail` to any address. A multi-tenant authority would extend that trust to every tenant in the
+// world, so msTenant() refuses anything but one organization's GUID or domain, and the button stays off until it's right.
 const MS_SCOPE = 'openid profile email User.Read';
-const msBase = (c: Ctx) => `https://login.microsoftonline.com/${encodeURIComponent(c.env.MS_TENANT_ID!.trim())}/oauth2/v2.0`;
+const MS_TENANT_HELP = 'Microsoft sign-in is off: MS_TENANT_ID must be your organization\'s tenant ID (a GUID) or one of its domains, never "common", "organizations" or "consumers".';
+/** Microsoft's own tenant for personal accounts: as open as "consumers". */
+const MS_CONSUMER_TENANT = '9188040d-6c67-4c5b-b112-36a304b66dad';
+const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const DOMAIN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+/** The configured tenant, or null unless it names exactly one organization ("common" and friends have no dot, so they fail DOMAIN). */
+function msTenant(c: Ctx): string | null {
+  const t = (c.env.MS_TENANT_ID ?? '').trim().toLowerCase();
+  return (GUID.test(t) && t !== MS_CONSUMER_TENANT) || DOMAIN.test(t) ? t : null;
+}
+const msOn = (c: Ctx) => !!(c.env.MS_CLIENT_ID && c.env.MS_CLIENT_SECRET && msTenant(c));
+const msBase = (c: Ctx) => `https://login.microsoftonline.com/${msTenant(c)}/oauth2/v2.0`;
 const msRedirect = (c: Ctx) => `${new URL(c.req.url).origin}/auth/microsoft/callback`;
 
 authRoutes.get('/microsoft', async (c) => {
-  if (!msOn(c)) return c.text('Microsoft sign-in is not configured: set MS_CLIENT_ID, MS_CLIENT_SECRET and MS_TENANT_ID.', 500);
-  const state = randomToken(16);
-  const verifier = randomToken(32);
-  setCookie(c, 'tv_ms', `${state}.${verifier}`, { ...cookieBase(c), path: '/auth', maxAge: 600 });
-  const next = safeNext(c.req.query('next'));
-  if (next !== '/') setCookie(c, NEXT_COOKIE, next, { ...cookieBase(c), path: '/auth', maxAge: 600 });
-  else deleteCookie(c, NEXT_COOKIE, { path: '/auth' });
+  if (!c.env.MS_CLIENT_ID || !c.env.MS_CLIENT_SECRET || !c.env.MS_TENANT_ID) {
+    return c.text('Microsoft sign-in is not configured: set MS_CLIENT_ID, MS_CLIENT_SECRET and MS_TENANT_ID.', 500);
+  }
+  if (!msOn(c)) return c.text(MS_TENANT_HELP, 500);
+  const pkce = await beginOAuth(c, 'tv_ms', safeNext(c.req.query('next')));
   const u = new URL(`${msBase(c)}/authorize`);
   u.search = new URLSearchParams({
-    client_id: c.env.MS_CLIENT_ID!,
+    client_id: c.env.MS_CLIENT_ID,
     redirect_uri: msRedirect(c),
     response_type: 'code',
     scope: MS_SCOPE,
-    state,
-    code_challenge: b64url(await sha256(verifier)),
-    code_challenge_method: 'S256',
     prompt: 'select_account',
+    ...pkce,
   }).toString();
   return c.redirect(u.toString());
 });
 
 authRoutes.get('/microsoft/callback', async (c) => {
   const { code, state, error } = c.req.query();
-  const saved = getCookie(c, 'tv_ms');
-  const next = safeNext(getCookie(c, NEXT_COOKIE));
-  deleteCookie(c, 'tv_ms', { path: '/auth' });
-  deleteCookie(c, NEXT_COOKIE, { path: '/auth' });
+  const saved = endOAuth(c, 'tv_ms');
   if (!msOn(c)) return c.redirect('/login');
-  if (error || !code || !saved) return c.redirect(`/login?error=${error === 'access_denied' || !error ? 'cancelled' : 'microsoft'}`);
-  const [savedState, verifier] = saved.split('.');
-  if (savedState !== state) return c.redirect('/login?error=expired');
-  const res = await fetch(`${msBase(c)}/token`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      code, client_id: c.env.MS_CLIENT_ID!, client_secret: c.env.MS_CLIENT_SECRET!,
-      redirect_uri: msRedirect(c), grant_type: 'authorization_code', code_verifier: verifier, scope: MS_SCOPE,
-    }),
-  }).catch(() => null);
-  if (!res?.ok) return c.redirect('/login?error=microsoft');
-  const { access_token } = await res.json<{ access_token?: string }>();
-  if (!access_token) return c.redirect('/login?error=microsoft');
-  const me = await fetch('https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName', {
-    headers: { authorization: `Bearer ${access_token}` },
-  }).then((r) => (r.ok ? r.json<{ displayName?: string; mail?: string | null; userPrincipalName?: string }>() : null)).catch(() => null);
+  if (error || !code || !saved.state) return c.redirect(`/login?error=${error === 'access_denied' || !error ? 'cancelled' : 'microsoft'}`);
+  if (saved.state !== state) return c.redirect('/login?error=expired');
+  const t = await redeemCode<{ access_token?: string }>(`${msBase(c)}/token`, {
+    code, client_id: c.env.MS_CLIENT_ID!, client_secret: c.env.MS_CLIENT_SECRET!, redirect_uri: msRedirect(c), code_verifier: saved.verifier, scope: MS_SCOPE,
+  });
+  if (!t?.access_token) return c.redirect('/login?error=microsoft');
+  const me = await getJson<{ displayName?: string; mail?: string | null; userPrincipalName?: string }>(
+    'https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName', t.access_token,
+  );
+  if (!me) return c.redirect('/login?error=microsoft');
   // A #EXT# principal is a guest from outside the tenant; only their invited outside address (`mail`) counts.
-  const email = me?.mail || (me?.userPrincipalName && !me.userPrincipalName.includes('#EXT#') ? me.userPrincipalName : null);
+  const email = me.mail || (me.userPrincipalName && !me.userPrincipalName.includes('#EXT#') ? me.userPrincipalName : null);
   if (!email) return c.redirect('/login?error=unverified');
-  return signIn(c, email, me?.displayName ?? '', null, next);
+  return signIn(c, email, me.displayName ?? '', null, saved.next);
 });
 
 /** Local development only: sign in as any existing user without Google. */

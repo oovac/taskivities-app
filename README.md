@@ -11,12 +11,12 @@ The design reference is [`docs/wireframes.html`](docs/wireframes.html). Open it 
 | App | React 19 + TypeScript, built with Vite, served as static assets by the Worker |
 | API | One Cloudflare Worker using [Hono](https://hono.dev) (`worker/`) |
 | Database | Cloudflare D1 (SQLite). Schema in `migrations/` |
-| Sign-in | Google OAuth (code + PKCE) and, optionally, WorkOS AuthKit (emailed codes, Microsoft, passkeys) for people without Google; handled in the Worker, with HttpOnly session cookies stored in D1 |
+| Sign-in | Google OAuth (code + PKCE) and, optionally, Microsoft 365 (Entra ID, one organization's tenant, code + PKCE) and WorkOS AuthKit (emailed codes, Microsoft, passkeys) for people without Google; handled in the Worker, with HttpOnly session cookies stored in D1 |
 | Live updates | The browser polls `/api/sync?since=<version>` every 10s (every 60s when the tab is hidden) |
 | AI assistants | Remote MCP server at `/mcp` (Streamable HTTP) on the same Worker: Cloudflare's `agents` SDK (`McpAgent`, one Durable Object per session) behind `@cloudflare/workers-oauth-provider` (OAuth 2.1 + dynamic client registration, tokens in KV) |
 
 ```
-worker/   index.ts (routes + OAuth provider) · auth.ts (Google, WorkOS + sessions) · api.ts (REST: tasks, sync) · tasks.ts (task rules shared by REST and MCP)
+worker/   index.ts (routes + OAuth provider) · auth.ts (Google, Microsoft, WorkOS + sessions) · api.ts (REST: tasks, sync) · tasks.ts (task rules shared by REST and MCP)
           mcp.ts (MCP tools) · oauth.ts (/authorize consent page for assistants) · admin.ts (people, projects, settings) · settings.ts (logo) · gmail.ts + invite-mail.ts (invite emails) · webhooks.ts · lib.ts
 shared/   types, date helpers and rules used by both the Worker and the app
 src/      React app: pages/ (Tasks and Projects: a person's or a project's view; Team: the People & projects page; Settings; Login), components/, actions.ts (all writes), keyboard.ts, focus.ts
@@ -85,7 +85,7 @@ scripts/tenant.mjs (per-instance deploys)   tenants/ (each instance's Cloudflare
 
 ## AI assistants (MCP)
 
-The Worker serves a remote MCP server at `https://<your-app-host>/mcp`. In Claude, add it as a custom connector with that URL; other MCP clients take the same URL. The client registers itself, the person signs in with the same Google account (or is already signed in), and approves the assistant on a consent page at `/authorize`. From then on **the assistant acts as that person**: it sees only what they see, follows the same rules, and every change it makes is written to the task history with `task_events.via` set to the client's registered name (shown as "via Claude").
+The Worker serves a remote MCP server at `https://<your-app-host>/mcp`. In Claude, add it as a custom connector with that URL; other MCP clients take the same URL. The client registers itself, the person signs in the same way they sign in to the app (or is already signed in), and approves the assistant on a consent page at `/authorize`. From then on **the assistant acts as that person**: it sees only what they see, follows the same rules, and every change it makes is written to the task history with `task_events.via` set to the client's registered name (shown as "via Claude").
 
 | Tool | What it does |
 |---|---|
@@ -165,6 +165,7 @@ What makes an instance is a small file, `tenants/<instance>.env`, which is **not
    npm run tenant -- secret acme GOOGLE_CLIENT_SECRET
    ```
    Optional: `ADMIN_EMAILS` (comma-separated addresses that are always let in as admins).
+   - **Optional: Microsoft 365 sign-in** (see below): `MS_CLIENT_ID`, `MS_CLIENT_SECRET` and `MS_TENANT_ID`.
    - **Optional: sign-in without Google** (see below): `WORKOS_CLIENT_ID` and `WORKOS_API_KEY`.
 5. **Deploy:**
    ```bash
@@ -172,7 +173,34 @@ What makes an instance is a small file, `tenants/<instance>.env`, which is **not
    ```
    This creates or updates the database tables, builds the app, and deploys it to that instance's Worker. The MCP Durable Object and custom domains are set up on the first deploy.
 6. **Sign in right away:** on an empty install the first person to sign in becomes the admin. Add your team on the **People & projects** page, and upload your logo on the **Settings** page.
-7. **Connect an assistant:** in Claude, add a custom connector with `https://<your-app-host>/mcp` and sign in. Nothing else to configure: assistants sign in through the same Google client.
+7. **Connect an assistant:** in Claude, add a custom connector with `https://<your-app-host>/mcp` and sign in. Nothing else to configure: assistants sign in through the same sign-in page.
+
+### Sign-in with Microsoft 365 (optional, Entra ID)
+
+For teams whose accounts live in Microsoft 365, an instance can add a **Continue with Microsoft** button that signs people in against your organization's own Microsoft Entra tenant. Only accounts in that tenant, and guests it has invited, can use it: personal Microsoft accounts and other organizations are turned away by Microsoft. Like Google, it only proves the email address: the address still has to be on the People & projects page, and assistants connecting over MCP can sign in this way too.
+
+**Which address counts:** the account's primary email in Entra (`mail`), or its sign-in name if it has none; for a guest, the address they were invited with. Your tenant's admins set these, so turning this on means trusting them to say who's who: an Entra admin could give an account any address, including an outside client's. That's usually fine for your own organization; if it isn't, use Google or WorkOS for those people. (WorkOS's own Microsoft option, below, takes accounts from any organization and relies on WorkOS to check the address; this one is tied to yours.)
+
+1. In the [Microsoft Entra admin center](https://entra.microsoft.com): *Identity → Applications → App registrations → New registration*.
+   - Supported account types: **Accounts in this organizational directory only (Single tenant)**.
+   - Redirect URI: platform **Web**, `https://<your-app-host>/auth/microsoft/callback`. Add one for each custom domain under *Authentication*, plus `http://localhost:5173/auth/microsoft/callback` if you also use it locally.
+2. On the app's *Overview*, copy the **Application (client) ID** and the **Directory (tenant) ID**.
+3. *Certificates & secrets → New client secret*, and copy its **Value** (not the Secret ID). **Client secrets expire** (after 24 months at most): note the date, and before then make a new one and set it again, or Microsoft sign-in stops working.
+4. *API permissions:* the default **Microsoft Graph → User.Read** (delegated) is all it needs. If your tenant doesn't let people consent to apps themselves, click **Grant admin consent**.
+5. Set the secrets:
+   ```bash
+   npm run tenant -- secret acme MS_CLIENT_ID
+   ```
+   ```bash
+   npm run tenant -- secret acme MS_CLIENT_SECRET
+   ```
+   ```bash
+   npm run tenant -- secret acme MS_TENANT_ID
+   ```
+   `MS_TENANT_ID` is the Directory (tenant) ID, or one of your organization's verified domains such as `contoso.com`. It must name your organization: `common`, `organizations` and `consumers` are refused, the button stays hidden, and the Worker logs why.
+6. Deploy. The sign-in page shows **Continue with Microsoft** (below Google) whenever all three are set. An instance can also run on Microsoft alone, without the Google secrets (invite emails through Gmail then aren't available).
+
+One app registration can serve several instances in the same organization: add each one's redirect URI.
 
 ### Sign-in without Google (optional, WorkOS)
 
@@ -181,7 +209,7 @@ Google sign-in works for any address with a Google account, including work addre
 Nothing else changes: WorkOS only proves the email address. The address still has to be on the People & projects page (the first sign-in on an empty install still becomes the admin), roles and projects work the same, and assistants connecting over MCP can sign in either way. Taskivities keeps its own 30-day session and ends the WorkOS session at once, so signing out here signs out, and the next sign-in asks again.
 
 1. Create an account at [dashboard.workos.com](https://dashboard.workos.com). Use the **Production** environment for live instances (Staging is for `http://localhost`).
-2. **Authentication:** turn on the methods to offer, for example **Magic Auth** (emailed codes), **Microsoft OAuth** and **Passkeys**. Google can stay off there: the app has its own Google button.
+2. **Authentication:** turn on the methods to offer, for example **Magic Auth** (emailed codes), **Microsoft OAuth** and **Passkeys**. Google can stay off there: the app has its own Google button. If everyone on Microsoft is in your own organization, the app's own Microsoft sign-in (above) is tied to your tenant and needs no WorkOS account.
 3. **Redirects:** add `https://<your-app-host>/auth/workos/callback` for each instance (and `http://localhost:5173/auth/workos/callback` in Staging for local development). Set the **sign-in endpoint** (where AuthKit sends people to start a sign-in) to `https://<your-app-host>/auth/workos`.
 4. **API Keys:** copy the **Client ID** (`client_…`) and the **API key** (`sk_…`) into the instance:
    ```bash

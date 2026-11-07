@@ -84,7 +84,7 @@
 		"TEAM_TZ": "America/New_York"
 	},
 	// Secrets, per instance: `npm run tenant -- secret <instance> NAME` for GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
-	// and optionally ADMIN_EMAILS. Locally they come from .dev.vars.
+	// and optionally ADMIN_EMAILS, MS_CLIENT_ID/MS_CLIENT_SECRET/MS_TENANT_ID and WORKOS_CLIENT_ID/WORKOS_API_KEY. Locally they come from .dev.vars.
 	"observability": {
 		"enabled": true
 	}

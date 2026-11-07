@@ -34,7 +34,7 @@ const MESSAGES: Record<string, string> = {
 };
 
 /** Which sign-in methods this instance has set up (WorkOS is optional), and the team's name and wordmark. */
-type Methods = { google: boolean; workos: boolean; microsoft?: boolean; name?: string; wordmark?: string | null };
+type Methods = { google: boolean; microsoft: boolean; workos: boolean; name?: string; wordmark?: string | null };
 
 export function Login() {
   const params = new URLSearchParams(location.search);
@@ -51,7 +51,7 @@ export function Login() {
   // null while loading, so an instance without Google doesn't flash its button.
   const [methods, setMethods] = useState<Methods | null>(null);
   useEffect(() => {
-    const fallback: Methods = { google: true, workos: false };
+    const fallback: Methods = { google: true, microsoft: false, workos: false };
     fetch('/auth/methods').then((r) => (r.ok ? r.json() : fallback)).then((m: Methods) => {
       setMethods(m);
       if (m.name) document.title = m.name;
@@ -73,8 +73,8 @@ export function Login() {
             </div>
           )}
           {error && MESSAGES[error] && <div className="si-msg" role="alert">{MESSAGES[error]}</div>}
-          {methods?.microsoft && <a className="gbtn" href={`/auth/microsoft${q}`}>{MSLOGO} Continue with Microsoft</a>}
           {methods?.google && <a className="gbtn" href={`/auth/login${q}`}>{GLOGO} Continue with Google</a>}
+          {methods?.microsoft && <a className="gbtn" href={`/auth/microsoft${q}`}>{MSLOGO} Continue with Microsoft</a>}
           {methods?.workos && <a className="gbtn" data-act="signin-email" href={`/auth/workos${q}`}>{I.mail(18)} Continue with email</a>}
           <div className="si-foot">Only people an admin has added can sign in.</div>
           {import.meta.env.DEV && (

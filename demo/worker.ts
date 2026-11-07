@@ -115,8 +115,8 @@ export default {
 
     if (path === '/login' && method === 'GET') return loginPage(req);
     if (path === '/auth/demo-login' && method === 'GET') return demoLogin(req, env);
-    // No Google or WorkOS sign-in in the demo.
-    if (path === '/auth/login' || path.startsWith('/auth/workos')) return Response.redirect(new URL(`/login${url.search}`, url).toString(), 302);
+    // No Google, Microsoft or WorkOS sign-in in the demo.
+    if (path === '/auth/login' || path.startsWith('/auth/microsoft') || path.startsWith('/auth/workos')) return Response.redirect(new URL(`/login${url.search}`, url).toString(), 302);
     if (path === '/auth/gmail') return Response.redirect(new URL('/settings?gmail=unavailable', url).toString(), 302);
     if (method === 'PUT' && /^\/api\/admin\/settings\/(logo|icon|wordmark|name)$/.test(path))
       return json({ error: 'Changing the logo, name or app icon is turned off in the demo. On your own instance, admins change them here.' }, 403);

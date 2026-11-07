@@ -9,6 +9,13 @@ GOOGLE_CLIENT_SECRET=
 WORKOS_CLIENT_ID=
 WORKOS_API_KEY=
 
+# Optional: "Continue with Microsoft" sign-in through your organization's Entra ID tenant (see the README).
+# Redirect URI to add to the app registration: http://localhost:5173/auth/microsoft/callback
+# MS_TENANT_ID is the tenant's ID (a GUID) or one of its domains, never "common".
+MS_CLIENT_ID=
+MS_CLIENT_SECRET=
+MS_TENANT_ID=
+
 # Optional: notifications (Web Push). Make a pair for local use with:  npm run -s push-keys >> .dev.vars
 # (Deployed instances get their own automatically on the first `npm run deploy`.)
 VAPID_PUBLIC_KEY=
