@@ -11,6 +11,7 @@ import {
 } from './lib';
 import { type Notice, WATCHERS, notify } from './push';
 import { followStmt } from './followers';
+import { touchLinked, unblockedBy } from './dependencies';
 
 /** SQL fragment limiting tasks to the projects the viewer can see (never an archived project's). */
 export const visible = (v: Viewer, alias = '') =>
@@ -246,6 +247,8 @@ export async function applyPatch(env: Env, v: Viewer, id: string, b: Patch, via:
       set('status', 'done'); set('done_at', now); set('done_on', t0); set('done_by', v.id);
       ev({ type: 'done' });
       notices.push({ to: WATCHERS, kind: 'done', actorId: v.id, via, taskId: id });
+      // Tasks that were only waiting on this one can start: whoever has each hears so.
+      notices.push(...(await unblockedBy(db, id, v.id, via)));
     } else if (b.status === 'open') {
       set('status', 'open'); set('done_at', null); set('done_on', null); set('done_by', null);
       ev({ type: 'reopened' });
@@ -361,6 +364,9 @@ export async function applyPatch(env: Env, v: Viewer, id: string, b: Patch, via:
       after.push(db.prepare('UPDATE series SET active = 0, updated_at = ? WHERE id = ?').bind(now, live.id));
     }
   }
+
+  // Linked tasks show this one's status and date (shared/types.ts → TaskLink): their apps reload them.
+  if (sets.some((x) => x.startsWith('status ') || x.startsWith('due_date '))) after.push(touchLinked(db, id));
 
   if (!events.length) return { stmts: [] as D1PreparedStatement[], changed: false, nextId: null, notices };
   const stmts = [
@@ -501,6 +507,8 @@ export async function setArchived(env: Env, v: Viewer, id: string, archive: bool
     db.prepare(`UPDATE tasks SET archived_at = ?, archived_by = ?, updated_at = ?, version = ${CURRENT_VERSION} WHERE id = ?`)
       .bind(archive ? now : null, archive ? v.id : null, now, t.id),
     eventStmt(db, { taskId: t.id, actorId: v.id, via, type: archive ? 'archived' : 'restored', at: now }),
+    // Tasks linked to it stop (or start again) showing it as a dependency.
+    touchLinked(db, t.id),
   ]);
   return mapTask((await loadTask(db, t.id))!);
 }

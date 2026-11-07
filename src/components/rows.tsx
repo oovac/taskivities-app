@@ -6,7 +6,8 @@ import { describe } from '../../shared/repeat';
 import type { Task } from '../../shared/types';
 import { openDrawer, openPop, toggleDone } from '../actions';
 import { useStore } from '../store';
-import { ariaFor, clockTime, firstName, lateDays } from '../util';
+import { ariaFor, clockTime, firstName, lateDays, linksOf } from '../util';
+import { blockedUntil, holdingUp, openBlockers, waitingBadly } from '../../shared/deps';
 import { Avatar, I, PrioTag, ProjPill } from './ui';
 
 // to/carried/by: a person's view. proj/proj-carried: a project's week (shows whose it is). pdone/popen: a project's day.
@@ -78,7 +79,7 @@ export function TaskRow({ t, ctx, showProject = false }: { t: Task; ctx: RowCtx;
         onClick={() => (ghost ? openDrawer(t.id) : toggleDone(t.id))}>{I.check()}</button>
       <div className="row-main" data-act="open" onClick={() => openDrawer(t.id)}>
         {(!done || report) && <PrioTag p={t.priority} />}
-        <div className="row-title">{t.title}{!done && t.series?.active && <RepeatMark t={t} />}{t.checklist.length > 0 && <CheckMark t={t} />}{t.attachments.length > 0 && <span className="clipmark" title={`${t.attachments.length} attachment${t.attachments.length > 1 ? 's' : ''}`} aria-label={`${t.attachments.length} attachments`}>{I.clip(11)}{t.attachments.length}</span>}{t.comments > 0 && <CommentMark n={t.comments} />}<EffortMark t={t} /></div>
+        <div className="row-title">{t.title}{!done && t.series?.active && <RepeatMark t={t} />}{t.checklist.length > 0 && <CheckMark t={t} />}{t.attachments.length > 0 && <span className="clipmark" title={`${t.attachments.length} attachment${t.attachments.length > 1 ? 's' : ''}`} aria-label={`${t.attachments.length} attachments`}>{I.clip(11)}{t.attachments.length}</span>}{t.comments > 0 && <CommentMark n={t.comments} />}<EffortMark t={t} /><DepMark t={t} /></div>
       </div>
       <div className="meta">{meta}</div>
       {!done && !ghost && (
@@ -118,7 +119,7 @@ export function TaskCard({ t, side, hideProject = false }: { t: Task; side: 'to'
       data-nav={`task:${t.id}`} tabIndex={-1} aria-label={ariaFor(t, today)} draggable={!done} onDragStart={onDragStart} onDragEnd={onDragEnd}>
       <button className="chk" tabIndex={-1} data-act="toggle" title={done ? 'Mark not done' : 'Mark done'} onClick={() => toggleDone(t.id)}>{I.check()}</button>
       <div className="tc-body" data-act="open" onClick={() => openDrawer(t.id)}>
-        <div className="tc-title">{!done && <PrioTag p={t.priority} />}{t.title}{!done && t.series?.active && <RepeatMark t={t} />}{t.checklist.length > 0 && <CheckMark t={t} />}{t.attachments.length > 0 && <span className="clipmark" title={`${t.attachments.length} attachment${t.attachments.length > 1 ? 's' : ''}`} aria-label={`${t.attachments.length} attachments`}>{I.clip(11)}{t.attachments.length}</span>}{t.comments > 0 && <CommentMark n={t.comments} />}<EffortMark t={t} /></div>
+        <div className="tc-title">{!done && <PrioTag p={t.priority} />}{t.title}{!done && t.series?.active && <RepeatMark t={t} />}{t.checklist.length > 0 && <CheckMark t={t} />}{t.attachments.length > 0 && <span className="clipmark" title={`${t.attachments.length} attachment${t.attachments.length > 1 ? 's' : ''}`} aria-label={`${t.attachments.length} attachments`}>{I.clip(11)}{t.attachments.length}</span>}{t.comments > 0 && <CommentMark n={t.comments} />}<EffortMark t={t} /><DepMark t={t} /></div>
         <div className="tc-meta">
           {!hideProject && <span className="tc-proj"><i style={{ background: p?.color }} />{p?.name}</span>}
           {late && <LateBadge t={t} today={today} />}
@@ -144,6 +145,33 @@ function EffortMark({ t }: { t: Task }) {
   if (!p?.effort || !v) return null;
   const label = effortLabel(p.effort, v);
   return <span className="efmark" title={`${EFFORT_TYPES[p.effort].name}: ${label}`} aria-label={`Effort ${label}`}>{label}</span>;
+}
+
+/**
+ * Dependencies on a row or card: "Waiting on 2" (red when the task is late, or a blocker is due after it) and
+ * "Blocks 1" (red "Holding up 1" when a task waiting on it is due before it). Only on open tasks.
+ */
+export function DepMark({ t }: { t: Task }) {
+  const s = useStore();
+  if (t.status !== 'open' || (!t.blockedBy?.length && !t.blocks?.length)) return null;
+  const by = linksOf(s, t, 'blockedBy'), bl = linksOf(s, t, 'blocks');
+  const waiting = openBlockers(t, by);
+  const held = holdingUp(t, bl, s.today);
+  const blocking = bl.filter((l) => l.open);
+  const names = (ids: { id: string }[]) => ids.map((l) => (s.tasks[l.id] ? `“${s.tasks[l.id].title}”` : 'a task in another project')).join(', ');
+  const until = blockedUntil(t, by, s.today);
+  return (
+    <>
+      {waiting.length > 0 && (
+        <span className={`depmark wait${waitingBadly(t, by, s.today) ? ' bad' : ''}`}
+          title={`Waiting on ${names(waiting)}${until ? ` · can't be done before ${fmt(until)}` : ''}`} aria-label={`Waiting on ${waiting.length}`}>
+          {I.link(11)}Waiting on {waiting.length}</span>
+      )}
+      {held.length > 0
+        ? <span className="depmark blk bad" title={`Holding up ${names(held)}: due before this one`} aria-label={`Holding up ${held.length}`}>{I.link(11)}Holding up {held.length}</span>
+        : blocking.length > 0 && <span className="depmark blk" title={`${names(blocking)} ${blocking.length > 1 ? 'wait' : 'waits'} on this`} aria-label={`Blocks ${blocking.length}`}>Blocks {blocking.length}</span>}
+    </>
+  );
 }
 
 const CommentMark = ({ n }: { n: number }) => (

@@ -2,13 +2,14 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { appName } from '../../shared/types';
 import { attachmentBlob, isFeed, remoteTaskUrl, sourceOf } from '../sources';
 import { EFFORT_TYPES, effortFor, effortLabel, storedEffortLabel } from '../../shared/effort';
-import { addDays, fmt } from '../../shared/dates';
+import { addDays, fmt, rel } from '../../shared/dates';
+import { blockedUntil, expectedOn, holdingUp, openBlockers } from '../../shared/deps';
 import { isLate, shownOn } from '../../shared/rules';
 import { describe } from '../../shared/repeat';
-import { CHECK_TEXT_MAX, COMMENT_MAX, PRIORITIES, type AttachmentInfo, type ChecklistItem, type Priority, type TaskEvent } from '../../shared/types';
-import { setFollowing, addChecklistItems, addComment, attachmentUrl, closeDrawer, pickAttachments, removeAttachment, uploadFiles, editChecklist, editNotes, removeChecklistItem, renameChecklistItem, toggleChecklistItem, loadEvents, openPop, patchTask, skipTask, toggleDone } from '../actions';
+import { CHECK_TEXT_MAX, COMMENT_MAX, PRIORITIES, type AttachmentInfo, type ChecklistItem, type Priority, type Task, type TaskEvent, type TaskLink } from '../../shared/types';
+import { setFollowing, addChecklistItems, addComment, attachmentUrl, closeDrawer, pickAttachments, removeAttachment, uploadFiles, editChecklist, editNotes, removeChecklistItem, renameChecklistItem, toggleChecklistItem, loadEvents, moveTasks, openDrawer, openPop, patchTask, setBlocker, skipTask, toggleDone } from '../actions';
 import { set, useStore, type State } from '../store';
-import { displayName, firstName, stamp } from '../util';
+import { displayName, firstName, lateDays, linksOf, stamp } from '../util';
 import { openMove, LateBadge } from './rows';
 import { type HistoryEntry, type HistoryLine, andList, groupHistory } from '../history';
 import { Avatar, Dot, I, PrioIcon, ProjPill } from './ui';
@@ -36,6 +37,7 @@ export function Drawer() {
   const showList = t.checklist.length > 0 || s.checklistOpen;
   const uploading = s.uploads.filter((u) => u.taskId === t.id);
   const showFiles = s.attachmentsOn && (t.attachments.length > 0 || uploading.length > 0);
+  const showDeps = (t.blockedBy?.length ?? 0) + (t.blocks?.length ?? 0) > 0;
 
   return (
     <>
@@ -125,17 +127,20 @@ export function Drawer() {
                 }} />
             </>
           )}
+          {showDeps && <Dependencies t={t} s={s} />}
           {showList && <Checklist key={`checklist:${t.id}`} taskId={t.id} items={t.checklist} />}
           {showFiles && <Attachments taskId={t.id} files={t.attachments} uploading={uploading} s={s} />}
           {s.attachmentsOn && (
             <input id="attach-input" type="file" multiple hidden tabIndex={-1} aria-hidden="true"
               onChange={(e) => { const f = [...(e.target.files ?? [])]; e.target.value = ''; if (f.length) void uploadFiles(t.id, f); }} />
           )}
-          {(!showNotes || !showList || (s.attachmentsOn && !showFiles)) && (
+          {(!showNotes || !showList || !showDeps || (s.attachmentsOn && !showFiles)) && (
             // Empty notes / no checklist: just small buttons, so the history sits higher up.
             <div className="dr-adds">
               {!showNotes && <button className="notes-add" data-act="notes" title="Add notes  (⇧N)" onClick={() => editNotes(t.id)}>{I.plus(13)} Add notes</button>}
               {!showList && <button className="notes-add" data-act="checklist" title="Add a checklist  (⇧C)" onClick={() => editChecklist(t.id)}>{I.check(12)} Add checklist</button>}
+              {!showDeps && <button className="notes-add" data-act="deps" title="Tasks this one waits on, or that wait on it"
+                onClick={(e) => openPop({ type: 'deps', mode: 'task', id: t.id, side: 'blockedBy' }, e.currentTarget)}>{I.link(13)} Add dependency</button>}
               {s.attachmentsOn && !showFiles && <button className="notes-add" data-act="attach" title="Attach files  (⇧A) · or drop / paste them here" onClick={() => pickAttachments(t.id)}>{I.clip(13)} Attach files</button>}
             </div>
           )}
@@ -197,6 +202,7 @@ function Followers({ t, s }: { t: NonNullable<State['tasks'][string]>; s: State 
 function EventText({ e, s }: { e: TaskEvent; s: State }) {
   const name = (id: string | null) => (id ? firstName(s.users[id]) : 'someone');
   const proj = (id: string | null) => (id && s.projects[id]?.name) || 'another project';
+  const other = (id: string | null) => (id && s.tasks[id] ? `“${s.tasks[id].title}”` : 'another task');
   switch (e.type) {
     case 'created': {
       let v: { assignee?: string; due?: string; priority?: number; repeat?: boolean } = {};
@@ -223,6 +229,10 @@ function EventText({ e, s }: { e: TaskEvent; s: State }) {
     case 'check_undone': return <>unchecked <b>{e.toValue}</b></>;
     case 'check_renamed': return <>renamed checklist item “{e.fromValue}” to <b>{e.toValue}</b></>;
     case 'check_removed': return <>removed <b>{e.toValue}</b> from the checklist</>;
+    case 'blocker_added': return <>made this wait on <b>{other(e.toValue)}</b></>;
+    case 'blocker_removed': return <>stopped this waiting on <b>{other(e.toValue)}</b></>;
+    case 'dependent_added': return <>made <b>{other(e.toValue)}</b> wait on this</>;
+    case 'dependent_removed': return <>stopped <b>{other(e.toValue)}</b> waiting on this</>;
     case 'archived': return <>archived this task</>;
     case 'restored': return <>restored this task</>;
     case 'follower_added': return <>added <b>{name(e.toValue)}</b> as a follower</>;
@@ -232,6 +242,86 @@ function EventText({ e, s }: { e: TaskEvent; s: State }) {
     case 'skipped': return <>skipped <b>{e.fromValue ? fmt(e.fromValue) : '?'}</b> · next one <b>{e.toValue ? fmt(e.toValue) : '?'}</b></>;
     default: return <>{e.type}</>;
   }
+}
+
+/**
+ * Dependencies: what this task waits on and what waits on it, with a one-click fix when the dates don't work
+ * (nothing moves by itself). Rules: shared/deps.ts.
+ */
+function Dependencies({ t, s }: { t: Task; s: State }) {
+  const by = linksOf(s, t, 'blockedBy'), bl = linksOf(s, t, 'blocks');
+  const until = blockedUntil(t, by, s.today);
+  const waiting = openBlockers(t, by);
+  const target = expectedOn(t.dueDate, s.today);
+  // Only tasks I can see can be moved.
+  const held = holdingUp(t, bl, s.today).filter((l) => s.tasks[l.id]);
+  const heldHidden = holdingUp(t, bl, s.today).length - held.length;
+  const add = (side: 'blockedBy' | 'blocks', el: HTMLElement) => openPop({ type: 'deps', mode: 'task', id: t.id, side }, el);
+  return (
+    <div className="deps" aria-label="Dependencies">
+      <div className="lbl">Dependencies
+        <button className="att-add" data-act="deps" title="Add a task this one waits on, or one that waits on it" onClick={(e) => add('blockedBy', e.currentTarget)}>{I.plus(12)} Add</button>
+      </div>
+      {by.length > 0 && (
+        <>
+          <div className="deps-h">Waits on{waiting.length > 0 && waiting.length < by.length && <span className="muted"> · {waiting.length} still open</span>}</div>
+          <ul className="deps-list">{by.map((l) => <DepItem key={l.id} l={l} t={t} s={s} side="blockedBy" />)}</ul>
+          {until ? (
+            <div className="deps-warn">
+              <span>{waiting.length > 1 ? 'What it waits on is' : 'It waits on a task'} due {fmt(until)}, after this one{t.dueDate < s.today ? ' (already late)' : ''}.</span>
+              <button className="btn-ghost sm" data-act="deps-move" onClick={() => void moveTasks([t.id], until)}>Move this to {fmt(until)}</button>
+            </div>
+          ) : waiting.length > 0 && t.dueDate < s.today && (
+            <div className="deps-warn"><span>Late, and still waiting on {waiting.length > 1 ? `${waiting.length} tasks` : 'a task'}.</span></div>
+          )}
+        </>
+      )}
+      {bl.length > 0 && (
+        <>
+          <div className="deps-h">Blocks</div>
+          <ul className="deps-list">{bl.map((l) => <DepItem key={l.id} l={l} t={t} s={s} side="blocks" />)}</ul>
+          {(held.length > 0 || heldHidden > 0) && (
+            <div className="deps-warn">
+              <span>
+                {held.length + heldHidden > 1 ? `${held.length + heldHidden} tasks waiting on this are` : 'A task waiting on this is'} due before it
+                {t.dueDate < s.today ? ', and this one is late' : ''}.
+                {t.dueDate < s.today ? ' Finish this, or move it to when it will be done.' : heldHidden > 0 && held.length === 0 && ' Whoever has it can move it.'}
+              </span>
+              {/* This one late too: they all roll into today, so moving them changes nothing. Finish or move this first. */}
+              {held.length > 0 && t.dueDate >= s.today && (
+                <button className="btn-ghost sm" data-act="deps-push" onClick={() => void moveTasks(held.map((l) => l.id), target)}>
+                  Move {held.length > 1 ? `${held.length}` : 'it'} to {fmt(target)}
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function DepItem({ l, t, s, side }: { l: TaskLink; t: Task; s: State; side: 'blockedBy' | 'blocks' }) {
+  const o = s.tasks[l.id];
+  const late = l.open && l.dueDate < s.today;
+  // Open and not loaded: it's in a project I'm not on (every open task I can see is loaded).
+  const label = o ? o.title : l.open ? 'A task in a project you’re not on' : 'A finished task';
+  // Taking a link off goes through the task that waits, which I need to be able to see.
+  const canRemove = side === 'blockedBy' || !!o;
+  return (
+    <li className={l.open ? '' : 'on'}>
+      <span className="dep-st" aria-label={l.open ? 'Open' : 'Done'}>{l.open ? <i /> : I.check(11)}</span>
+      {o ? <button className="dep-t" title="Open this task" onClick={() => openDrawer(l.id)}>{label}</button> : <span className="dep-t dim">{label}</span>}
+      {o && <span title={displayName(s.users[o.assigneeId])}><Avatar user={s.users[o.assigneeId]} size={18} /></span>}
+      <span className="dep-d">
+        {!l.open ? 'Done' : late ? <>due {fmt(l.dueDate)} <span className="late">{lateDays({ ...(o ?? t), dueDate: l.dueDate, status: 'open' }, s.today)}d late</span></> : `due ${rel(l.dueDate, s.today)}`}
+      </span>
+      {canRemove && (
+        <button className="ck-x" title={side === 'blockedBy' ? 'Stop waiting on it' : 'Stop it waiting on this'} aria-label={`Remove the dependency on ${label}`}
+          onClick={() => void setBlocker(t.id, l.id, side, false)}>{I.x(12)}</button>
+      )}
+    </li>
+  );
 }
 
 /** Plain text with web addresses turned into links (opened in a new tab). */

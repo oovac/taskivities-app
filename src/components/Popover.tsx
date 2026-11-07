@@ -1,12 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { feedParts, isFeed, localProjects, localUsers, localUsersOf, myProjectsEverywhere, personOn } from '../sources';
+import { feedParts, isFeed, localProjects, localUsers, localUsersOf, myProjectsEverywhere, personOn, sameSource } from '../sources';
 import { DOW, MONL, addDays, fmt, parseDate, toDate, weekStart } from '../../shared/dates';
 import { type Freq, type Repeat, cleanRepeat, describe, presets, sameRule } from '../../shared/repeat';
 import { isAdmin, onProject } from '../../shared/rules';
 import { PRIORITIES, appName, type NotifyPrefs, type Priority, type Project, type Task, type User } from '../../shared/types';
 import {
   assignable, closePop, defaultDraftDate, moveTasks, openConnect, openPop, viewProject, disableUser, enableUser, setPage, setPriority, setProject, setRepeat, signOut, switchablePeople, transfer,
-  updateUser, viewPerson, editNotes, editChecklist, pickAttachments, archiveTask, setFollowing, setEffort, currentSel, setMultiPick, viewMulti,
+  updateUser, viewPerson, editNotes, editChecklist, pickAttachments, archiveTask, setFollowing, setEffort, currentSel, setMultiPick, viewMulti, setBlocker,
 } from '../actions';
 import { focusLater } from '../focus';
 import { EFFORT_TYPES, effortFor, effortFromInput, fmtTime } from '../../shared/effort';
@@ -89,6 +89,7 @@ function Content({ p, s }: { p: Pop; s: State }) {
     case 'update': return <UpdatePop s={s} />;
     case 'inbox': return <InboxPop s={s} />;
     case 'followers': return <FollowersPop p={p} s={s} />;
+    case 'deps': return <DepsPop p={p} s={s} />;
     case 'account': return <AccountPop s={s} />;
     case 'taskmenu': return <TaskMenu p={p} s={s} />;
     case 'repeat': return <RepeatPop p={p} s={s} />;
@@ -660,6 +661,48 @@ function FollowersPop({ p, s }: { p: Pop; s: State }) {
   );
 }
 
+/**
+ * Add a dependency: pick tasks this one waits on, or tasks that wait on it. Lists open tasks (searching finds done
+ * ones too), this task's project first; only tasks on the same instance. Stays open to add several.
+ */
+function DepsPop({ p, s }: { p: Pop; s: State }) {
+  const t = s.tasks[p.id!];
+  if (!t) return null;
+  const side = p.side ?? 'blockedBy';
+  const q = (p.q || '').trim().toLowerCase();
+  const linked = new Set([...(t.blockedBy ?? []), ...(t.blocks ?? [])].map((l) => l.id));
+  const list = Object.values(s.tasks)
+    .filter((x) => x.id !== t.id && !linked.has(x.id) && !x.archivedAt && sameSource(x.id, t.id) && (q ? x.title.toLowerCase().includes(q) : x.status === 'open'))
+    .sort((a, b) => Number(a.status === 'done') - Number(b.status === 'done') || Number(a.projectId !== t.projectId) - Number(b.projectId !== t.projectId)
+      || a.dueDate.localeCompare(b.dueDate))
+    .slice(0, 40);
+  return (
+    <>
+      <div className="deps-tabs" role="tablist" aria-label="Kind of dependency">
+        <button role="tab" aria-selected={side === 'blockedBy'} className={side === 'blockedBy' ? 'on' : ''} onClick={() => updatePop({ side: 'blockedBy' })}>This waits on…</button>
+        <button role="tab" aria-selected={side === 'blocks'} className={side === 'blocks' ? 'on' : ''} onClick={() => updatePop({ side: 'blocks' })}>Waiting on this…</button>
+      </div>
+      <div style={{ padding: '0 4px' }}>
+        <input className="pin" id="pop-q" placeholder="Search tasks" value={p.q || ''} autoComplete="off" onChange={(e) => updatePop({ q: e.target.value })} />
+      </div>
+      <div className="deps-opts">
+        {list.length ? list.map((x) => (
+          <button key={x.id} className="opt dep-opt" data-t={x.id} onClick={() => void setBlocker(t.id, x.id, side, true)}>
+            <Dot color={s.projects[x.projectId]?.color ?? '#A0A0AB'} />
+            <span className={`dep-opt-t${x.status === 'done' ? ' done' : ''}`}>{x.title}</span>
+            <span className="r"><Avatar user={s.users[x.assigneeId]} size={18} /> {x.status === 'done' ? 'Done' : fmt(x.dueDate)}</span>
+          </button>
+        )) : <div className="pop-empty">{q ? 'No task matches.' : 'No other open tasks. Search to find done ones.'}</div>}
+      </div>
+      <div className="pop-foot">
+        {side === 'blockedBy'
+          ? `“${t.title}” can't be finished before the tasks it waits on. If one is due after it, you'll be offered to move it.`
+          : `These can't be finished before “${t.title}”. If it slips past them, you'll be offered to move them too.`}
+      </div>
+    </>
+  );
+}
+
 /** For admins: is there a newer release than the one this instance runs, and how to deploy it. */
 function UpdatePop({ s }: { s: State }) {
   const u = s.update;
@@ -704,7 +747,7 @@ function NotifyPop({ s }: { s: State }) {
   const run = async (f: () => Promise<string | null | void>) => { setBusy(true); setMsg(null); const r = await f(); setBusy(false); if (r) setMsg(r); };
   const kinds: [keyof NotifyPrefs, string][] = [
     ['assigned', 'Someone gives me a task'],
-    ['comments', 'Tasks I have or follow: comments, done, handed on'],
+    ['comments', 'Tasks I have or follow: comments, done, handed on, nothing left to wait on'],
     ['morning', 'Morning summary at 8:00'],
   ];
   return (
@@ -910,6 +953,10 @@ function TaskMenu({ p, s }: { p: Pop; s: State }) {
       <button className="opt" data-act="menu-notes" onClick={() => { closePop(false); editNotes(t.id); }}>{I.list(15)}Notes<span className="r">⇧N</span></button>
       <button className="opt" data-act="menu-checklist" onClick={() => { closePop(false); editChecklist(t.id); }}>{I.check(14)}Checklist<span className="r">⇧C</span></button>
       {s.attachmentsOn && <button className="opt" data-act="menu-attach" onClick={() => { closePop(false); pickAttachments(t.id); }}>{I.clip(15)}Attach files<span className="r">⇧A</span></button>}
+      <button className="opt" data-act="menu-deps" onClick={(e) => {
+        const a = document.querySelector<HTMLElement>('.drawer [data-act="task-menu"]') ?? e.currentTarget;
+        openPop({ type: 'deps', mode: 'task', id: t.id, side: 'blockedBy' }, a);
+      }}>{I.link(15)}Dependencies…</button>
       <div className="pop-sep" />
       <button className="opt danger" data-act="archive" onClick={() => { closePop(false); void archiveTask(t.id); }}>
         {I.trash(15)}Archive task

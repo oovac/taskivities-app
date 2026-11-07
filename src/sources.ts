@@ -96,11 +96,15 @@ function taskIn(c: Ctx, t: Task): Task {
     archivedBy: uIn(c, t.archivedBy), followers: t.followers.map((x) => uIn(c, x)!),
     attachments: t.attachments.map((a) => ({ ...a, by: uIn(c, a.by)! })),
     series: t.series ? { ...t.series, assigneeId: uIn(c, t.series.assigneeId)! } : null,
+    // Dependencies are always within one instance (worker/dependencies.ts).
+    blockedBy: (t.blockedBy ?? []).map((l) => ({ ...l, id: nsId(c.src, l.id) })),
+    blocks: (t.blocks ?? []).map((l) => ({ ...l, id: nsId(c.src, l.id) })),
   };
 }
 const PERSON_EVENTS = new Set(['transferred', 'follower_added', 'follower_removed']);
+const TASK_EVENTS = new Set(['blocker_added', 'blocker_removed', 'dependent_added', 'dependent_removed']);
 function eventIn(c: Ctx, e: TaskEvent): TaskEvent {
-  const ppl = PERSON_EVENTS.has(e.type), proj = e.type === 'project_changed';
+  const ppl = PERSON_EVENTS.has(e.type), proj = e.type === 'project_changed' || TASK_EVENTS.has(e.type);
   const v = (x: string | null) => (ppl ? uIn(c, x) : proj && x ? nsId(c.src, x) : x);
   return { ...e, id: nsId(c.src, e.id), taskId: nsId(c.src, e.taskId), actorId: uIn(c, e.actorId)!, fromValue: v(e.fromValue), toValue: v(e.toValue) };
 }
@@ -125,7 +129,7 @@ function bodyOut(src: string, b: unknown): unknown {
   const c = ctxFor(src);
   if (!c || !b || typeof b !== 'object' || Array.isArray(b)) return b;
   const o = { ...(b as Record<string, unknown>) };
-  for (const k of ['assigneeId', 'projectId', 'userId']) if (typeof o[k] === 'string') o[k] = out(c, o[k] as string);
+  for (const k of ['assigneeId', 'projectId', 'userId', 'blockerId']) if (typeof o[k] === 'string') o[k] = out(c, o[k] as string);
   if (Array.isArray(o.ids)) o.ids = (o.ids as string[]).map((x) => out(c, x));
   return o;
 }

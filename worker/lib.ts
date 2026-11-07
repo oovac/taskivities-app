@@ -1,6 +1,6 @@
 import type { OAuthHelpers } from '@cloudflare/workers-oauth-provider';
 import type { Context } from 'hono';
-import type { Project, Task, TaskEvent, User } from '../shared/types';
+import type { Project, Task, TaskEvent, TaskLink, User } from '../shared/types';
 import type { SeriesInfo } from '../shared/repeat';
 import { isEffortType } from '../shared/effort';
 import { todayIn } from '../shared/dates';
@@ -122,13 +122,23 @@ export const TASK_COLS =
   'FROM (SELECT id, text, done FROM checklist_items WHERE task_id = tasks.id ORDER BY position, created_at) c) AS checklist_json, ' +
   "(SELECT json_group_array(json_object('id', a.id, 'name', a.name, 'size', a.size, 'type', a.type, 'by', a.uploaded_by, 'at', a.uploaded_at)) " +
   'FROM (SELECT * FROM attachments WHERE task_id = tasks.id AND removed_at IS NULL ORDER BY uploaded_at) a) AS attachments_json, ' +
-  '(SELECT json_group_array(json_array(f.user_id, f.following)) FROM (SELECT * FROM task_followers WHERE task_id = tasks.id ORDER BY at) f) AS followers_json';
+  '(SELECT json_group_array(json_array(f.user_id, f.following)) FROM (SELECT * FROM task_followers WHERE task_id = tasks.id ORDER BY at) f) AS followers_json, ' +
+  // Dependencies (migrations/0019): [id, open, due] of each linked task, leaving out archived tasks and archived projects'.
+  "(SELECT json_group_array(json_array(x.id, x.status = 'open', x.due_date)) FROM (SELECT b.id, b.status, b.due_date FROM task_dependencies d " +
+  'JOIN tasks b ON b.id = d.blocker_id WHERE d.task_id = tasks.id AND b.archived_at IS NULL ' +
+  'AND b.project_id NOT IN (SELECT id FROM projects WHERE archived = 1) ORDER BY d.at) x) AS blocked_by_json, ' +
+  "(SELECT json_group_array(json_array(x.id, x.status = 'open', x.due_date)) FROM (SELECT w.id, w.status, w.due_date FROM task_dependencies d " +
+  'JOIN tasks w ON w.id = d.task_id WHERE d.blocker_id = tasks.id AND w.archived_at IS NULL ' +
+  'AND w.project_id NOT IN (SELECT id FROM projects WHERE archived = 1) ORDER BY d.at) x) AS blocks_json';
 
 export interface TaskRow {
   id: string; title: string; notes: string; project_id: string; assignee_id: string; created_by: string; assigned_by: string;
   due_date: string; priority: number; status: 'open' | 'done'; done_at: string | null; done_on: string | null; done_by: string | null;
   created_at: string; updated_at: string; version: number; series_id: string | null; archived_at: string | null; archived_by: string | null; effort?: string | null; series_json: string | null; comment_count: number; checklist_json: string | null; attachments_json: string | null; followers_json?: string | null;
+  blocked_by_json?: string | null; blocks_json?: string | null;
 }
+const parseLinks = (j: string | null | undefined): TaskLink[] =>
+  (JSON.parse(j || '[]') as [string, number, string][]).map(([id, open, dueDate]) => ({ id, open: !!open, dueDate }));
 const parseSeries = (j: string | null): SeriesInfo | null => {
   if (!j) return null;
   const s = JSON.parse(j) as SeriesInfo & { active: number | boolean };
@@ -146,6 +156,8 @@ export const mapTask = (r: TaskRow): Task => ({
   checklist: (JSON.parse(r.checklist_json || '[]') as { id: string; text: string; done: number }[]).map((c) => ({ id: c.id, text: c.text, done: !!c.done })),
   followers: followersFrom(r.created_by, r.followers_json),
   effort: r.effort ?? null,
+  blockedBy: parseLinks(r.blocked_by_json),
+  blocks: parseLinks(r.blocks_json),
 });
 
 /** The creator follows unless they stopped (a row with following = 0); everyone else follows with a row (migrations/0015). */

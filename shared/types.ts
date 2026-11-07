@@ -130,7 +130,18 @@ export interface Task {
   followers: string[];
   /** '<type>:<value>' (shared/effort.ts), or null. Only counts when its type is what the project tracks now. */
   effort: string | null;
+  /** Tasks this one waits on (its blockers), and tasks waiting on it. Archived tasks are left out. Rules: shared/deps.ts. */
+  blockedBy: TaskLink[];
+  blocks: TaskLink[];
 }
+
+/**
+ * The other end of a dependency, as much as anyone who can see this task may know about it (it may be in a project
+ * they're not on): whether it's still open, and when it's due. The app shows the rest when it has the task loaded.
+ */
+export interface TaskLink { id: string; open: boolean; dueDate: string }
+/** The most tasks one task can wait on. */
+export const BLOCKERS_MAX = 20;
 
 export type EventType =
   | 'created'
@@ -164,6 +175,11 @@ export type EventType =
   | 'follower_removed'
   | 'attached'
   | 'detached'
+  /** Dependencies: to_value is the other task's id. blocker_*: on the task that waits; dependent_*: on the blocker. */
+  | 'blocker_added'
+  | 'blocker_removed'
+  | 'dependent_added'
+  | 'dependent_removed'
   /** Archived (hidden from every list) / restored. */
   | 'archived'
   | 'restored';

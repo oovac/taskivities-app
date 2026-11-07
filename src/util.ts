@@ -1,7 +1,7 @@
 import { addDays, fmt, rel, weekStart, MONS } from '../shared/dates';
 import { localProjects, localUsers, myProjectsEverywhere, personOn, sameSource } from './sources';
 import { isLate, onProject, shownOn } from '../shared/rules';
-import { NORMAL, PRIORITIES, type Project, type Task, type User } from '../shared/types';
+import { NORMAL, PRIORITIES, type Project, type Task, type TaskLink, type User } from '../shared/types';
 import { upcoming } from '../shared/repeat';
 import type { State } from './store';
 
@@ -83,3 +83,10 @@ export const stamp = (iso: string, today: string) => {
 };
 
 export { fmt, rel, isLate, shownOn };
+
+/**
+ * A task's dependencies (tasks it waits on, or tasks waiting on it), with what the app has loaded about each other
+ * task: fresher than the copy the task carries while an edit is on its way. Rules: shared/deps.ts.
+ */
+export const linksOf = (s: State, t: Task, side: 'blockedBy' | 'blocks'): TaskLink[] =>
+  (t[side] ?? []).map((l) => { const o = s.tasks[l.id]; return o ? { id: l.id, open: o.status === 'open', dueDate: o.dueDate } : l; });

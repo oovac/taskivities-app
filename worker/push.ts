@@ -84,7 +84,7 @@ export const WATCHERS = '*';
 export interface Notice {
   /** A person's id, or WATCHERS. */
   to: string;
-  kind: 'assigned' | 'comment' | 'done' | 'reopened' | 'handed' | 'followed';
+  kind: 'assigned' | 'comment' | 'done' | 'reopened' | 'handed' | 'followed' | 'unblocked';
   actorId: string;
   /** The assistant ("Claude") or webhook ("GitHub webhook") that made the change for the actor. */
   via: string | null;
@@ -101,7 +101,7 @@ export interface Notice {
 }
 
 /** When one change means several things to one person, they hear the first of these. */
-const RANK: Notice['kind'][] = ['assigned', 'followed', 'handed', 'done', 'reopened', 'comment'];
+const RANK: Notice['kind'][] = ['assigned', 'followed', 'handed', 'unblocked', 'done', 'reopened', 'comment'];
 
 /** Sends notices after the response. Nobody is told about their own change, unless a webhook made it for them. */
 export function notify(env: Env, notices: Notice[]) {
@@ -186,6 +186,10 @@ async function deliver(env: Env, keys: PushKeys | null, raw: Notice[]) {
         }
         case 'followed':
           payload = { title: `${who} added you as a follower`, body: line, ...link };
+          break;
+        case 'unblocked':
+          // Who finished the blocker, not what it was: it may be in a project they're not on.
+          payload = { title: `Nothing left to wait on`, body: `${line}\n${who} finished what it was waiting on.`, ...link };
           break;
       }
     }

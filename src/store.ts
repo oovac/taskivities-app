@@ -22,7 +22,7 @@ const savedMulti = (): MultiSel => {
 };
 export const BOARD_WEEKS_MAX = 52;
 export type View = 'today' | 'list' | 'board';
-export type PopType = 'move' | 'assign' | 'prio' | 'proj' | 'person' | 'projpick' | 'urole' | 'uproj' | 'udisable' | 'uenable' | 'notify' | 'update' | 'inbox' | 'followers' | 'account' | 'repeat' | 'taskmenu' | 'pages' | 'effort';
+export type PopType = 'move' | 'assign' | 'prio' | 'proj' | 'person' | 'projpick' | 'urole' | 'uproj' | 'udisable' | 'uenable' | 'notify' | 'update' | 'inbox' | 'followers' | 'account' | 'repeat' | 'taskmenu' | 'pages' | 'effort' | 'deps';
 
 export interface Pop {
   type: PopType;
@@ -38,6 +38,8 @@ export interface Pop {
   q?: string;
   /** effort: mark the task done once the effort is chosen (it was required). */
   thenDone?: boolean;
+  /** deps: which side is being added: tasks this one waits on, or tasks waiting on it. */
+  side?: 'blockedBy' | 'blocks';
 }
 
 export interface InboxState {

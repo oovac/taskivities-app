@@ -9,6 +9,10 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+### Added
+
+- **Dependencies between tasks:** a task can wait on other tasks, as many as it needs, and one task can block several. Add them from a task's panel (**Add dependency**, or ⋯ → **Dependencies…**), picking tasks this one waits on or tasks waiting on it; tasks in other projects work too. Rows and cards show **Waiting on 2** or **Blocks 1**, in red when the dates don't work: a waiting task that's late or due before what it waits on, and **Holding up 1** on the task in the way. Nothing moves on its own: moving a task past the ones waiting on it offers **Move it too**, and the task panel offers to move a waiting task to when its blockers are due. Whoever has a waiting task is notified when the last thing it waits on is done. Assistants can set dependencies too (`set_dependencies`), and see them on every task.
+
 ## v0.7.0 (2026-11-07)
 
 ### Added

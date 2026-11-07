@@ -9,6 +9,7 @@ import { Hono } from 'hono';
 import { admin } from './admin';
 import { api } from './api';
 import { attachmentRoutes } from './attachments';
+import { dependencyRoutes } from './dependencies';
 import { followRoutes } from './followers';
 import { inboxRoutes } from './inbox';
 import { type AppEnv, type Env, HttpError, loadViewer, validTz } from './lib';
@@ -56,6 +57,7 @@ v1.use('*', async (c, next) => {
 v1.route('/v1/admin', admin);
 v1.route('/v1/tasks', attachmentRoutes);
 v1.route('/v1/tasks', followRoutes);
+v1.route('/v1/tasks', dependencyRoutes);
 v1.route('/v1/push', pushRoutes);
 v1.route('/v1/push-relays', relayTargetRoutes);
 v1.route('/v1/inbox', inboxRoutes);

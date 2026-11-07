@@ -16,6 +16,8 @@ import type { McpProps } from './oauth';
 import { UPLOAD_LINK_MINUTES, addAttachmentBytes, addAttachmentFromUrl, createUploadLink, readAttachment, typeFromName } from './attachments';
 import { addComment, changeChecklist, createTask, setArchived, loadVisibleTask, updateTask, updateTaskWithNext, visible } from './tasks';
 import { setFollowing } from './followers';
+import { setBlocker } from './dependencies';
+import { blockedUntil, holdingUp } from '../shared/deps';
 import { createProject, invitePeople, setProjectArchived, updateProject } from './admin';
 
 const PRIORITY_NAMES = ['urgent', 'high', 'normal', 'low'] as const;
@@ -121,6 +123,20 @@ function describeTask(t: Task, dir: Directory, t0: string) {
     ...(t.followers.some((f) => f !== t.assigneeId) ? { followers: t.followers.filter((f) => f !== t.assigneeId).map((f) => userLabel(dir, f)) } : {}),
     ...(t.attachments.length ? { attachments: t.attachments.map((a) => ({ id: a.id, name: a.name, type: a.type, size: a.size })) } : {}),
     ...(t.checklist.length ? { checklist: t.checklist.map((c) => ({ id: c.id, item: c.text, done: c.done })) } : {}),
+    ...depsOf(t, t0),
+  };
+}
+
+/** Dependencies, by task id (list_tasks has the titles of the ones the person can see), with what the dates mean. */
+function depsOf(t: Task, t0: string) {
+  const link = (l: Task['blockedBy'][number]) => ({ id: l.id, done: !l.open, due_date: l.dueDate });
+  const until = blockedUntil(t, t.blockedBy, t0);
+  const held = holdingUp(t, t.blocks, t0);
+  return {
+    ...(t.blockedBy.length ? { waits_on: t.blockedBy.map(link) } : {}),
+    ...(t.blocks.length ? { blocks: t.blocks.map(link) } : {}),
+    ...(until ? { blocked_until: until } : {}),
+    ...(held.length ? { holding_up: held.map((l) => l.id) } : {}),
   };
 }
 
@@ -528,6 +544,32 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
         this.run(async (v, dir, t0) => {
           const t = await setArchived(this.env, v, args.id, !args.restore, this.via);
           return { [args.restore ? 'restored' : 'archived']: describeTask(t, dir, t0) };
+        }),
+    );
+
+    this.server.registerTool(
+      'set_dependencies',
+      {
+        title: 'Set what a task waits on',
+        description:
+          'Say which tasks a task waits on (its blockers: it can\'t be finished before they are), or stop it waiting on some. A task can wait on ' +
+          'several tasks and block several. Tasks show waits_on and blocks (ids, done, due_date); blocked_until means a blocker is due after ' +
+          'the task, and holding_up lists waiting tasks due before this one. Nothing moves by itself: if dates clash, ask the person whether ' +
+          'to move them (update_task with due_date).',
+        inputSchema: {
+          id: z.string().describe('The task that waits (task id from list_tasks).'),
+          wait_on: z.array(z.string()).max(20).optional().describe('Task ids it should wait on. Any task the person can see; no circles.'),
+          stop_waiting_on: z.array(z.string()).max(20).optional().describe('Task ids it should no longer wait on.'),
+        },
+        annotations: { idempotentHint: true },
+      },
+      (args) =>
+        this.run(async (v, dir, t0) => {
+          if (!args.wait_on?.length && !args.stop_waiting_on?.length) throw bad('Give wait_on or stop_waiting_on.');
+          let task: Task | null = null;
+          for (const b of args.stop_waiting_on ?? []) task = (await setBlocker(this.env, v, args.id, b, false, this.via)).task;
+          for (const b of args.wait_on ?? []) task = (await setBlocker(this.env, v, args.id, b, true, this.via)).task;
+          return { task: describeTask(task!, dir, t0) };
         }),
     );
 

@@ -15,7 +15,8 @@ import { BOARD_WEEKS_MAX, type ManageTab, type MultiSel, type Page, type Pop, ty
 import { syncPush } from './push';
 import { checkForUpdate } from './updates';
 import { loadInbox } from './inbox';
-import { displayName, draftEffective, firstName, myProjects, sharesWith } from './util';
+import { displayName, draftEffective, firstName, linksOf, myProjects, sharesWith } from './util';
+import { expectedOn } from '../shared/deps';
 
 const pending = new Set<string>(); // tasks with an edit in flight (ignore sync for them)
 const mine = new Map<string, number>(); // tasks I changed recently (don't flash my own edits)
@@ -126,7 +127,8 @@ export async function sync() {
         if (prev && prev.version >= t.version) continue;
         tasks[t.id] = t;
         delete events[t.id];
-        if ((mine.get(t.id) ?? 0) < Date.now() - 15000) flashIds.push(t.id);
+        // A task linked to one that changed comes back with a new version but the same updated_at: no flash for it.
+        if ((mine.get(t.id) ?? 0) < Date.now() - 15000 && (!prev || prev.updatedAt !== t.updatedAt)) flashIds.push(t.id);
         if (!prev && t.assigneeId === me && t.createdBy !== me) {
           toast(`${firstName(s.users[t.createdBy])} assigned you “${t.title}”`);
         } else if (prev && t.comments > prev.comments && (t.assigneeId === me || t.createdBy === me) && (mine.get(t.id) ?? 0) < Date.now() - 15000) {
@@ -298,10 +300,31 @@ export async function moveTasks(ids: string[], dueDate: string) {
       ]);
       moved.flat().forEach(putTask);
     }
-    toast(prevs.length > 1 ? `Moved ${prevs.length} tasks to ${rel(dueDate, s.today)}` : `Moved to ${rel(dueDate, s.today)}`, () => {
+    const base = prevs.length > 1 ? `Moved ${prevs.length} tasks to ${rel(dueDate, s.today)}` : `Moved to ${rel(dueDate, s.today)}`;
+    const undoMove = () => {
       set({ toast: null });
       prevs.forEach((t) => void patchTask(t.id, { dueDate: t.dueDate }, { restore: true }));
-    });
+    };
+    // Dependencies: tasks waiting on these that are now due before them can be moved too (never by themselves).
+    const after = S();
+    const moved = new Set(prevs.map((t) => t.id));
+    const target = expectedOn(dueDate, after.today);
+    const heldIds = [...new Set(prevs.flatMap((t) => linksOf(after, t, 'blocks'))
+      .filter((l) => l.open && !moved.has(l.id) && after.tasks[l.id] && after.tasks[l.id].dueDate < target).map((l) => l.id))];
+    // And moving a waiting task before what it waits on: say so.
+    const one = prevs.length === 1 ? after.tasks[prevs[0].id] : null;
+    const waits = one ? linksOf(after, one, 'blockedBy').filter((l) => l.open && expectedOn(l.dueDate, after.today) > target) : [];
+    if (heldIds.length) {
+      const n = heldIds.length;
+      const first = after.tasks[heldIds[0]];
+      const it = prevs.length > 1 ? 'them' : 'it';
+      toast(`${base} · ${n > 1 ? `${n} tasks due earlier wait on ${it}` : `“${first.title}” waits on ${it}`}`,
+        undoMove, false, { label: n > 1 ? `Move ${n} too` : 'Move it too', run: () => { set({ toast: null }); void moveTasks(heldIds, dueDate); } });
+    } else if (waits.length) {
+      const latest = waits.reduce((a, b) => (expectedOn(b.dueDate, after.today) > expectedOn(a.dueDate, after.today) ? b : a));
+      const bt = after.tasks[latest.id];
+      toast(`${base} · it waits on ${bt ? `“${bt.title}”` : 'a task'}, due ${rel(expectedOn(latest.dueDate, after.today), after.today)}`, undoMove);
+    } else toast(base, undoMove);
   } catch (e) {
     prevs.forEach(putTask);
     toastError(e);
@@ -752,6 +775,36 @@ export async function replayHookRequest(id: string, rid: string) {
     toastError(e);
   }
 }
+// ---------- dependencies ----------
+/**
+ * Links two tasks, or unlinks them. side 'blockedBy': `taskId` waits on `otherId`; 'blocks': `otherId` waits on `taskId`.
+ * Both tasks come back from the server (the other one only if I can see it).
+ */
+export async function setBlocker(taskId: string, otherId: string, side: 'blockedBy' | 'blocks', add: boolean, quiet = false) {
+  const [waiter, blocker] = side === 'blockedBy' ? [taskId, otherId] : [otherId, taskId];
+  const s = S();
+  const wt = s.tasks[waiter], bt = s.tasks[blocker];
+  [waiter, blocker].forEach((id) => { pending.add(id); mine.set(id, Date.now()); });
+  try {
+    const r = add
+      ? await clientFor(waiter).post<{ task: Task; tasks: Task[] }>('/blockers', { blockerId: blocker })
+      : await clientFor(waiter).del<{ task: Task; tasks: Task[] }>(`/blockers/${encodeURIComponent(isFeed(blocker) ? feedParts(blocker).rid : blocker)}`);
+    putTask(r.task);
+    (r.tasks ?? []).forEach(putTask);
+    flash([r.task.id, ...(r.tasks ?? []).map((t) => t.id)]);
+    if (!quiet) {
+      const w = wt ? `“${wt.title}”` : 'That task', b = bt ? `“${bt.title}”` : 'a task you can’t see';
+      toast(add ? `${w} now waits on ${b}` : `${w} no longer waits on ${b}`, () => { set({ toast: null }); void setBlocker(taskId, otherId, side, !add, true); });
+    }
+    return true;
+  } catch (e) {
+    toastError(e);
+    return false;
+  } finally {
+    [waiter, blocker].forEach((id) => pending.delete(id));
+  }
+}
+
 async function openCreated(taskId: string) {
   await sync();
   if (S().tasks[taskId]) openDrawer(taskId);

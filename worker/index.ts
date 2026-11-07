@@ -12,6 +12,7 @@ import { attachmentRoutes, uploadRoutes } from './attachments';
 import { morningSummaries, pushRoutes } from './push';
 import { inboxRoutes } from './inbox';
 import { followRoutes } from './followers';
+import { dependencyRoutes } from './dependencies';
 import { relayIn, relayRoutes } from './relay';
 import { v1Handler } from './v1';
 
@@ -52,6 +53,7 @@ app.use('/api/*', sameOrigin, requireSession);
 app.route('/api/admin', admin);
 app.route('/api/tasks', attachmentRoutes);
 app.route('/api/tasks', followRoutes);
+app.route('/api/tasks', dependencyRoutes);
 app.route('/api/push', pushRoutes);
 app.route('/api/inbox', inboxRoutes);
 app.route('/api/relays', relayRoutes);
