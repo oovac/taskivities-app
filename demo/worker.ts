@@ -15,6 +15,8 @@ const ACCOUNTS = [
   { key: 'sara', email: 'sara@example.com', name: 'Sara Lopez', role: 'Member', about: 'Sees only the projects she is on.' },
 ];
 const RESET = 'every 8 hours';
+/** What apps that connect the demo call it. */
+const DEMO_NAME = 'Taskivities Demo';
 const OWN = 'https://www.taskivities.com/open-source';
 
 /** The app's environment, with the stand-in bucket so attachments are on (and keep nothing). */
@@ -137,6 +139,15 @@ export default {
       return new Response(res.body, { status: res.status, headers });
     }
     if (method === 'GET' && !path.startsWith('/authorize') && res.headers.get('content-type')?.startsWith('text/html')) return withBanner(res);
+    // Apps that connect the demo (docs/multi-instance.md) label its tasks, projects and people with its name. Give
+    // them "Taskivities Demo", so it stands apart from their own instances; the demo itself keeps its wordmark.
+    if (method === 'GET' && path === '/v1/bootstrap' && res.ok) {
+      const b = (await res.json()) as { settings?: { name?: string } };
+      if (b.settings && !b.settings.name) b.settings.name = DEMO_NAME;
+      const headers = new Headers(res.headers);
+      headers.delete('content-length');
+      return new Response(JSON.stringify(b), { status: res.status, headers });
+    }
     return res;
   },
 

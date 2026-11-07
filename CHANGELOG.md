@@ -9,6 +9,10 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+### Changed
+
+- **Demo:** apps that connect the public demo (Other instances) show it as **Taskivities Demo**, so its tasks and people stand apart from your own instance's. The demo itself looks the same.
+
 ## v0.6.0 (2026-11-07)
 
 ### Added
