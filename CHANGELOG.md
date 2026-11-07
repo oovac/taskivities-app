@@ -9,6 +9,8 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+## v0.6.1 (2026-11-07)
+
 ### Changed
 
 - **Switcher:** with other instances connected, the instance buttons at the top stay on one line, with each instance's colour, and scroll sideways when there are many.
