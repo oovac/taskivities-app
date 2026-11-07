@@ -29,6 +29,8 @@ export interface Conn {
   /** ms since epoch */
   expires: number;
   color: string;
+  /** Who I am there. One connection per instance: reconnecting has to be as the same person. */
+  user?: { id: string; name: string };
 }
 const KEY = 'tv:sources';
 const loadConns = (): Conn[] => { try { return JSON.parse(localStorage.getItem(KEY) || '[]') as Conn[]; } catch { return []; } };
@@ -40,7 +42,7 @@ export const connByHost = (host: string) => loadConns().find((c) => new URL(c.or
 const putConn = (c: Conn) => saveConns([...loadConns().filter((x) => x.id !== c.id), c]);
 
 /** What the app shows about a connection. */
-export interface SourceInfo { id: string; origin: string; name: string; color: string; status: 'ok' | 'loading' | 'error' | 'signed-out'; error?: string }
+export interface SourceInfo { id: string; origin: string; name: string; color: string; status: 'ok' | 'loading' | 'error' | 'signed-out'; error?: string; user?: string }
 
 // =====================================================================================================================
 // Ids: theirs ↔ ours
@@ -140,6 +142,15 @@ async function tokenCall(c: Pick<Conn, 'origin' | 'clientId'>, params: Record<st
   const data = (await res.json().catch(() => ({}))) as { access_token?: string; refresh_token?: string; expires_in?: number; error_description?: string };
   if (!res.ok || !data.access_token) throw new ApiError(res.status || 400, data.error_description || 'Sign-in there failed.');
   return { access: data.access_token, refresh: data.refresh_token ?? '', expires: Date.now() + (data.expires_in ?? 3600) * 1000 };
+}
+
+/** Ends a sign-in there (RFC 7009 at its token endpoint): revoking the refresh token ends the whole grant. */
+async function revoke(c: Pick<Conn, 'origin' | 'clientId'>, token: string) {
+  if (!token) return;
+  await fetch(`${c.origin}/token`, {
+    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ client_id: c.clientId, token, token_type_hint: 'refresh_token' }),
+  }).catch(() => { /* gone already, or unreachable: it expires on its own */ });
 }
 
 /** A fresh access token (refreshed once at a time per connection). null: signed out there; reconnect. */
@@ -304,7 +315,7 @@ async function loadSource(c: Conn) {
 export async function loadSources() {
   const cs = loadConns();
   set((s) => ({
-    sources: cs.map((c) => s.sources.find((x) => x.id === c.id) ?? { id: c.id, origin: c.origin, name: c.origin.replace(/^https?:\/\//, ''), color: c.color, status: 'loading' as const }),
+    sources: cs.map((c) => ({ ...(s.sources.find((x) => x.id === c.id) ?? { id: c.id, origin: c.origin, name: c.origin.replace(/^https?:\/\//, ''), color: c.color, status: 'loading' as const }), user: c.user?.name })),
   }));
   await Promise.all(cs.map((c) => loadSource(c).catch((e) => markSource(c.id, { status: S().sources.find((x) => x.id === c.id)?.status === 'signed-out' ? 'signed-out' : 'error', error: e instanceof Error ? e.message : String(e) }))));
 }
@@ -383,9 +394,17 @@ export function cleanOrigin(raw: string): string {
   return u.origin;
 }
 
-/** Starts connecting: registers this app there (once), then goes there to sign in and approve. */
-export async function connectInstance(raw: string) {
+/**
+ * Starts connecting: registers this app there (once), then goes there to sign in and approve. One connection per
+ * instance: connecting one that's already connected is refused (disconnect it first to connect as someone else),
+ * and `reconnect` (signed out there, or a new device) has to be as the same person.
+ */
+export async function connectInstance(raw: string, reconnect = false) {
   const origin = cleanOrigin(raw);
+  const here = connByOrigin(origin);
+  if (here && !reconnect) throw new Error(`${origin.replace(/^https?:\/\//, '')} is already connected${here.user ? ` as ${here.user.name}` : ''}. Disconnect it first to connect as someone else.`);
+  const elsewhere = here?.user ? null : (await api.get<{ relays: { origin: string; user: { id: string; name: string } }[] }>('/api/relays').catch(() => ({ relays: [] }))).relays.find((r) => r.origin === origin);
+  const expect = here?.user ?? (elsewhere?.user?.id ? elsewhere.user : null);
   const clients = JSON.parse(localStorage.getItem('tv:clients') || '{}') as Record<string, string>;
   let clientId = clients[origin];
   if (!clientId) {
@@ -407,7 +426,7 @@ export async function connectInstance(raw: string) {
   const verifier = randomStr(48);
   const challenge = b64u(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
   const st = randomStr(18);
-  sessionStorage.setItem(PENDING, JSON.stringify({ origin, clientId, verifier, state: st }));
+  sessionStorage.setItem(PENDING, JSON.stringify({ origin, clientId, verifier, state: st, expect }));
   location.href = `${origin}/authorize?${new URLSearchParams({
     response_type: 'code', client_id: clientId, redirect_uri: redirectUri(), code_challenge: challenge, code_challenge_method: 'S256', state: st,
   })}`;
@@ -417,20 +436,36 @@ export async function connectInstance(raw: string) {
 export async function finishConnect(): Promise<{ ok: boolean; message: string }> {
   const q = new URLSearchParams(location.search);
   history.replaceState(null, '', '/');
-  const pending = JSON.parse(sessionStorage.getItem(PENDING) || 'null') as { origin: string; clientId: string; verifier: string; state: string } | null;
+  const pending = JSON.parse(sessionStorage.getItem(PENDING) || 'null') as { origin: string; clientId: string; verifier: string; state: string; expect?: { id: string; name: string } | null } | null;
   sessionStorage.removeItem(PENDING);
   if (!pending || q.get('state') !== pending.state) return { ok: false, message: 'That connection request expired. Try again.' };
   if (q.get('error')) return { ok: false, message: q.get('error') === 'access_denied' ? 'Access wasn’t approved.' : q.get('error_description') || 'Connecting didn’t work.' };
   try {
     const t = await tokenCall(pending, { grant_type: 'authorization_code', code: q.get('code') ?? '', redirect_uri: redirectUri(), code_verifier: pending.verifier });
+    // Who did they approve as? Reconnecting has to be as the same person.
+    const meRes = await fetch(`${pending.origin}/v1/bootstrap`, { headers: { authorization: `Bearer ${t.access}` } });
+    const me = ((await meRes.json().catch(() => ({}))) as { me?: User }).me;
+    if (!me) return { ok: false, message: 'Signed in there, but couldn’t tell as whom. Try again.' };
+    const user = { id: me.id, name: me.name || me.email };
+    const host = pending.origin.replace(/^https?:\/\//, '');
+    if (pending.expect && pending.expect.id !== user.id) {
+      await revoke(pending, t.refresh); // not kept: leave nothing behind there
+      return { ok: false, message: `You signed in to ${host} as ${user.name}, but it's connected as ${pending.expect.name}. Sign in there as ${pending.expect.name}, or disconnect it first.` };
+    }
+    // Home keeps one relay per instance, for every device: it refuses a second person (worker/relay.ts).
+    let relay: string;
+    try { relay = (await api.post<{ url: string }>('/api/relays', { origin: pending.origin, user })).url; } catch (e) {
+      await revoke(pending, t.refresh);
+      return { ok: false, message: e instanceof Error ? e.message : 'Connecting didn’t work.' };
+    }
     const old = connByOrigin(pending.origin);
     const used = new Set(loadConns().map((c) => c.color));
     const c: Conn = {
-      id: old?.id ?? randomStr(6).replace(/[-_]/g, 'x'), origin: pending.origin, clientId: pending.clientId, ...t,
+      id: old?.id ?? randomStr(6).replace(/[-_]/g, 'x'), origin: pending.origin, clientId: pending.clientId, ...t, user,
       color: old?.color ?? PROJECT_COLORS.find((x) => !used.has(x)) ?? PROJECT_COLORS[0],
     };
     putConn(c);
-    await setUpRelay(c).catch(() => { /* notifications only; the rest works */ });
+    await srcCall(c.id, 'POST', '/push-relays', { url: relay }, true).catch(() => { /* notifications only; the rest works */ });
     await loadSources();
     return { ok: true, message: `Connected ${S().sources.find((x) => x.id === c.id)?.name ?? pending.origin}. Your tasks there now show with yours.` };
   } catch (e) {
@@ -438,18 +473,15 @@ export async function finishConnect(): Promise<{ ok: boolean; message: string }>
   }
 }
 
-/** Notifications from that instance, through this one: a relay here, given to it there. */
-async function setUpRelay(c: Conn) {
-  const { url } = await api.post<{ url: string }>('/api/relays', { origin: c.origin });
-  await srcCall(c.id, 'POST', '/push-relays', { url }, true);
-}
-
 export async function disconnectInstance(id: string) {
   const c = connById(id);
   if (c) {
-    // Stop its notifications (the relay here goes too, so it would stop anyway) and forget it on this device.
+    // End the sign-in there (as revoking it there would), and stop its notifications (the relay here goes too, so it would stop anyway) and forget it on this device.
     const relays = await api.get<{ relays: { id: string; origin: string }[] }>('/api/relays').catch(() => ({ relays: [] }));
-    await Promise.all(relays.relays.filter((r) => r.origin === c.origin).map((r) => api.del(`/api/relays/${r.id}`).catch(() => {})));
+    await Promise.all([
+      ...relays.relays.filter((r) => r.origin === c.origin).map((r) => api.del(`/api/relays/${r.id}`).catch(() => {})),
+      revoke(c, c.refresh),
+    ]);
   }
   saveConns(loadConns().filter((x) => x.id !== id));
   state.delete(id);
@@ -463,8 +495,8 @@ export async function disconnectInstance(id: string) {
 }
 
 /** Instances connected on another device (from home's relays) but not this one: offered for a one-tap reconnect. */
-export async function connectedElsewhere(): Promise<string[]> {
-  const { relays } = await api.get<{ relays: { origin: string }[] }>('/api/relays');
+export async function connectedElsewhere(): Promise<{ origin: string; user: string }[]> {
+  const { relays } = await api.get<{ relays: { origin: string; user: { name: string } }[] }>('/api/relays');
   const here = new Set(loadConns().map((c) => c.origin));
-  return [...new Set(relays.map((r) => r.origin))].filter((o) => !here.has(o));
+  return relays.filter((r) => !here.has(r.origin)).map((r) => ({ origin: r.origin, user: r.user?.name ?? '' }));
 }

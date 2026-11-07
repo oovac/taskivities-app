@@ -21,8 +21,9 @@ CREATE TABLE relays (
   id          TEXT PRIMARY KEY,
   user_id     TEXT NOT NULL REFERENCES users (id),
   origin      TEXT NOT NULL,     -- the other instance, e.g. https://work.example.com
+  remote_user TEXT NOT NULL,     -- JSON: who you are there ({ id, name }): one connection per instance, on every device
   secret_hash TEXT NOT NULL,
   created_at  TEXT NOT NULL,
   last_at     TEXT               -- when it last passed a notification on
 );
-CREATE INDEX relays_user ON relays (user_id);
+CREATE UNIQUE INDEX relays_user_origin ON relays (user_id, origin);

@@ -16,14 +16,14 @@ export function InstancesSheet({ s }: { s: State }) {
   const [url, setUrl] = useState(prefill ? host(prefill) : '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const [elsewhere, setElsewhere] = useState<string[]>([]);
+  const [elsewhere, setElsewhere] = useState<{ origin: string; user: string }[]>([]);
 
   useEffect(() => { void connectedElsewhere().then(setElsewhere).catch(() => {}); }, [s.sources.length]);
 
-  const connect = async (target = url) => {
+  const connect = async (target = url, reconnect = false) => {
     if (!target.trim()) { setErr('Give the address of the other instance.'); return; }
     setBusy(true); setErr('');
-    try { await connectInstance(target); } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't connect."); setBusy(false); }
+    try { await connectInstance(target, reconnect); } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't connect."); setBusy(false); }
   };
   const remove = async (x: SourceInfo) => {
     await disconnectInstance(x.id);
@@ -52,9 +52,9 @@ export function InstancesSheet({ s }: { s: State }) {
                   <i className="in-dot" style={{ background: x.color }} />
                   <div className="in-main">
                     <b>{x.name}</b>
-                    <span>{host(x.origin)} · <span className={x.status === 'ok' ? '' : 'in-err'}>{x.status === 'error' && x.error ? x.error : STATUS[x.status]}</span></span>
+                    <span>{host(x.origin)}{x.user ? ` · as ${x.user}` : ''} · <span className={x.status === 'ok' ? '' : 'in-err'}>{x.status === 'error' && x.error ? x.error : STATUS[x.status]}</span></span>
                   </div>
-                  {x.status === 'signed-out' && <button className="btn-primary sm" onClick={() => void connect(x.origin)}>Reconnect</button>}
+                  {x.status === 'signed-out' && <button className="btn-primary sm" onClick={() => void connect(x.origin, true)}>Reconnect</button>}
                   <a className="btn-ghost sm" href={x.origin} target="_blank" rel="noopener">Open</a>
                   <button className="btn-ghost sm" data-act="source-remove" onClick={() => void remove(x)}>Disconnect</button>
                 </div>
@@ -67,10 +67,10 @@ export function InstancesSheet({ s }: { s: State }) {
               <div className="lbl" style={{ marginTop: 16 }}>Connected on another device</div>
               <div className="card in-list">
                 {elsewhere.map((o) => (
-                  <div key={o} className="in-row">
+                  <div key={o.origin} className="in-row">
                     <span className="in-key">{I.link(14)}</span>
-                    <div className="in-main"><b>{host(o)}</b><span>Its notifications already come here. Connect this device to see its tasks.</span></div>
-                    <button className="btn-primary sm" data-act="source-reconnect" disabled={busy} onClick={() => void connect(o)}>Connect</button>
+                    <div className="in-main"><b>{host(o.origin)}</b><span>{o.user ? `As ${o.user}. ` : ''}Its notifications already come here. Connect this device to see its tasks.</span></div>
+                    <button className="btn-primary sm" data-act="source-reconnect" disabled={busy} onClick={() => void connect(o.origin, true)}>Connect</button>
                   </div>
                 ))}
               </div>

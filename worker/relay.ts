@@ -6,32 +6,42 @@
 // push key: one subscription per device, however many instances you use. The relay can't read or change anything
 // on the other instance; it only passes on what it's sent.
 import { Hono } from 'hono';
-import { type AppEnv, type Env, bad, nowIso, randomToken, sha256hex, uid } from './lib';
+import { type AppEnv, type Env, bad, conflict, nowIso, randomToken, sha256hex, uid } from './lib';
 import { sendToUser } from './push';
 
 // ---------- home: the relays I run for my people ----------
-interface RelayRow { id: string; user_id: string; origin: string; secret_hash: string; created_at: string; last_at: string | null }
+interface RelayRow { id: string; user_id: string; origin: string; remote_user: string; secret_hash: string; created_at: string; last_at: string | null }
+interface RemoteUser { id: string; name: string }
+const who = (r: RelayRow): RemoteUser => { try { return JSON.parse(r.remote_user) as RemoteUser; } catch { return { id: '', name: '' }; } };
 
 export const relayRoutes = new Hono<AppEnv>();
 
 /** Instances someone connected (from any device): a new device offers to reconnect them. */
 relayRoutes.get('/', async (c) => {
   const { results } = await c.env.DB.prepare('SELECT * FROM relays WHERE user_id = ? ORDER BY created_at').bind(c.get('viewer').id).all<RelayRow>();
-  return c.json({ relays: results.map((r) => ({ id: r.id, origin: r.origin, createdAt: r.created_at, lastAt: r.last_at })) });
+  return c.json({ relays: results.map((r) => ({ id: r.id, origin: r.origin, user: who(r), createdAt: r.created_at, lastAt: r.last_at })) });
 });
 
-/** A relay for one other instance (a new one replaces an older one for the same instance). Its address holds the secret. */
+/**
+ * A relay for one other instance; its address holds the secret. One connection per instance: connecting again (a new
+ * device, or after being signed out there) has to be as the same person there. To switch, disconnect first.
+ */
 relayRoutes.post('/', async (c) => {
   const v = c.get('viewer');
-  const b = await c.req.json<{ origin?: string }>().catch(() => ({} as { origin?: string }));
+  const b = await c.req.json<{ origin?: string; user?: RemoteUser }>().catch(() => ({} as { origin?: string; user?: RemoteUser }));
   let origin: string;
   try { origin = new URL(String(b.origin ?? '')).origin; } catch { throw bad('Give the other instance’s address.'); }
+  const user = { id: String(b.user?.id ?? ''), name: String(b.user?.name ?? '').slice(0, 80) };
+  if (!user.id) throw bad('Say who you are there.');
   const db = c.env.DB;
+  const old = await db.prepare('SELECT * FROM relays WHERE user_id = ? AND origin = ?').bind(v.id, origin).first<RelayRow>();
+  if (old && who(old).id !== user.id)
+    throw conflict(`${new URL(origin).host} is already connected as ${who(old).name || 'someone else'}. Disconnect it first to connect as someone else.`);
   const id = uid();
   const secret = randomToken(24);
   await db.batch([
     db.prepare('DELETE FROM relays WHERE user_id = ? AND origin = ?').bind(v.id, origin),
-    db.prepare('INSERT INTO relays (id, user_id, origin, secret_hash, created_at) VALUES (?, ?, ?, ?, ?)').bind(id, v.id, origin, await sha256hex(secret), nowIso()),
+    db.prepare('INSERT INTO relays (id, user_id, origin, remote_user, secret_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(id, v.id, origin, JSON.stringify(user), await sha256hex(secret), nowIso()),
   ]);
   return c.json({ id, url: `${new URL(c.req.url).origin}/relay/${id}.${secret}` }, 201);
 });
