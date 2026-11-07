@@ -17,10 +17,10 @@ The design reference is [`docs/wireframes.html`](docs/wireframes.html). Open it 
 
 ```
 worker/   index.ts (routes + OAuth provider) · auth.ts (Google, Microsoft, WorkOS + sessions) · api.ts (REST: tasks, sync) · tasks.ts (task rules shared by REST and MCP)
-          mcp.ts (MCP tools) · oauth.ts (/authorize consent page for assistants) · admin.ts (people, projects, settings) · settings.ts (logo) · gmail.ts + invite-mail.ts (invite emails) · webhooks.ts · lib.ts
+          mcp.ts (MCP tools) · oauth.ts (/authorize consent page for assistants) · admin.ts (people, projects, settings) · settings.ts (logo) · mailbox.ts + invite-mail.ts (invite emails from Gmail or Outlook) · microsoft.ts · token-crypto.ts · webhooks.ts · lib.ts
 shared/   types, date helpers and rules used by both the Worker and the app
 src/      React app: pages/ (Tasks and Projects: a person's or a project's view; Team: the People & projects page; Settings; Login), components/, actions.ts (all writes), keyboard.ts, focus.ts
-migrations/ (0001 schema, 0002 time zones, 0003 repeating tasks, 0004 settings, 0005 Gmail tokens, 0006 webhooks, 0007 checklists, 0008 attachments, 0009 upload links, 0010 archive, 0011 disabled people, 0012 archived projects, 0013 notifications, 0014 inbox, 0015 followers, 0016 effort, 0017 other instances)   seed/dev.sql (local sample data)
+migrations/ (0001 schema, 0002 time zones, 0003 repeating tasks, 0004 settings, 0005 Gmail tokens, 0006 webhooks, 0007 checklists, 0008 attachments, 0009 upload links, 0010 archive, 0011 disabled people, 0012 archived projects, 0013 notifications, 0014 inbox, 0015 followers, 0016 effort, 0017 other instances, 0018 mailboxes)   seed/dev.sql (local sample data)
 scripts/tenant.mjs (per-instance deploys)   tenants/ (each instance's Cloudflare IDs; only example.env is committed)
 ```
 
@@ -64,7 +64,7 @@ scripts/tenant.mjs (per-instance deploys)   tenants/ (each instance's Cloudflare
 - **Switching between people and projects:** the picker at the top of either page (click the name, or press **P**) lists people and projects together: pick a project from someone's week to see the project's week, or a person from a project to see theirs.
 - **Managing projects:** admins create, edit and archive projects on the People & projects page's Projects tab, or from the switcher while viewing a project (*New project…*, and *Edit project…* for the one shown). A project made from the quick-add's project menu becomes the new task's project.
 - **Archiving projects:** admins archive an old project from its **Edit** sheet. It's hidden from everyone, admins included, together with all its tasks (open and done): lists, counts, sync, webhooks and assistants treat it like a project nobody is on, its repeating tasks pause and its webhooks stop making tasks. Nothing is deleted, and members keep their place on it. Archived projects are listed in a collapsed "Archived" section on the People & projects page's Projects tab, where an admin restores one and everything comes back as it was (a project of the same name has to be renamed first). Migration 0012.
-- **Disabling people, not deleting them:** the ⊘ button on the People & projects page disables someone (after their open tasks are handed to someone on the same projects). They can't sign in, their assistants lose access, their Gmail connection is deleted, and they can't be assigned anything; but their row stays, every task's history still names them, and their projects are remembered. Disabled people are listed in a collapsed "Disabled" section, where an admin enables them again (members confirm or change their projects). Adding a disabled person's address again also enables them. You can't disable yourself or the last admin. Migration 0011 (it renames the old `removed` status to `disabled`).
+- **Disabling people, not deleting them:** the ⊘ button on the People & projects page disables someone (after their open tasks are handed to someone on the same projects). They can't sign in, their assistants lose access, their invite mailbox (Gmail or Outlook) is disconnected, and they can't be assigned anything; but their row stays, every task's history still names them, and their projects are remembered. Disabled people are listed in a collapsed "Disabled" section, where an admin enables them again (members confirm or change their projects). Adding a disabled person's address again also enables them. You can't disable yourself or the last admin. Migration 0011 (it renames the old `removed` status to `disabled`).
 - **History is append-only.** Every write updates `tasks` and inserts into `task_events` in the same D1 batch, and database triggers refuse any `UPDATE` or `DELETE` on `task_events`.
 - **Roles:**
   - Admins see every project and are the only ones who manage people and projects.
@@ -80,11 +80,11 @@ scripts/tenant.mjs (per-instance deploys)   tenants/ (each instance's Cloudflare
   - **Saving the mapping makes it live:** each request then creates a task, made by the admin who saved it and marked "via <name> webhook" in the history. The assignee can come from an email or name in the request (falling back to a chosen person on the project); the due date from a field (past or missing dates become today), a number of days, or today; the priority from words like `high`, `P1` or `2`.
   - Requests that don't match "only when" are **skipped**; a repeat of the same "skip repeats" value is a **duplicate**; a title field that's missing is an **error** (no half-empty tasks). Every request is logged with its result, and the sender gets a matching status code (201 created, 202 sample stored, 200 skipped, 422 error).
   - Credentials and IP addresses in headers (`authorization`, cookies, `x-forwarded-*`, Cloudflare's client IP headers) are never stored. Pause keeps logging without creating tasks; "Stop & edit samples" goes back to collecting.
-- **Invite emails** (optional, per admin; `worker/gmail.ts`):
-  - An admin connects their Gmail on the **Settings** page. Google is asked for **`gmail.send` only**: the app can send mail as them, never read it. After that, adding people (and the resend button on the People & projects page) emails each one an invite from the admin's own address, with a sign-in button.
-  - The refresh token is stored encrypted (AES-GCM) in `google_tokens`, with a key derived from `GOOGLE_CLIENT_SECRET` (or the optional `TOKEN_KEY` secret). Disconnecting deletes it and revokes it at Google; disabling the person deletes it too.
-  - **It never blocks adding people.** Not connected, the permission unticked, a revoked or expired token, the Gmail API off, or a Gmail error: the person is still added, and the admin is offered the sign-in link to share. A connection Google no longer accepts is dropped so the app shows "not connected" again.
-  - It reuses the sign-in callback (`/auth/callback`), so there's no extra redirect URI to register, and it only connects the Google account the admin signs in with.
+- **Invite emails** (optional, per admin; `worker/mailbox.ts`):
+  - An admin connects **their Gmail or their Outlook** (Microsoft 365) on the **Settings** page: whichever sign-in this instance offers (Gmail needs Google sign-in, Outlook needs Microsoft 365 sign-in). The provider is asked to **send only** (`gmail.send`, or Microsoft Graph `Mail.Send` plus `offline_access`): the app can send mail as them, never read it. After that, adding people (and the resend button on the People & projects page) emails each one an invite from the admin's own address, with a sign-in button. The email names the ways people can sign in on this instance.
+  - One mailbox per admin: connecting Outlook replaces a connected Gmail, and the other way round. The refresh token is stored encrypted (AES-GCM) in `mailboxes`, with a key derived from the provider's client secret (or the optional `TOKEN_KEY` secret, recommended since Entra client secrets are replaced every so often). Disconnecting deletes it (and revokes it at Google; Microsoft has no per-token revoke, and an unused one expires); disabling the person deletes it too.
+  - **It never blocks adding people.** Not connected, the permission unticked, a revoked or expired token, the Gmail API off, an account without an Exchange Online mailbox, or a send error: the person is still added, and the admin is offered the sign-in link to share. A connection the provider no longer accepts is dropped so the app shows "not connected" again.
+  - It reuses the sign-in callbacks (`/auth/callback`, `/auth/microsoft/callback`), so there's no extra redirect URI to register, and it only connects the account the admin signs in with.
 - **Sign-in:** only email addresses added by an admin can sign in. On a brand-new install, the **first person to sign in becomes the admin** (the check is one atomic insert, so only one person can win). The optional `ADMIN_EMAILS` secret names addresses that are always let in as admins, which is useful for getting back in if you lock yourself out.
 - **Writes come only from the app's own pages:** they need the same origin plus a custom header, and the session cookie is `SameSite=Lax`. The one exception is `/mcp`, which takes an OAuth bearer token instead (see below).
 - **One set of task rules.** The REST API and the MCP tools both call `worker/tasks.ts` (`createTask`, `applyPatch`), so visibility, "assignee must be on the project" and "no past due dates" can't diverge.
@@ -110,6 +110,10 @@ The Worker serves a remote MCP server at `https://<your-app-host>/mcp`. In Claud
 | `follow_task(id, follow?, person?)` | Follow a task (or stop); `person` adds or removes someone else on the project |
 | `transfer_task(id, to, note?, this_only?)` | The new assignee must be on the task's project. `this_only` leaves future copies of a repeating task with the current person |
 | `project_day(project, date)` | What got finished in a project that day (by priority, then due date), plus what's still open |
+| `create_project(name, description?, color?, members?, effort?, effort_required?)` | Admins only. Creates a project; members by name or email (admins are on every project anyway). Effort: `none`, `time`, `tshirt` or `points` |
+| `update_project(project, name?, description?, color?, add_members?, remove_members?, effort?, effort_required?)` | Admins only. Changes only what's given; taking someone off needs them to have no open tasks there and another project to stay on |
+| `archive_project(project, restore?)` | Admins only. Archives a project and its tasks (nothing is deleted), or restores an archived one by name |
+| `invite_people(emails, role?, projects?)` | Admins only. Adds people (members need at least one project); invite emails go out from the admin's Gmail or Outlook if connected, otherwise it returns the sign-in link to share |
 
 People and projects are given by name (or email, or "me"), not ids. Access is checked on every call, so disabling someone, taking them off a project or archiving a project applies to their assistant at once. Access tokens last an hour; a connection lasts a year from approval, after which the person signs in again. Disabling a person cuts their assistant off immediately.
 
@@ -192,7 +196,7 @@ For teams whose accounts live in Microsoft 365, an instance can add a **Continue
    - Redirect URI: platform **Web**, `https://<your-app-host>/auth/microsoft/callback`. Add one for each custom domain under *Authentication*, plus `http://localhost:5173/auth/microsoft/callback` if you also use it locally.
 2. On the app's *Overview*, copy the **Application (client) ID** and the **Directory (tenant) ID**.
 3. *Certificates & secrets → New client secret*, and copy its **Value** (not the Secret ID). **Client secrets expire** (after 24 months at most): note the date, and before then make a new one and set it again, or Microsoft sign-in stops working.
-4. *API permissions:* the default **Microsoft Graph → User.Read** (delegated) is all it needs. If your tenant doesn't let people consent to apps themselves, click **Grant admin consent**.
+4. *API permissions:* the default **Microsoft Graph → User.Read** (delegated) is all sign-in needs. For **invite emails from Outlook** (optional), also add **Microsoft Graph → Mail.Send** and **offline_access** (both delegated): the app only ever sends, never reads. If your tenant doesn't let people consent to apps themselves, click **Grant admin consent**. Admins then connect Outlook on the Settings page; their account needs an Exchange Online mailbox.
 5. Set the secrets:
    ```bash
    npm run tenant -- secret acme MS_CLIENT_ID
@@ -204,7 +208,7 @@ For teams whose accounts live in Microsoft 365, an instance can add a **Continue
    npm run tenant -- secret acme MS_TENANT_ID
    ```
    `MS_TENANT_ID` is the Directory (tenant) ID, or one of your organization's verified domains such as `contoso.com`. It must name your organization: `common`, `organizations` and `consumers` are refused, the button stays hidden, and the Worker logs why.
-6. Deploy. The sign-in page shows **Continue with Microsoft** (below Google) whenever all three are set. An instance can also run on Microsoft alone, without the Google secrets (invite emails through Gmail then aren't available).
+6. Deploy. The sign-in page shows **Continue with Microsoft** (below Google) whenever all three are set. An instance can also run on Microsoft alone, without the Google secrets: admins then email invites from Outlook instead of Gmail.
 
 One app registration can serve several instances in the same organization: add each one's redirect URI.
 
@@ -224,7 +228,7 @@ Nothing else changes: WorkOS only proves the email address. The address still ha
    ```bash
    npm run tenant -- secret acme WORKOS_API_KEY
    ```
-5. Deploy. The sign-in page shows **Continue with email** whenever both are set; without them it shows Google only. An instance can also run on WorkOS alone, without the Google secrets (invite emails through Gmail then aren't available).
+5. Deploy. The sign-in page shows **Continue with email** whenever both are set; without them it shows Google only. An instance can also run on WorkOS alone, without the Google secrets (invite emails then need Gmail or Outlook, so they aren't available).
 
 One WorkOS environment can serve several instances: add each one's redirect URI.
 

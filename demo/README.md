@@ -4,7 +4,7 @@ A separate folder: nothing in `worker/`, `shared/` or `src/` knows about it, and
 
 `demo/worker.ts` wraps the app's own Worker (`worker/index.ts`) without changing it:
 
-- **Sign-in:** `/login` is a demo page: sign in as Jordan (admin) or Sara (member) from `seed/dev.sql`. No Google client needed. `/auth/login`, `/auth/microsoft`, `/auth/workos` and `/auth/gmail` are turned off.
+- **Sign-in:** `/login` is a demo page: sign in as Jordan (admin) or Sara (member) from `seed/dev.sql`. No Google client needed. `/auth/login`, `/auth/microsoft`, `/auth/workos`, `/auth/gmail` and `/auth/outlook` are turned off.
 - **Uploads:** anything uploaded is kept as `samples/sample.png` (images) or `samples/sample.pdf` (anything else), under the visitor's file name (`files.ts`). Nothing is stored: there's no R2 bucket, and a stand-in bucket serves the samples. AI assistants' attachments get the same treatment.
 - **Logo and app icon uploads** are refused with a message.
 - **Banner:** every app page gets a "Demo · resets every 8 hours · Run your own →" bar.
@@ -31,4 +31,4 @@ Never point this at an instance with real data: a reset deletes everything.
 
 To change what uploads become, replace `samples/sample.png` or `samples/sample.pdf` (Vite bundles them into the Worker via `samples.ts`).
 
-If the app changes, check what the demo relies on: the routes it intercepts (`/login`, `/auth/login`, `/auth/microsoft`, `/auth/workos`, `/auth/gmail`, the logo/icon settings and upload routes), the `sessions` table and `tv_session` cookie, the `attachments` table, the `.app` layout and colour variables (banner), and the table list in `reset.ts` (add new tables there).
+If the app changes, check what the demo relies on: the routes it intercepts (`/login`, `/auth/login`, `/auth/microsoft`, `/auth/workos`, `/auth/gmail`, `/auth/outlook`, the logo/icon settings and upload routes), the `sessions` table and `tv_session` cookie, the `attachments` table, the `.app` layout and colour variables (banner), and the table list in `reset.ts` (add new tables there).

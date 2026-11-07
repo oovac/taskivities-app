@@ -6,7 +6,7 @@ import { applyUrl, startRouter } from './router';
 import { applyFeedDir, clientFor, feedParts, finishConnect, isFeed, srcCall, loadSources, localUsers, moveOnSources, sourcesRange, syncSources, taskFromSource, uploadTarget } from './sources';
 import { type EffortType, effortFor, storedEffortLabel } from '../shared/effort';
 import { ATTACH_MAX_BYTES } from '../shared/types';
-import type { AppSettings, ArchivedProject, Bootstrap, InviteEmailResult, WebhookInfo, WebhookRequestInfo, Priority, Project, Role, SyncResponse, Task, TaskEvent, User } from '../shared/types';
+import type { AppSettings, ArchivedProject, Bootstrap, InviteEmailResult, MailboxVia, WebhookInfo, WebhookRequestInfo, Priority, Project, Role, SyncResponse, Task, TaskEvent, User } from '../shared/types';
 import { PRIORITIES } from '../shared/types';
 import { api, ApiError } from './api';
 import { applyBrand } from './brand';
@@ -55,7 +55,8 @@ function applyDirectory(b: Bootstrap): Partial<State> {
   if ((page === 'team' || page === 'settings') && b.me.role !== 'admin') page = 'tasks';
   applyBrand(b.settings);
   return {
-    me: b.me, users, projects, today: b.today, tz: b.tz, dirVersion: b.directoryVersion, settings: b.settings, gmail: b.gmail, attachmentsOn: b.attachments, viewUser, page,
+    me: b.me, users, projects, today: b.today, tz: b.tz, dirVersion: b.directoryVersion, settings: b.settings,
+    mailbox: b.mailbox, mailboxOptions: b.mailboxOptions ?? [], signInWith: b.signInWith ?? [], attachmentsOn: b.attachments, viewUser, page,
     pushKey: b.push?.publicKey ?? null, notify: b.notify, updateRepo: b.updates?.repo ?? null, inboxUnread: b.inboxUnread ?? 0,
     // Another instance's project stays (its projects aren't in this directory).
     projSel: s.projSel === 'all' || s.projSel === 'multi' || isFeed(s.projSel) || projects[s.projSel] ? s.projSel : 'all',
@@ -68,7 +69,7 @@ export async function boot() {
     const b = await api.get<Bootstrap>('/api/bootstrap');
     const t = await api.get<{ from: string; to: string; tasks: Task[]; version: number }>('/api/tasks');
     set({ ...applyDirectory(b), tasks: byId(t.tasks), version: t.version, range: { from: t.from, to: t.to }, ready: true, lastSync: Date.now() });
-    gmailReturn(); // reads its ?gmail= result before the router tidies the address
+    mailboxReturn(); // reads its ?mailbox= result before the router tidies the address
     // Other instances connected on this device (src/sources.ts), then the address: what to show (src/router.ts).
     const sourcesReady = loadSources();
     if (location.pathname === '/oauth/done') {
@@ -476,13 +477,16 @@ export async function addPeople(emails: string[], role: Role, projects: string[]
   inviteToast(added, r.added.length, r.email);
 }
 
+/** "sign in with Google or Microsoft", or plain "sign in". */
+export const signInHow = (via: string[]) =>
+  via.length ? `sign in with ${via.length > 1 ? `${via.slice(0, -1).join(', ')} or ${via[via.length - 1]}` : via[0]}` : 'sign in';
 /** The sign-in page people are invited to. */
 export const inviteLink = () => `${location.origin}/login`;
 const copyLinkAction = { label: 'Copy link', run: () => void copyInviteLink() };
 export async function copyInviteLink() {
   try {
     await navigator.clipboard.writeText(inviteLink());
-    toast('Sign-in link copied. They sign in with Google using the address you added.');
+    toast(`Sign-in link copied. They ${signInHow(S().signInWith)} using the address you added.`);
   } catch {
     toast(`Copy this link: ${inviteLink()}`, undefined, true);
   }
@@ -496,8 +500,8 @@ function inviteToast(prefix: string, count: number, e: InviteEmailResult | undef
     return;
   }
   if (e?.reason) {
-    // Was connected, but it no longer works (expired, revoked, Gmail error): say so, and offer the link.
-    void refreshGmail();
+    // Was connected, but it no longer works (expired, revoked, a send error): say so, and offer the link.
+    void refreshMailbox();
     toast(`${prefix}, but the invite wasn't emailed. ${e.reason}`, undefined, true, copyLinkAction);
     return;
   }
@@ -515,42 +519,50 @@ export async function resendInvite(userId: string) {
   }
 }
 
-// ---------- Gmail for invite emails ----------
-async function refreshGmail() {
+// ---------- the mailbox invite emails go out from (Gmail or Outlook) ----------
+/** The two providers, as admins see them. */
+export const MAILBOX: Record<MailboxVia, { name: string; company: string }> = {
+  gmail: { name: 'Gmail', company: 'Google' },
+  outlook: { name: 'Outlook', company: 'Microsoft' },
+};
+async function refreshMailbox() {
   const b = await api.get<Bootstrap>('/api/bootstrap').catch(() => null);
-  if (b) set({ gmail: b.gmail });
+  if (b) set({ mailbox: b.mailbox, mailboxOptions: b.mailboxOptions ?? [] });
 }
-/** Leaves the app for Google's consent screen; comes back to `back` with ?gmail=<result>. */
-export function connectGmail(back = location.pathname) {
-  location.href = `/auth/gmail?next=${encodeURIComponent(back)}`;
+/** Leaves the app for the provider's consent screen; comes back to `back` with ?mailbox=<result>&via=<via>. */
+export function connectMailbox(via: MailboxVia, back = location.pathname) {
+  location.href = `/auth/${via}?next=${encodeURIComponent(back)}`;
 }
-export async function disconnectGmail() {
+export async function disconnectMailbox() {
+  const name = MAILBOX[S().mailbox?.via ?? 'gmail'].name;
   try {
-    await api.del('/api/admin/gmail');
-    set({ gmail: null });
-    toast("Gmail disconnected. Invites won't be emailed until you connect it again.");
+    await api.del('/api/admin/mailbox');
+    set({ mailbox: null });
+    toast(`${name} disconnected. Invites won't be emailed until you connect a mailbox again.`);
   } catch (e) {
     toastError(e);
   }
 }
-const GMAIL_RESULTS: Record<string, [string, boolean]> = {
-  connected: ['Gmail connected. Invites will be emailed from your address.', false],
-  cancelled: ["Gmail wasn't connected.", false],
-  no_permission: ["Gmail wasn't connected: the \"send email on your behalf\" permission wasn't allowed.", true],
-  wrong_account: ['Choose the Google account you sign in to Taskivities with.', true],
-  unavailable: ["Google sign-in isn't set up on this instance, so Gmail can't be connected.", true],
-  expired: ['That took too long. Try connecting Gmail again.', true],
-  failed: ["Google didn't finish connecting Gmail. Try again.", true],
-  forbidden: ['Only admins can connect Gmail.', true],
+const MAILBOX_RESULTS: Record<string, (m: { name: string; company: string }) => [string, boolean]> = {
+  connected: (m) => [`${m.name} connected. Invites will be emailed from your address.`, false],
+  cancelled: (m) => [`${m.name} wasn't connected.`, false],
+  no_permission: (m) => [`${m.name} wasn't connected: the permission to send email as you wasn't allowed.`, true],
+  wrong_account: (m) => [`Choose the ${m.company} account you sign in to Taskivities with.`, true],
+  unavailable: (m) => [`${m.company} sign-in isn't set up on this instance, so ${m.name} can't be connected.`, true],
+  expired: (m) => [`That took too long. Try connecting ${m.name} again.`, true],
+  failed: (m) => [`${m.company} didn't finish connecting ${m.name}. Try again.`, true],
+  forbidden: (m) => [`Only admins can connect ${m.name}.`, true],
 };
-/** After coming back from Google: say what happened, and tidy the address bar. */
-function gmailReturn() {
+/** After coming back from Google or Microsoft: say what happened, and tidy the address bar. */
+function mailboxReturn() {
   const q = new URLSearchParams(location.search);
-  const r = q.get('gmail');
+  const r = q.get('mailbox');
   if (!r) return;
-  q.delete('gmail');
+  const via = q.get('via') === 'outlook' ? 'outlook' : 'gmail';
+  q.delete('mailbox');
+  q.delete('via');
   history.replaceState(null, '', `${location.pathname}${q.size ? `?${q}` : ''}`);
-  const [text, error] = GMAIL_RESULTS[r] ?? GMAIL_RESULTS.failed;
+  const [text, error] = (MAILBOX_RESULTS[r] ?? MAILBOX_RESULTS.failed)(MAILBOX[via]);
   toast(text, undefined, error);
 }
 export async function updateUser(id: string, body: { role?: Role; projects?: string[] }, message?: string) {

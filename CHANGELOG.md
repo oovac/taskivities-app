@@ -9,6 +9,15 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+### Added
+
+- **AI assistants can manage projects and invite people:** admins can ask Claude (or another assistant) to create a project, rename it, change its description, colour or effort tracking, add or remove members, archive or restore it, and invite people by email (`create_project`, `update_project`, `archive_project`, `invite_people`). The same rules apply as on the People & projects page.
+- **Invite emails from Outlook:** admins on instances with Microsoft 365 sign-in can connect their Outlook on the Settings page, and invites are emailed from their own address, as with Gmail. Add the delegated **Mail.Send** and **offline_access** Microsoft Graph permissions to the Entra app first (see the README). Each admin connects one mailbox, Gmail or Outlook; existing Gmail connections carry over.
+
+### Fixed
+
+- **Invite wording:** invite emails, the sign-in link and the People & projects page no longer say "Sign in with Google" on instances that offer Microsoft or email sign-in; they name the ways people can sign in there.
+
 ## v0.6.1 (2026-11-07)
 
 ### Changed

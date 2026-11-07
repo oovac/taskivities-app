@@ -3,12 +3,13 @@ import { Hono } from 'hono';
 import { EMAIL_RE } from '../shared/rules';
 import { isEffortType } from '../shared/effort';
 import { DESCRIPTION_MAX, PROJECT_COLORS, USER_COLORS, type Role } from '../shared/types';
-import { disconnect, sendInvites, type SendResult } from './gmail';
+import { disconnectMailbox, sendInvites, type SendResult } from './mailbox';
+import { signInWith } from './auth';
 import { checkIcons, checkName, checkSvg, loadSettings, saveIcons, saveLogo, saveName, saveWordmark } from './settings';
 import { webhookAdmin } from './webhooks';
 import { notify } from './push';
 import {
-  type AppEnv, type Ctx, type ProjectRow, type UserRow, CURRENT_VERSION, auditStmt, bad, bumpDirectory, bumpVersion, conflict, eventStmt,
+  type AppEnv, type Ctx, type Env, type ProjectRow, type UserRow, type Viewer, CURRENT_VERSION, auditStmt, bad, bumpDirectory, bumpVersion, conflict, eventStmt,
   forbidden, getUser, mapProject, memberProjects, notFound, nowIso, uid,
 } from './lib';
 
@@ -34,10 +35,13 @@ const existingProjects = async (db: D1Database) =>
   new Set((await db.prepare('SELECT id FROM projects WHERE archived = 0').all<{ id: string }>()).results.map((r) => r.id));
 
 // ---------- people ----------
-admin.post('/users', async (c) => {
-  const v = c.get('viewer');
-  const db = c.env.DB;
-  const b = await c.req.json<{ emails?: string[]; role?: Role; projects?: string[] }>();
+/**
+ * Adds people (invites them) as `v`, an admin: members with their projects, or admins. Someone disabled earlier is
+ * enabled again with the role and projects chosen here. Invites go out from the admin's Gmail or Outlook if one is connected.
+ * Used by the People & projects page and AI assistants (worker/mcp.ts).
+ */
+export async function invitePeople(env: Env, v: Viewer, origin: string, b: { emails?: string[]; role?: Role; projects?: string[] }) {
+  const db = env.DB;
   const emails = [...new Set((b.emails ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean))];
   if (!emails.length) throw bad('Enter at least one email address.');
   const invalid = emails.filter((e) => !EMAIL_RE.test(e));
@@ -70,11 +74,12 @@ admin.post('/users', async (c) => {
     added.push(email);
   }
   if (stmts.length) await db.batch([...stmts, bumpDirectory(db)]);
-  // Email them from the admin's Gmail if it's connected. Never fails the add: the app falls back to the link.
+  // Email them from the admin's mailbox if one is connected. Never fails the add: the app falls back to the link.
   const names = await projectNames(db, projects);
-  const email = await emailInvites(c, added.map((to) => ({ to, role, projects: names })));
-  return c.json({ added, skipped, email });
-});
+  const email = await emailInvites(env, v, origin, added.map((to) => ({ to, role, projects: names })));
+  return { added, skipped, email };
+}
+admin.post('/users', async (c) => c.json(await invitePeople(c.env, c.get('viewer'), new URL(c.req.url).origin, await c.req.json<{ emails?: string[]; role?: Role; projects?: string[] }>())));
 
 const projectNames = async (db: D1Database, ids: string[]) => {
   if (!ids.length) return [];
@@ -82,12 +87,11 @@ const projectNames = async (db: D1Database, ids: string[]) => {
   return results.map((r) => r.name);
 };
 
-async function emailInvites(c: Ctx, people: { to: string; role: Role; projects: string[] }[]): Promise<SendResult> {
-  const v = c.get('viewer');
-  const link = `${new URL(c.req.url).origin}/login`;
-  const app = (await loadSettings(c.env.DB)).name;
-  const r = await sendInvites(c.env, { id: v.id, name: v.name }, people.map((p) => ({ ...p, link, app })));
-  if (r.sent.length) await auditStmt(c.env.DB, v.id, 'invite_emailed', null, { to: r.sent }).run();
+async function emailInvites(env: Env, v: Viewer, origin: string, people: { to: string; role: Role; projects: string[] }[]): Promise<SendResult> {
+  const link = `${origin}/login`;
+  const app = (await loadSettings(env.DB)).name;
+  const r = await sendInvites(env, { id: v.id, name: v.name }, people.map((p) => ({ ...p, link, app, signInWith: signInWith(env) })));
+  if (r.sent.length) await auditStmt(env.DB, v.id, 'invite_emailed', null, { to: r.sent }).run();
   return r;
 }
 
@@ -97,7 +101,7 @@ admin.post('/users/:id/invite', async (c) => {
   const u = await getUser(db, c.req.param('id'));
   if (!u || u.status !== 'invited') throw bad('Only people who haven\'t signed in yet can be sent an invite.');
   const names = u.role === 'admin' ? [] : await projectNames(db, await memberProjects(db, u.id));
-  return c.json({ email: await emailInvites(c, [{ to: u.email, role: u.role, projects: names }]) });
+  return c.json({ email: await emailInvites(c.env, c.get('viewer'), new URL(c.req.url).origin, [{ to: u.email, role: u.role, projects: names }]) });
 });
 
 admin.patch('/users/:id', async (c) => {
@@ -181,7 +185,7 @@ admin.post('/users/:id/disable', async (c) => {
   }
   stmts.push(db.prepare("UPDATE users SET status = 'disabled', disabled_at = ?, disabled_by = ? WHERE id = ?").bind(now, v.id, id));
   stmts.push(db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(id));
-  stmts.push(db.prepare('DELETE FROM google_tokens WHERE user_id = ?').bind(id)); // and their Gmail connection
+  stmts.push(db.prepare('DELETE FROM mailboxes WHERE user_id = ?').bind(id)); // and their invite mailbox
   stmts.push(db.prepare('DELETE FROM push_subscriptions WHERE user_id = ?').bind(id)); // and their devices' notifications
   stmts.push(auditStmt(db, v.id, 'user_disabled', id, { transferred: open.length, to: to ?? null }));
   stmts.push(bumpDirectory(db));
@@ -219,7 +223,7 @@ admin.post('/users/:id/enable', async (c) => {
 });
 
 // ---------- projects ----------
-interface ProjectBody { name?: string; color?: string; description?: string; members?: string[]; effort?: string | null; effortRequired?: boolean }
+export interface ProjectBody { name?: string; color?: string; description?: string; members?: string[]; effort?: string | null; effortRequired?: boolean }
 
 async function validateProject(db: D1Database, b: ProjectBody, selfId?: string) {
   const name = (b.name ?? '').trim();
@@ -236,10 +240,9 @@ async function validateProject(db: D1Database, b: ProjectBody, selfId?: string) 
   return { name, color, description, effort, effortRequired };
 }
 
-admin.post('/projects', async (c) => {
-  const v = c.get('viewer');
-  const db = c.env.DB;
-  const b = await c.req.json<ProjectBody>();
+/** Creates a project as `v` (an admin), with its members (ids of members, not admins: they're on every project). */
+export async function createProject(env: Env, v: Viewer, b: ProjectBody): Promise<string> {
+  const db = env.DB;
   const p = await validateProject(db, b);
   const id = uid();
   const stmts = [
@@ -250,16 +253,18 @@ admin.post('/projects', async (c) => {
     bumpDirectory(db),
   ];
   await db.batch(stmts);
-  return c.json({ id }, 201);
-});
+  return id;
+}
+admin.post('/projects', async (c) => c.json({ id: await createProject(c.env, c.get('viewer'), await c.req.json<ProjectBody>()) }, 201));
 
-admin.patch('/projects/:id', async (c) => {
-  const v = c.get('viewer');
-  const db = c.env.DB;
-  const id = c.req.param('id');
+/**
+ * Changes a project as `v` (an admin): only what `b` sets. `members` is the whole new list of members (not admins);
+ * taking someone off needs them to have no open tasks there and another project to be on.
+ */
+export async function updateProject(env: Env, v: Viewer, id: string, b: ProjectBody) {
+  const db = env.DB;
   const cur = await db.prepare('SELECT * FROM projects WHERE id = ? AND archived = 0').bind(id).first<ProjectRow>();
   if (!cur) throw notFound('Project not found.');
-  const b = await c.req.json<ProjectBody>();
   const p = await validateProject(db, {
     name: b.name ?? cur.name, color: b.color ?? cur.color, description: b.description ?? cur.description,
     effort: b.effort !== undefined ? b.effort : cur.effort, effortRequired: b.effortRequired ?? !!cur.effort_required,
@@ -287,6 +292,9 @@ admin.patch('/projects/:id', async (c) => {
   }
   stmts.push(auditStmt(db, v.id, 'project_updated', id, p), bumpDirectory(db));
   await db.batch(stmts);
+}
+admin.patch('/projects/:id', async (c) => {
+  await updateProject(c.env, c.get('viewer'), c.req.param('id'), await c.req.json<ProjectBody>());
   return c.json({ ok: true });
 });
 
@@ -295,13 +303,11 @@ admin.patch('/projects/:id', async (c) => {
  * every list, count, search and assistant until it's restored, and then come back as they were. Its incoming webhooks
  * stop making tasks, and its repeating tasks pause. Members keep their place on it.
  */
-async function setProjectArchived(c: Ctx, archive: boolean) {
-  const v = c.get('viewer');
-  const db = c.env.DB;
-  const id = c.req.param('id')!;
+export async function setProjectArchived(env: Env, v: Viewer, id: string, archive: boolean) {
+  const db = env.DB;
   const cur = await db.prepare('SELECT * FROM projects WHERE id = ?').bind(id).first<ProjectRow>();
   if (!cur) throw notFound('Project not found.');
-  if (!!cur.archived === archive) return c.json({ ok: true });
+  if (!!cur.archived === archive) return;
   if (!archive) {
     const dup = await db.prepare('SELECT id FROM projects WHERE name = ? COLLATE NOCASE AND archived = 0').bind(cur.name).first();
     if (dup) throw conflict(`Another project is already called ${cur.name}. Rename that one first.`);
@@ -315,10 +321,9 @@ async function setProjectArchived(c: Ctx, archive: boolean) {
     auditStmt(db, v.id, archive ? 'project_archived' : 'project_restored', id, { name: cur.name }),
     bumpDirectory(db),
   ]);
-  return c.json({ ok: true });
 }
-admin.post('/projects/:id/archive', (c) => setProjectArchived(c, true));
-admin.post('/projects/:id/restore', (c) => setProjectArchived(c, false));
+admin.post('/projects/:id/archive', async (c) => { await setProjectArchived(c.env, c.get('viewer'), c.req.param('id'), true); return c.json({ ok: true }); });
+admin.post('/projects/:id/restore', async (c) => { await setProjectArchived(c.env, c.get('viewer'), c.req.param('id'), false); return c.json({ ok: true }); });
 
 /** Archived projects, newest first, with how much is in each. Only the People & projects page asks for these. */
 admin.get('/projects/archived', async (c) => {
@@ -360,10 +365,10 @@ admin.put('/settings/wordmark', async (c) => {
 });
 admin.delete('/settings/wordmark', async (c) => c.json({ settings: await saveWordmark(c.env.DB, c.get('viewer').id, null) }));
 
-// ---------- Gmail for invite emails (connecting is a redirect: GET /auth/gmail) ----------
-admin.delete('/gmail', async (c) => {
+// ---------- the invite mailbox, Gmail or Outlook (connecting is a redirect: GET /auth/gmail or /auth/outlook) ----------
+admin.delete('/mailbox', async (c) => {
   const v = c.get('viewer');
-  await disconnect(c.env, v.id);
-  await auditStmt(c.env.DB, v.id, 'gmail_disconnected', v.id, null).run();
+  await disconnectMailbox(c.env, v.id);
+  await auditStmt(c.env.DB, v.id, 'mailbox_disconnected', v.id, null).run();
   return c.json({ ok: true });
 });

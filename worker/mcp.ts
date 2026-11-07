@@ -7,7 +7,7 @@ import { diffDays, isDate } from '../shared/dates';
 import { isLate, shownOn } from '../shared/rules';
 import { describe as describeRepeat } from '../shared/repeat';
 import { EFFORT_TYPES, effortFor, effortFromInput, effortLabel, effortTotal } from '../shared/effort';
-import { COMMENT_MAX, DESCRIPTION_MAX, PRIORITIES, TITLE_MAX, type Priority, type Project, type Task, type User } from '../shared/types';
+import { COMMENT_MAX, DESCRIPTION_MAX, PRIORITIES, PROJECT_COLORS, TITLE_MAX, type Priority, type Project, type Task, type User } from '../shared/types';
 import {
   type Env, type ProjectRow, type TaskRow, type UserRow, type Viewer,
   HttpError, TASK_COLS, bad, canSeeProject, loadViewer, mapProject, mapTask, mapUser, today,
@@ -16,6 +16,7 @@ import type { McpProps } from './oauth';
 import { UPLOAD_LINK_MINUTES, addAttachmentBytes, addAttachmentFromUrl, createUploadLink, readAttachment, typeFromName } from './attachments';
 import { addComment, changeChecklist, createTask, setArchived, loadVisibleTask, updateTask, updateTaskWithNext, visible } from './tasks';
 import { setFollowing } from './followers';
+import { createProject, invitePeople, setProjectArchived, updateProject } from './admin';
 
 const PRIORITY_NAMES = ['urgent', 'high', 'normal', 'low'] as const;
 type PriorityName = (typeof PRIORITY_NAMES)[number];
@@ -638,6 +639,159 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
             done: done.map((t) => describeTask(t, dir, t0)),
             ...(project.effort ? { effort_done: effortTotal(project.effort, done.map((t) => t.effort)) || null } : {}),
             still_open: open.map((t) => describeTask(t, dir, t0)),
+          };
+        }),
+    );
+
+    // ---------- admins: projects and people ----------
+    const adminOnly = (v: Viewer, what: string) => { if (v.role !== 'admin') throw bad(`Only admins can ${what}. Ask an admin on your team.`); };
+    const effortArgIn = z.enum(['none', 'time', 'tshirt', 'points']).describe(
+      'How the project measures effort on its tasks: none, time (time spent, like 1h 30m), tshirt (XS–XL) or points (story points 1–21).',
+    );
+    const toEffortType = (e: 'none' | 'time' | 'tshirt' | 'points') => (e === 'none' ? null : e === 'points' ? 'fibo' : e);
+    const colorArg = z.string().describe(`One of the project colours: ${PROJECT_COLORS.join(', ')}. Picked for you when left out.`);
+    /** Members (not admins: they're on every project) from names or emails. */
+    const membersFrom = (dir: Directory, v: Viewer, names: string[]) => {
+      const users = names.map((n) => findUser(dir, v, n));
+      const admins = users.filter((u) => u.role === 'admin');
+      return { ids: users.filter((u) => u.role !== 'admin').map((u) => u.id), admins: admins.map((u) => u.name) };
+    };
+    const describeProject = (dir: Directory, p: Project) => ({
+      name: p.name, description: p.description, color: p.color,
+      effort: p.effort ? { tracks: EFFORT_TYPES[p.effort].name, required_to_finish: p.effortRequired } : null,
+      members: [...dir.users.values()].filter((u) => u.role !== 'admin' && u.projects.includes(p.id)).map((u) => u.name),
+    });
+
+    this.server.registerTool(
+      'create_project',
+      {
+        title: 'Create a project',
+        description:
+          'Admins only. Create a project. Write a description for it: assistants (including you) read it to decide which project a task belongs in. ' +
+          'Members are people who are not admins (admins are on every project); give names or emails from list_projects or invite_people.',
+        inputSchema: {
+          name: z.string().min(1).max(80),
+          description: z.string().max(DESCRIPTION_MAX).optional().describe('What belongs in this project, what doesn\'t, and how tasks are named.'),
+          color: colorArg.optional(),
+          members: z.array(z.string()).optional().describe('People to add (names or emails).'),
+          effort: effortArgIn.optional(),
+          effort_required: z.boolean().optional().describe('Effort must be recorded before a task is marked done.'),
+        },
+      },
+      (args) =>
+        this.run(async (v, dir) => {
+          adminOnly(v, 'create projects');
+          const m = membersFrom(dir, v, args.members ?? []);
+          const used = new Set(dir.projects.map((p) => p.color));
+          const id = await createProject(this.env, v, {
+            name: args.name, description: args.description ?? '', members: m.ids,
+            color: args.color ?? PROJECT_COLORS.find((c) => !used.has(c)) ?? PROJECT_COLORS[dir.projects.length % PROJECT_COLORS.length],
+            effort: args.effort ? toEffortType(args.effort) : null, effortRequired: args.effort_required,
+          });
+          const after = await loadDirectory(this.env.DB, v);
+          return {
+            created: describeProject(after, after.projects.find((p) => p.id === id)!),
+            ...(m.admins.length ? { note: `${m.admins.join(', ')} ${m.admins.length > 1 ? 'are admins' : 'is an admin'}, so already on every project.` } : {}),
+          };
+        }),
+    );
+
+    this.server.registerTool(
+      'update_project',
+      {
+        title: 'Change a project',
+        description:
+          'Admins only. Rename a project, change its description, colour or effort tracking, and add or take off members. Only what you pass changes. ' +
+          "Taking someone off needs them to have no open tasks there (transfer_task first) and another project to stay on.",
+        inputSchema: {
+          project: z.string().describe('Project name.'),
+          name: z.string().min(1).max(80).optional().describe('New name.'),
+          description: z.string().max(DESCRIPTION_MAX).optional(),
+          color: colorArg.optional(),
+          add_members: z.array(z.string()).optional().describe('Names or emails.'),
+          remove_members: z.array(z.string()).optional().describe('Names or emails.'),
+          effort: effortArgIn.optional(),
+          effort_required: z.boolean().optional(),
+        },
+      },
+      (args) =>
+        this.run(async (v, dir) => {
+          adminOnly(v, 'change projects');
+          const p = findProject(dir, args.project);
+          let members: string[] | undefined;
+          if (args.add_members?.length || args.remove_members?.length) {
+            const cur = [...dir.users.values()].filter((u) => u.role !== 'admin' && u.projects.includes(p.id)).map((u) => u.id);
+            const add = membersFrom(dir, v, args.add_members ?? []).ids;
+            const drop = new Set(membersFrom(dir, v, args.remove_members ?? []).ids);
+            members = [...new Set([...cur, ...add])].filter((id) => !drop.has(id));
+          }
+          await updateProject(this.env, v, p.id, {
+            name: args.name, description: args.description, color: args.color, members,
+            ...(args.effort ? { effort: toEffortType(args.effort) } : {}), effortRequired: args.effort_required,
+          });
+          const after = await loadDirectory(this.env.DB, v);
+          return { updated: describeProject(after, after.projects.find((x) => x.id === p.id)!) };
+        }),
+    );
+
+    this.server.registerTool(
+      'archive_project',
+      {
+        title: 'Archive or restore a project',
+        description:
+          'Admins only. Archive a project: it and all its tasks are hidden from everyone (nothing is deleted), its repeating tasks pause and its ' +
+          'webhooks stop. Pass restore: true, with the archived project\'s name, to bring it back as it was.',
+        inputSchema: {
+          project: z.string().describe('Project name.'),
+          restore: z.boolean().optional(),
+        },
+        annotations: { destructiveHint: true },
+      },
+      (args) =>
+        this.run(async (v, dir) => {
+          adminOnly(v, 'archive projects');
+          if (!args.restore) {
+            const p = findProject(dir, args.project);
+            await setProjectArchived(this.env, v, p.id, true);
+            return { archived: p.name, note: 'Restore it any time with archive_project and restore: true.' };
+          }
+          const { results } = await this.env.DB.prepare('SELECT * FROM projects WHERE archived = 1 ORDER BY archived_at DESC').all<ProjectRow>();
+          const q = norm(args.project);
+          const hits = results.filter((r) => norm(r.name) === q).length ? results.filter((r) => norm(r.name) === q) : results.filter((r) => norm(r.name).includes(q));
+          if (!hits.length) throw bad(`No archived project matches "${args.project}". Archived: ${results.map((r) => `"${r.name}"`).join(', ') || 'none'}.`);
+          if (hits.length > 1) throw bad(`"${args.project}" matches several archived projects: ${hits.map((r) => `"${r.name}"`).join(', ')}.`);
+          await setProjectArchived(this.env, v, hits[0].id, false);
+          return { restored: hits[0].name };
+        }),
+    );
+
+    this.server.registerTool(
+      'invite_people',
+      {
+        title: 'Invite people',
+        description:
+          'Admins only. Add people by email so they can sign in. Members see only the projects you give them (at least one); admins see every ' +
+          "project and manage the team. If the admin connected their Gmail or Outlook, each gets an invite email; otherwise share the sign-in link returned here. " +
+          'Someone disabled earlier is enabled again with the role and projects given.',
+        inputSchema: {
+          emails: z.array(z.string()).min(1).max(50),
+          role: z.enum(['member', 'admin']).optional().describe('Default: member.'),
+          projects: z.array(z.string()).optional().describe('Project names (required for members).'),
+        },
+      },
+      (args) =>
+        this.run(async (v, dir) => {
+          adminOnly(v, 'invite people');
+          const role = args.role ?? 'member';
+          const projects = role === 'admin' ? [] : (args.projects ?? []).map((n) => findProject(dir, n).id);
+          const origin = this.props?.origin ?? '';
+          const r = await invitePeople(this.env, v, origin, { emails: args.emails, role, projects });
+          const sent = new Set(r.email.sent);
+          return {
+            added: r.added.map((e) => ({ email: e, invite_email: sent.has(e) ? 'sent' : 'not sent' })),
+            ...(r.skipped.length ? { already_on_the_team: r.skipped } : {}),
+            sign_in_link: origin ? `${origin}/login` : 'this app\'s address + /login',
+            ...(r.added.some((e) => !sent.has(e)) ? { note: 'Send them the sign-in link: they sign in with the email address you added.' } : {}),
           };
         }),
     );

@@ -1,7 +1,7 @@
 // The public demo's Worker. It wraps the app's own Worker (worker/index.ts) without changing it:
 //   • /login is a demo sign-in page: pick a sample person (Jordan, an admin; Sara, a member). No Google.
 //   • Uploads are kept as sample files under the visitor's file name (demo/files.ts).
-//   • Logo, name, wordmark and app icon changes and Gmail invites are turned off.
+//   • Logo, name, wordmark and app icon changes and invite mailboxes (Gmail, Outlook) are turned off.
 //   • Every page of the app gets a "Demo" banner.
 //   • A Cron Trigger puts the sample data back (demo/reset.ts) and signs everyone out.
 // Kept apart from the app: nothing in worker/, shared/ or src/ knows about it. Deployed with demo/deploy.mjs.
@@ -119,7 +119,8 @@ export default {
     if (path === '/auth/demo-login' && method === 'GET') return demoLogin(req, env);
     // No Google, Microsoft or WorkOS sign-in in the demo.
     if (path === '/auth/login' || path.startsWith('/auth/microsoft') || path.startsWith('/auth/workos')) return Response.redirect(new URL(`/login${url.search}`, url).toString(), 302);
-    if (path === '/auth/gmail') return Response.redirect(new URL('/settings?gmail=unavailable', url).toString(), 302);
+    if (path === '/auth/gmail' || path === '/auth/outlook')
+      return Response.redirect(new URL(`/settings?mailbox=unavailable&via=${path.slice(6)}`, url).toString(), 302);
     // Anyone can connect the demo to their own Taskivities (docs/multi-instance.md), as a sample person. But everyone
     // shares those people, so it doesn't send their notifications to anyone's home instance (other visitors' doings).
     if (method === 'POST' && path === '/v1/push-relays')

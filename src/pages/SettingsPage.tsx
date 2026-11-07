@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { isAdmin } from '../../shared/rules';
-import { connectGmail, createHook, disconnectGmail, loadHooks, openHook, resetIcon, resetLogo, resetWordmark, saveAppName, uploadIcon, uploadLogo, uploadWordmark } from '../actions';
+import { MAILBOX, connectMailbox, createHook, disconnectMailbox, loadHooks, openHook, resetIcon, resetLogo, resetWordmark, saveAppName, uploadIcon, uploadLogo, uploadWordmark } from '../actions';
 import { ICON_SIZES, NAME_MAX, appName } from '../../shared/types';
 import { hookStatus } from '../components/WebhookSheet';
 import { logoUrl } from '../brand';
@@ -117,21 +117,28 @@ export function SettingsPage() {
       <AppIcon />
       <Webhooks />
       <section className="sec">
-        <div className="sec-h"><h2>Invite emails</h2><span className="cnt">{s.gmail ? 'On' : 'Off'} · just for you</span></div>
+        <div className="sec-h"><h2>Invite emails</h2><span className="cnt">{s.mailbox ? 'On' : 'Off'} · just for you</span></div>
         <div className="card set-card">
           <div className="set-body">
-            {s.gmail ? (
-              <p>When you add people, Taskivities emails them an invite from <b>{s.gmail.email}</b> through your Gmail. A copy is in your Sent folder, and replies come to you.</p>
+            {s.mailbox ? (
+              <p>When you add people, Taskivities emails them an invite from <b>{s.mailbox.email}</b> through your {MAILBOX[s.mailbox.via].name}. A copy
+                is in your Sent folder, and replies come to you.</p>
+            ) : s.mailboxOptions.length ? (
+              <p>Connect your {s.mailboxOptions.map((v) => MAILBOX[v].name).join(' or ')} and Taskivities emails people an invite from your address when
+                you add them. Until then, you send them the sign-in link yourself. {s.mailboxOptions.map((v) => MAILBOX[v].company).join(' or ')} will
+                ask you to allow <b>sending email</b> as you: Taskivities can't read your mail.</p>
             ) : (
-              <p>Connect your Gmail and Taskivities emails people an invite from your address when you add them. Until then, you send them the sign-in link yourself.
-                Google will ask you to allow <b>sending email</b> on your behalf: Taskivities can't read your mail.</p>
+              <p>Invites can be emailed from your Gmail or Outlook once Google or Microsoft sign-in is set up on this instance. Until then, you send
+                people the sign-in link yourself.</p>
             )}
             <div className="set-actions">
-              {s.gmail ? (
-                <button className="btn-ghost" data-act="gmail-disconnect" onClick={() => void disconnectGmail()}>Disconnect Gmail</button>
-              ) : (
-                <button className="btn-primary" data-act="gmail-connect" onClick={() => connectGmail('/settings')}>{I.mail(14)} Connect Gmail</button>
-              )}
+              {s.mailbox ? (
+                <button className="btn-ghost" data-act="mailbox-disconnect" onClick={() => void disconnectMailbox()}>Disconnect {MAILBOX[s.mailbox.via].name}</button>
+              ) : s.mailboxOptions.map((v, i) => (
+                <button key={v} className={i ? 'btn-ghost' : 'btn-primary'} data-act={`mailbox-connect-${v}`} onClick={() => connectMailbox(v, '/settings')}>
+                  {I.mail(14)} Connect {MAILBOX[v].name}
+                </button>
+              ))}
             </div>
           </div>
         </div>

@@ -5,9 +5,10 @@ import { Hono, type MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { USER_COLORS, appName } from '../shared/types';
 import { loadSettings } from './settings';
-import { GMAIL_SEND, saveConnection } from './gmail';
+import { mailboxProvider, saveMailbox } from './mailbox';
+import { GRAPH_ME, type GraphMe, emailOf, msBase as msBaseOf, msOn as msOnOf, msTenant as msTenantOf } from './microsoft';
 import {
-  type AppEnv, type Ctx, type UserRow, auditStmt, b64url, bumpDirectory, defaultTz, nowIso, randomToken, sha256, sha256hex, toViewer, uid, validTz,
+  type AppEnv, type Ctx, type Env, type UserRow, auditStmt, b64url, bumpDirectory, defaultTz, nowIso, randomToken, sha256, sha256hex, toViewer, uid, validTz,
 } from './lib';
 
 const SESSION_COOKIE = 'tv_session';
@@ -65,6 +66,13 @@ const GOOGLE_TOKEN = 'https://oauth2.googleapis.com/token';
 const GOOGLE_USERINFO = 'https://openidconnect.googleapis.com/v1/userinfo';
 const googleOn = (c: Ctx) => !!(c.env.GOOGLE_CLIENT_ID && c.env.GOOGLE_CLIENT_SECRET);
 
+/** How people sign in here, for "sign in with … using this address" (in the app and in invite emails). */
+export const signInWith = (env: Env): string[] => [
+  env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET ? 'Google' : '',
+  msOnOf(env) ? 'Microsoft' : '',
+  env.WORKOS_CLIENT_ID && env.WORKOS_API_KEY ? 'email' : '',
+].filter(Boolean);
+
 authRoutes.get('/login', async (c) => {
   if (!googleOn(c)) return c.text('Google sign-in is not configured yet: set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.', 500);
   const pkce = await beginOAuth(c, 'tv_oauth', safeNext(c.req.query('next')));
@@ -80,62 +88,75 @@ authRoutes.get('/login', async (c) => {
   return c.redirect(u.toString());
 });
 
-// ---------- Gmail for invite emails (admins, optional; see worker/gmail.ts) ----------
-/** Adds ?gmail=<result> to the page we go back to, so the app can say what happened. */
-const withGmail = (path: string, result: string) => `${path}${path.includes('?') ? '&' : '?'}gmail=${result}`;
+// ---------- an invite mailbox: Gmail or Outlook (admins, optional; see worker/mailbox.ts) ----------
+// Each connects through the instance's own Google or Microsoft sign-in app and callback (the `mailbox:<via>` mode in
+// the PKCE cookie tells the callback it isn't a sign-in), so there's no extra redirect URI to register. Only the
+// "send" permission is asked for, and it has to be the account they sign in to the app with.
+/** Adds ?mailbox=<result>&via=<gmail|outlook> to the page we go back to, so the app can say what happened. */
+const withMailbox = (path: string, via: string, result: string) =>
+  `${path}${path.includes('?') ? '&' : '?'}${new URLSearchParams({ mailbox: result, via })}`;
+const MAILBOX_FLOW = {
+  gmail: {
+    cookie: 'tv_oauth', authorize: () => GOOGLE_AUTHORIZE, redirect: (c: Ctx) => redirectUri(c),
+    // A refresh token, so invites can be sent later: Google only returns one on a fresh consent.
+    extra: { access_type: 'offline', prompt: 'consent', include_granted_scopes: 'true' } as Record<string, string>,
+    whoami: async (token: string) => (await getJson<{ email?: string }>(GOOGLE_USERINFO, token))?.email ?? null,
+  },
+  outlook: {
+    cookie: 'tv_ms', authorize: (c: Ctx) => `${msBase(c)}/authorize`, redirect: (c: Ctx) => msRedirect(c),
+    extra: {} as Record<string, string>,
+    whoami: async (token: string) => { const me = await getJson<GraphMe>(GRAPH_ME, token); return me ? emailOf(me) : null; },
+  },
+} as const;
 
-authRoutes.get('/gmail', async (c) => {
+authRoutes.get('/:via{gmail|outlook}', async (c) => {
+  const via = c.req.param('via') as 'gmail' | 'outlook';
+  const p = mailboxProvider(via), flow = MAILBOX_FLOW[via];
   const back = safeNext(c.req.query('next') || '/settings');
   const user = await currentUser(c);
   if (!user) return c.redirect(`/login?next=${encodeURIComponent(back)}`);
-  if (user.role !== 'admin') return c.redirect(withGmail(back, 'forbidden'));
-  if (!googleOn(c)) return c.redirect(withGmail(back, 'unavailable'));
-  const pkce = await beginOAuth(c, 'tv_oauth', back, 'gmail');
-  const u = new URL(GOOGLE_AUTHORIZE);
+  if (user.role !== 'admin') return c.redirect(withMailbox(back, via, 'forbidden'));
+  if (!p.on(c.env)) return c.redirect(withMailbox(back, via, 'unavailable'));
+  const pkce = await beginOAuth(c, flow.cookie, back, `mailbox:${via}`);
+  const u = new URL(flow.authorize(c));
   u.search = new URLSearchParams({
-    client_id: c.env.GOOGLE_CLIENT_ID!,
-    redirect_uri: redirectUri(c), // the same callback as sign-in, so no extra redirect URI to register
-    response_type: 'code',
-    // Send only. Never gmail.readonly: the app doesn't read mail.
-    scope: `openid email ${GMAIL_SEND}`,
-    access_type: 'offline', // a refresh token, so invites can be sent later
-    prompt: 'consent', // Google only returns a refresh token on a fresh consent
-    include_granted_scopes: 'true',
-    login_hint: user.email,
-    ...pkce,
+    client_id: p.client(c.env).client_id, redirect_uri: flow.redirect(c), response_type: 'code', scope: p.scope,
+    login_hint: user.email, ...flow.extra, ...pkce,
   }).toString();
   return c.redirect(u.toString());
 });
 
-async function gmailCallback(c: Ctx, code: string | undefined, error: string | undefined, verifier: string, back: string) {
+/** Back from the consent screen: check it's their own account and sending was allowed, then keep the connection. */
+async function mailboxCallback(c: Ctx, via: 'gmail' | 'outlook', code: string | undefined, error: string | undefined, verifier: string, back: string) {
+  const p = mailboxProvider(via), flow = MAILBOX_FLOW[via];
   const user = await currentUser(c);
   if (!user) return c.redirect('/login');
-  if (user.role !== 'admin') return c.redirect(withGmail(back, 'forbidden'));
-  if (error || !code) return c.redirect(withGmail(back, 'cancelled'));
-  const t = await redeemCode<{ access_token: string; refresh_token?: string; scope?: string }>(GOOGLE_TOKEN, {
-    code, client_id: c.env.GOOGLE_CLIENT_ID!, client_secret: c.env.GOOGLE_CLIENT_SECRET!, redirect_uri: redirectUri(c), code_verifier: verifier,
+  if (user.role !== 'admin') return c.redirect(withMailbox(back, via, 'forbidden'));
+  if (!p.on(c.env)) return c.redirect(withMailbox(back, via, 'unavailable'));
+  // consent_required: their organization doesn't let people allow this themselves (an admin has to grant it).
+  if (error || !code) return c.redirect(withMailbox(back, via, error === 'consent_required' ? 'no_permission' : 'cancelled'));
+  const t = await redeemCode<{ access_token?: string; refresh_token?: string; scope?: string }>(p.tokenUrl(c.env), {
+    code, ...p.client(c.env), redirect_uri: flow.redirect(c), code_verifier: verifier, ...(via === 'outlook' ? { scope: p.scope } : {}),
   });
-  if (!t?.access_token) return c.redirect(withGmail(back, 'failed'));
-  const revoke = () => fetch('https://oauth2.googleapis.com/revoke', {
-    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ token: t.refresh_token || t.access_token }),
-  }).catch(() => undefined);
-  // Google lets people untick individual permissions: without "send email" there's nothing to store.
-  if (!(t.scope ?? '').split(' ').includes(GMAIL_SEND)) { await revoke(); return c.redirect(withGmail(back, 'no_permission')); }
-  const info = await getJson<{ email?: string }>(GOOGLE_USERINFO, t.access_token);
-  // Invites go out from the address they sign in with, so it must be the same Google account.
-  if (!info?.email || info.email.toLowerCase() !== user.email.toLowerCase()) { await revoke(); return c.redirect(withGmail(back, 'wrong_account')); }
-  if (!t.refresh_token) return c.redirect(withGmail(back, 'failed'));
-  await saveConnection(c.env, user.id, user.email, t.refresh_token, t.scope ?? GMAIL_SEND);
-  await auditStmt(c.env.DB, user.id, 'gmail_connected', user.id, null).run();
-  return c.redirect(withGmail(back, 'connected'));
+  if (!t?.access_token) return c.redirect(withMailbox(back, via, 'failed'));
+  const drop = () => p.revoke?.(t.refresh_token || t.access_token!);
+  // People can untick individual permissions: without "send email" there's nothing to keep.
+  if (!p.canSend(t.scope ?? '')) { await drop(); return c.redirect(withMailbox(back, via, 'no_permission')); }
+  // Invites go out from the address they sign in with, so it must be that same account.
+  const email = await flow.whoami(t.access_token);
+  if (!email || email.toLowerCase() !== user.email.toLowerCase()) { await drop(); return c.redirect(withMailbox(back, via, 'wrong_account')); }
+  if (!t.refresh_token) return c.redirect(withMailbox(back, via, 'failed'));
+  await saveMailbox(c.env, user.id, via, user.email, t.refresh_token, t.scope ?? p.scope);
+  await auditStmt(c.env.DB, user.id, 'mailbox_connected', user.id, { via }).run();
+  return c.redirect(withMailbox(back, via, 'connected'));
 }
 
 authRoutes.get('/callback', async (c) => {
   const { code, state, error } = c.req.query();
   const saved = endOAuth(c, 'tv_oauth');
-  if (saved.mode === 'gmail') {
-    if (saved.state !== state) return c.redirect(withGmail(saved.next, 'expired'));
-    return gmailCallback(c, code, error, saved.verifier, saved.next);
+  if (saved.mode === 'mailbox:gmail') {
+    if (saved.state !== state) return c.redirect(withMailbox(saved.next, 'gmail', 'expired'));
+    return mailboxCallback(c, 'gmail', code, error, saved.verifier, saved.next);
   }
   if (error || !code || !saved.state) return c.redirect('/login?error=cancelled');
   if (saved.state !== state) return c.redirect('/login?error=expired');
@@ -229,17 +250,10 @@ function sessionIdOf(token: string | undefined): string | null {
 // world, so msTenant() refuses anything but one organization's GUID or domain, and the button stays off until it's right.
 const MS_SCOPE = 'openid profile email User.Read';
 const MS_TENANT_HELP = 'Microsoft sign-in is off: MS_TENANT_ID must be your organization\'s tenant ID (a GUID) or one of its domains, never "common", "organizations" or "consumers".';
-/** Microsoft's own tenant for personal accounts: as open as "consumers". */
-const MS_CONSUMER_TENANT = '9188040d-6c67-4c5b-b112-36a304b66dad';
-const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const DOMAIN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
-/** The configured tenant, or null unless it names exactly one organization ("common" and friends have no dot, so they fail DOMAIN). */
-function msTenant(c: Ctx): string | null {
-  const t = (c.env.MS_TENANT_ID ?? '').trim().toLowerCase();
-  return (GUID.test(t) && t !== MS_CONSUMER_TENANT) || DOMAIN.test(t) ? t : null;
-}
-const msOn = (c: Ctx) => !!(c.env.MS_CLIENT_ID && c.env.MS_CLIENT_SECRET && msTenant(c));
-const msBase = (c: Ctx) => `https://login.microsoftonline.com/${msTenant(c)}/oauth2/v2.0`;
+// The tenant checks live in worker/microsoft.ts, shared with Outlook invite emails.
+const msTenant = (c: Ctx) => msTenantOf(c.env);
+const msOn = (c: Ctx) => msOnOf(c.env);
+const msBase = (c: Ctx) => msBaseOf(c.env);
 const msRedirect = (c: Ctx) => `${new URL(c.req.url).origin}/auth/microsoft/callback`;
 
 authRoutes.get('/microsoft', async (c) => {
@@ -263,6 +277,10 @@ authRoutes.get('/microsoft', async (c) => {
 authRoutes.get('/microsoft/callback', async (c) => {
   const { code, state, error } = c.req.query();
   const saved = endOAuth(c, 'tv_ms');
+  if (saved.mode === 'mailbox:outlook') {
+    if (saved.state !== state) return c.redirect(withMailbox(saved.next, 'outlook', 'expired'));
+    return mailboxCallback(c, 'outlook', code, error, saved.verifier, saved.next);
+  }
   if (!msOn(c)) return c.redirect('/login');
   if (error || !code || !saved.state) return c.redirect(`/login?error=${error === 'access_denied' || !error ? 'cancelled' : 'microsoft'}`);
   if (saved.state !== state) return c.redirect('/login?error=expired');
@@ -270,12 +288,9 @@ authRoutes.get('/microsoft/callback', async (c) => {
     code, client_id: c.env.MS_CLIENT_ID!, client_secret: c.env.MS_CLIENT_SECRET!, redirect_uri: msRedirect(c), code_verifier: saved.verifier, scope: MS_SCOPE,
   });
   if (!t?.access_token) return c.redirect('/login?error=microsoft');
-  const me = await getJson<{ displayName?: string; mail?: string | null; userPrincipalName?: string }>(
-    'https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName', t.access_token,
-  );
+  const me = await getJson<GraphMe>(GRAPH_ME, t.access_token);
   if (!me) return c.redirect('/login?error=microsoft');
-  // A #EXT# principal is a guest from outside the tenant; only their invited outside address (`mail`) counts.
-  const email = me.mail || (me.userPrincipalName && !me.userPrincipalName.includes('#EXT#') ? me.userPrincipalName : null);
+  const email = emailOf(me);
   if (!email) return c.redirect('/login?error=unverified');
   return signIn(c, email, me.displayName ?? '', null, saved.next);
 });

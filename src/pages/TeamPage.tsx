@@ -1,10 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { Fragment, useEffect, useRef } from 'react';
 import { localProjects, localUsers } from '../sources';
 import { fmt } from '../../shared/dates';
 import { EMAIL_RE, isAdmin } from '../../shared/rules';
 import { DESCRIPTION_MAX, PROJECT_COLORS, type Role } from '../../shared/types';
 import { EFFORT_ORDER, EFFORT_TYPES, type EffortType } from '../../shared/effort';
-import { addPeople, archiveProject, connectGmail, copyInviteLink, loadArchivedProjects, openPop, resendInvite, restoreProject, saveProject, setManageTab } from '../actions';
+import { addPeople, archiveProject, MAILBOX, connectMailbox, copyInviteLink, signInHow, loadArchivedProjects, openPop, resendInvite, restoreProject, saveProject, setManageTab } from '../actions';
 import { activeSelector, focusLater } from '../focus';
 import { S, set, useStore, type ManageTab, type ProjEdit, type State } from '../store';
 import { displayName, people } from '../util';
@@ -122,7 +122,7 @@ export function TeamPage() {
                   {u.status === 'invited' ? <span className="st inv">Invited · {fmt(u.addedAt.slice(0, 10)).split(', ')[1]}</span> : <span className="st ok">Active</span>}
                 </div>
                 <div className="tact">
-                  {u.status === 'invited' && (s.gmail ? (
+                  {u.status === 'invited' && (s.mailbox ? (
                     <button className="icon-btn" data-act="resend" title="Email the invite again" aria-label={`Email the invite to ${u.email} again`}
                       onClick={() => void resendInvite(u.id)}>{I.mail()}</button>
                   ) : (
@@ -286,9 +286,12 @@ function InviteForm({ s }: { s: State }) {
       </div>
       <div className="inv-foot">
         <span className="muted-s inv-mail">
-          {s.gmail
-            ? <>{I.mail(13)} We'll email them an invite from {s.gmail.email}.</>
-            : <>They sign in with Google using exactly this address. <button className="linkish" data-act="gmail-connect" onClick={() => connectGmail('/manage')}>Connect Gmail</button> to email invites automatically.</>}
+          {s.mailbox
+            ? <>{I.mail(13)} We'll email them an invite from {s.mailbox.email}.</>
+            : <>They {signInHow(s.signInWith)} using exactly this address.
+              {s.mailboxOptions.length > 0 && <>{' '}Connect {s.mailboxOptions.map((v, i) => (
+                <Fragment key={v}>{i > 0 && ' or '}<button className="linkish" data-act={`mailbox-connect-${v}`} onClick={() => connectMailbox(v, '/manage')}>{MAILBOX[v].name}</button></Fragment>
+              ))} to email invites automatically.</>}</>}
         </span>
         <button className="btn-ghost" onClick={close}>Cancel</button>
         <button className="btn-primary" disabled={inv.busy} onClick={() => void submit()}>{inv.busy ? 'Adding…' : 'Add'}</button>
