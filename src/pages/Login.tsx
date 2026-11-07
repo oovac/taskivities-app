@@ -10,6 +10,15 @@ const GLOGO = (
   </svg>
 );
 
+const MSLOGO = (
+  <svg width="18" height="18" viewBox="0 0 23 23" aria-hidden="true">
+    <rect x="1" y="1" width="10" height="10" fill="#F25022" />
+    <rect x="12" y="1" width="10" height="10" fill="#7FBA00" />
+    <rect x="1" y="12" width="10" height="10" fill="#00A4EF" />
+    <rect x="12" y="12" width="10" height="10" fill="#FFB900" />
+  </svg>
+);
+
 const readCookie = (name: string) => {
   const m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
   return m ? decodeURIComponent(m[1]) : null;
@@ -20,11 +29,12 @@ const MESSAGES: Record<string, string> = {
   expired: 'That sign-in link expired. Please try again.',
   google: "Google didn't complete the sign-in. Please try again.",
   workos: "The email sign-in didn't complete. Please try again.",
+  microsoft: "Microsoft didn't complete the sign-in. Please try again.",
   unverified: "That account's email address isn't verified.",
 };
 
 /** Which sign-in methods this instance has set up (WorkOS is optional), and the team's name and wordmark. */
-type Methods = { google: boolean; workos: boolean; name?: string; wordmark?: string | null };
+type Methods = { google: boolean; workos: boolean; microsoft?: boolean; name?: string; wordmark?: string | null };
 
 export function Login() {
   const params = new URLSearchParams(location.search);
@@ -63,6 +73,7 @@ export function Login() {
             </div>
           )}
           {error && MESSAGES[error] && <div className="si-msg" role="alert">{MESSAGES[error]}</div>}
+          {methods?.microsoft && <a className="gbtn" href={`/auth/microsoft${q}`}>{MSLOGO} Continue with Microsoft</a>}
           {methods?.google && <a className="gbtn" href={`/auth/login${q}`}>{GLOGO} Continue with Google</a>}
           {methods?.workos && <a className="gbtn" data-act="signin-email" href={`/auth/workos${q}`}>{I.mail(18)} Continue with email</a>}
           <div className="si-foot">Only people an admin has added can sign in.</div>

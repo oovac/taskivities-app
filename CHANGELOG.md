@@ -9,6 +9,8 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+- **Sign in with Microsoft 365:** an instance can now use its organization's own Microsoft (Entra ID) tenant to sign people in — set the `MS_CLIENT_ID`, `MS_CLIENT_SECRET` and `MS_TENANT_ID` secrets (see `tenants/example.env`). Sign-in is locked to that one tenant, and the email comes from Microsoft Graph, not from a token claim another tenant could set to anything. Works alongside or instead of Google and WorkOS.
+
 ## v0.5.2 (2026-11-06)
 
 - **Empty days are hidden:** in Week views, days with nothing done or planned are no longer shown, so the list is shorter. Today always shows. A week with nothing at all says so.

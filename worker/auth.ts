@@ -155,7 +155,7 @@ const workosRedirect = (c: Ctx) => `${new URL(c.req.url).origin}/auth/workos/cal
 /** What the sign-in page needs: which buttons to show, and the team's name and wordmark. */
 authRoutes.get('/methods', async (c) => {
   const st = await loadSettings(c.env.DB);
-  return c.json({ google: googleOn(c), workos: workosOn(c), name: appName(st), wordmark: st.customWordmark ? st.wordmarkVersion : null });
+  return c.json({ google: googleOn(c), workos: workosOn(c), microsoft: msOn(c), name: appName(st), wordmark: st.customWordmark ? st.wordmarkVersion : null });
 });
 
 authRoutes.get('/workos', (c) => {
@@ -220,6 +220,67 @@ function sessionIdOf(token: string | undefined): string | null {
     return null;
   }
 }
+
+// ---------- Microsoft 365 / Entra ID (optional; on when MS_CLIENT_ID, MS_CLIENT_SECRET and MS_TENANT_ID are set) ----------
+// Locked to one organization's tenant: the authorize and token endpoints are tenant-specific, so only that tenant
+// issues codes here. The email comes from Microsoft Graph (/me), not from a token claim another tenant's admin could
+// set to anything (the "nOAuth" problem) — that's the verified-email requirement for this provider.
+const msOn = (c: Ctx) => !!(c.env.MS_CLIENT_ID && c.env.MS_CLIENT_SECRET && c.env.MS_TENANT_ID);
+const MS_SCOPE = 'openid profile email User.Read';
+const msBase = (c: Ctx) => `https://login.microsoftonline.com/${encodeURIComponent(c.env.MS_TENANT_ID!.trim())}/oauth2/v2.0`;
+const msRedirect = (c: Ctx) => `${new URL(c.req.url).origin}/auth/microsoft/callback`;
+
+authRoutes.get('/microsoft', async (c) => {
+  if (!msOn(c)) return c.text('Microsoft sign-in is not configured: set MS_CLIENT_ID, MS_CLIENT_SECRET and MS_TENANT_ID.', 500);
+  const state = randomToken(16);
+  const verifier = randomToken(32);
+  setCookie(c, 'tv_ms', `${state}.${verifier}`, { ...cookieBase(c), path: '/auth', maxAge: 600 });
+  const next = safeNext(c.req.query('next'));
+  if (next !== '/') setCookie(c, NEXT_COOKIE, next, { ...cookieBase(c), path: '/auth', maxAge: 600 });
+  else deleteCookie(c, NEXT_COOKIE, { path: '/auth' });
+  const u = new URL(`${msBase(c)}/authorize`);
+  u.search = new URLSearchParams({
+    client_id: c.env.MS_CLIENT_ID!,
+    redirect_uri: msRedirect(c),
+    response_type: 'code',
+    scope: MS_SCOPE,
+    state,
+    code_challenge: b64url(await sha256(verifier)),
+    code_challenge_method: 'S256',
+    prompt: 'select_account',
+  }).toString();
+  return c.redirect(u.toString());
+});
+
+authRoutes.get('/microsoft/callback', async (c) => {
+  const { code, state, error } = c.req.query();
+  const saved = getCookie(c, 'tv_ms');
+  const next = safeNext(getCookie(c, NEXT_COOKIE));
+  deleteCookie(c, 'tv_ms', { path: '/auth' });
+  deleteCookie(c, NEXT_COOKIE, { path: '/auth' });
+  if (!msOn(c)) return c.redirect('/login');
+  if (error || !code || !saved) return c.redirect(`/login?error=${error === 'access_denied' || !error ? 'cancelled' : 'microsoft'}`);
+  const [savedState, verifier] = saved.split('.');
+  if (savedState !== state) return c.redirect('/login?error=expired');
+  const res = await fetch(`${msBase(c)}/token`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code, client_id: c.env.MS_CLIENT_ID!, client_secret: c.env.MS_CLIENT_SECRET!,
+      redirect_uri: msRedirect(c), grant_type: 'authorization_code', code_verifier: verifier, scope: MS_SCOPE,
+    }),
+  }).catch(() => null);
+  if (!res?.ok) return c.redirect('/login?error=microsoft');
+  const { access_token } = await res.json<{ access_token?: string }>();
+  if (!access_token) return c.redirect('/login?error=microsoft');
+  const me = await fetch('https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName', {
+    headers: { authorization: `Bearer ${access_token}` },
+  }).then((r) => (r.ok ? r.json<{ displayName?: string; mail?: string | null; userPrincipalName?: string }>() : null)).catch(() => null);
+  // A #EXT# principal is a guest from outside the tenant; only their invited outside address (`mail`) counts.
+  const email = me?.mail || (me?.userPrincipalName && !me.userPrincipalName.includes('#EXT#') ? me.userPrincipalName : null);
+  if (!email) return c.redirect('/login?error=unverified');
+  return signIn(c, email, me?.displayName ?? '', null, next);
+});
 
 /** Local development only: sign in as any existing user without Google. */
 authRoutes.get('/dev-login', async (c) => {
