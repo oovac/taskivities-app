@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { appName } from '../../shared/types';
 import { attachmentBlob, isFeed, remoteTaskUrl, sourceOf } from '../sources';
 import { EFFORT_TYPES, effortFor, effortLabel, storedEffortLabel } from '../../shared/effort';
 import { addDays, fmt } from '../../shared/dates';
@@ -54,6 +55,8 @@ export function Drawer() {
         <div className="dr-top">
           <ProjPill p={p} />
           <span className="spacer" />
+          {/* With other instances connected, every task says where it lives: this one too. */}
+          {!ext && s.sources.length > 0 && <span className="dr-ext home" title="This task is on this instance">{appName(s.settings)}</span>}
           {ext && <a className="dr-ext" href={remoteTaskUrl(ext, t.id)} target="_blank" rel="noopener" title={`This task is on ${ext.name} (${ext.origin.replace(/^https?:\/\//, '')})`}>{ext.name} {I.arrowUp(12)}</a>}
           <button className="icon-btn" data-act="task-menu" title="More" aria-label="More actions" aria-haspopup="menu"
             onClick={(e) => openPop({ type: 'taskmenu', mode: 'task', id: t.id }, e.currentTarget)}>{I.dots()}</button>
