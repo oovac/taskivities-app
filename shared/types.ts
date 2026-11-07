@@ -23,6 +23,8 @@ export interface User {
   /** When and by whom they were disabled (null unless disabled). */
   disabledAt: string | null;
   disabledBy: string | null;
+  /** App only: someone on another instance (src/sources.ts): that instance's name. Never in this instance's lists. */
+  feed?: string;
 }
 
 export interface Project {
@@ -35,6 +37,8 @@ export interface Project {
   /** How the project measures effort on its tasks (null: it doesn't), and whether a task needs it before it's done. */
   effort: EffortType | null;
   effortRequired: boolean;
+  /** App only: a project on another instance (src/sources.ts): that instance's name. Never in this instance's lists. */
+  feed?: string;
 }
 
 /** What a person is notified about on their devices (Web Push). */
@@ -71,6 +75,8 @@ export interface InboxItem {
   /** handed: who got the task. */
   to: string | null;
   at: string;
+  /** App only: another instance's entry (src/sources.ts), with whether it was already seen there. */
+  seen?: boolean;
 }
 export interface InboxPage {
   items: InboxItem[];

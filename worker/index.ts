@@ -12,6 +12,8 @@ import { attachmentRoutes, uploadRoutes } from './attachments';
 import { morningSummaries, pushRoutes } from './push';
 import { inboxRoutes } from './inbox';
 import { followRoutes } from './followers';
+import { relayIn, relayRoutes } from './relay';
+import { v1Handler } from './v1';
 
 // The MCP session Durable Object (bound as MCP_OBJECT in wrangler.jsonc).
 export { TaskivitiesMCP };
@@ -37,6 +39,11 @@ app.route('/hooks', hookRoutes);
 // One-time upload links for AI assistants (secret in the URL). See worker/attachments.ts.
 app.route('/upload', uploadRoutes);
 
+// Other instances passing on a person's notifications (secret in the URL). See worker/relay.ts.
+app.route('/relay', relayIn);
+// Taskivities apps on other instances, with an OAuth token (the same ones assistants get). See worker/v1.ts.
+app.all('/v1/*', (c) => v1Handler.fetch(c.req.raw, c.env, c.executionCtx as ExecutionContext));
+
 app.route('/auth', authRoutes);
 // Sign-in + consent page for AI assistants connecting over MCP.
 app.route('/authorize', oauthRoutes);
@@ -47,6 +54,7 @@ app.route('/api/tasks', attachmentRoutes);
 app.route('/api/tasks', followRoutes);
 app.route('/api/push', pushRoutes);
 app.route('/api/inbox', inboxRoutes);
+app.route('/api/relays', relayRoutes);
 app.route('/api', api);
 app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404));
 

@@ -9,6 +9,8 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+- **Other instances:** use one app for all your Taskivities instances. In the account menu, open **Other instances**, give another instance's address and approve there (you sign in to it as usual). Your tasks there then show in your day, week and board, labelled with where they're from, and you can do anything with them you could there, from done and dates to comments, files and handing over. Their inbox entries show under the bell, and their notifications reach your devices through this instance. Each device connects once; a new one offers your instances in one tap. Both instances need this version.
+
 ### Added
 
 - **Sign in with Microsoft 365:** the sign-in page can offer **Continue with Microsoft** for your organization's own Microsoft 365 (Entra ID) accounts, next to or instead of Google and email sign-in. Only accounts in your organization, and guests it has invited, can use it, and as with Google they still have to be added on the People & projects page. To turn it on, register an app in Microsoft Entra and set the `MS_CLIENT_ID`, `MS_CLIENT_SECRET` and `MS_TENANT_ID` secrets (see the README). Entra client secrets expire, so note the date and replace it before then.

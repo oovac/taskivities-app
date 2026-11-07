@@ -4,6 +4,7 @@ import type { InboxItem, InboxKind, InboxPage } from '../shared/types';
 import { api } from './api';
 import { openPop } from './actions';
 import { S, set } from './store';
+import { sourcesInbox, sourcesMarkRead } from './sources';
 
 export function openInbox(anchor: HTMLElement) {
   set({ inbox: null });
@@ -24,9 +25,14 @@ export async function loadInbox(older = false) {
     }
     // Refreshing while open keeps this visit's "unread" marks.
     const readAt = cur && !cur.loading && cur.items.length ? earlier(cur.readAt, r.readAt) : r.readAt;
-    set({ inbox: { items: r.items, next: r.next, readAt, loading: false } });
+    // Other instances' newest entries, mixed in by time (each knows what was already seen there).
+    const theirs = (await sourcesInbox()).flatMap(({ page }) => page.items.map((i) => ({ ...i, seen: !!page.readAt && i.at <= page.readAt })));
+    const keepSeen = new Map((cur?.items ?? []).filter((i) => i.seen === false).map((i) => [i.id, false]));
+    const items = [...r.items, ...theirs.map((i) => (keepSeen.has(i.id) ? { ...i, seen: false } : i))].sort((a, b) => b.at.localeCompare(a.at));
+    set({ inbox: { items, next: r.next, readAt, loading: false } });
     const newest = r.items[0]?.at;
     if (S().inboxUnread > 0 || (newest && (!r.readAt || newest > r.readAt))) await markRead(newest);
+    if (theirs.some((i) => !i.seen) || Object.values(S().feedDir.unread).some((n) => n > 0)) await sourcesMarkRead(new Date().toISOString());
   } catch {
     set((s) => ({ inbox: s.inbox && { ...s.inbox, loading: false, error: true } }));
   }
@@ -53,7 +59,7 @@ export function inboxRows(items: InboxItem[], readAt: string | null): InboxRow[]
   const rows: InboxRow[] = [];
   const open = new Map<string, InboxRow>();
   for (const it of items) {
-    const unread = !readAt || it.at > readAt;
+    const unread = it.seen !== undefined ? !it.seen : !readAt || it.at > readAt;
     // Unread and seen entries never share a row, so something new can't hide in an old group.
     const key = it.kind === 'comment' ? `c|${it.taskId}|${unread}` : it.kind === 'assigned' ? `h|${it.actorId}|${it.at}` : `n|${it.id}`;
     const row = open.get(key);

@@ -45,6 +45,30 @@ async function sendAll(env: Env, keys: PushKeys, subs: SubRow[], payload: Payloa
   return results;
 }
 
+/** Sends one notification to all of someone's devices here (the relay uses this for other instances' notices). */
+export async function sendToUser(env: Env, userId: string, payload: Payload) {
+  const keys = pushKeys(env);
+  if (!keys) return;
+  const subs = (await env.DB.prepare('SELECT * FROM push_subscriptions WHERE user_id = ?').bind(userId).all<SubRow>()).results;
+  if (subs.length) await sendAll(env, keys, subs, payload);
+}
+
+interface RelayRow { id: string; user_id: string; url: string }
+/**
+ * Passes a notification to the relays someone's home instances run for them (worker/relay.ts), which show it on
+ * their devices. Best effort, like push itself; a relay that's gone (they disconnected) is forgotten.
+ */
+async function sendToRelays(env: Env, relays: RelayRow[], n: { title: string; body: string; tag: string; taskId?: string | null }) {
+  const db = env.DB;
+  await Promise.all(relays.map(async (r) => {
+    try {
+      const res = await fetch(r.url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(n), redirect: 'manual', signal: AbortSignal.timeout(5000) });
+      if (res.status === 404 || res.status === 410) await db.prepare('DELETE FROM push_relays WHERE id = ?').bind(r.id).run();
+      else if (res.ok) await db.prepare('UPDATE push_relays SET last_ok_at = ? WHERE id = ?').bind(nowIso(), r.id).run();
+    } catch { /* unreachable for now: try again next time */ }
+  }));
+}
+
 /** Open tasks on someone's plate today (due today or carried over), for the app icon's badge. */
 async function openToday(db: D1Database, userId: string, day: string) {
   return (await db.prepare(
@@ -81,8 +105,9 @@ const RANK: Notice['kind'][] = ['assigned', 'followed', 'handed', 'done', 'reope
 
 /** Sends notices after the response. Nobody is told about their own change, unless a webhook made it for them. */
 export function notify(env: Env, notices: Notice[]) {
+  // No push keys: devices here can't be reached, but people's home instances (relays) still can.
   const keys = pushKeys(env);
-  if (!keys || !notices.length) return;
+  if (!notices.length) return;
   const list = notices;
   const job = deliver(env, keys, list).catch((e) => console.error('notify failed', e));
   try { waitUntil(job); } catch { /* not inside a request: the promise runs on its own */ }
@@ -90,7 +115,7 @@ export function notify(env: Env, notices: Notice[]) {
 
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
-async function deliver(env: Env, keys: PushKeys, raw: Notice[]) {
+async function deliver(env: Env, keys: PushKeys | null, raw: Notice[]) {
   const db = env.DB;
   // Expand "everyone on the task", then drop people's own changes (unless a webhook made them for them).
   const expanded: Notice[] = [];
@@ -102,8 +127,9 @@ async function deliver(env: Env, keys: PushKeys, raw: Notice[]) {
     .sort((a, b) => RANK.indexOf(a.kind) - RANK.indexOf(b.kind));
   if (!notices.length) return;
   const to = [...new Set(notices.map((n) => n.to))];
-  const subs = (await db.prepare(`SELECT * FROM push_subscriptions WHERE user_id IN (${to.map(() => '?').join(',')})`).bind(...to).all<SubRow>()).results;
-  if (!subs.length) return;
+  const subs = keys ? (await db.prepare(`SELECT * FROM push_subscriptions WHERE user_id IN (${to.map(() => '?').join(',')})`).bind(...to).all<SubRow>()).results : [];
+  const relays = (await db.prepare(`SELECT id, user_id, url FROM push_relays WHERE user_id IN (${to.map(() => '?').join(',')})`).bind(...to).all<RelayRow>()).results;
+  if (!subs.length && !relays.length) return;
   const people = [...new Set([...to, ...notices.map((n) => n.actorId), ...notices.map((n) => n.target).filter(Boolean) as string[]])];
   const users = new Map((await db.prepare(`SELECT id, name, email, role, status, notify, time_zone FROM users WHERE id IN (${people.map(() => '?').join(',')})`)
     .bind(...people).all<{ id: string; name: string; email: string; role: string; status: string; notify: string | null; time_zone: string | null }>()).results.map((u) => [u.id, u]));
@@ -123,7 +149,8 @@ async function deliver(env: Env, keys: PushKeys, raw: Notice[]) {
     seen.add(key);
     const u = users.get(n.to);
     const mine = subs.filter((s) => s.user_id === n.to);
-    if (!u || u.status !== 'active' || !mine.length) continue;
+    const theirRelays = relays.filter((r) => r.user_id === n.to);
+    if (!u || u.status !== 'active' || (!mine.length && !theirRelays.length)) continue;
     const t = n.taskId ? tasks.get(n.taskId) : undefined;
     if (t && (t.archived || (u.role !== 'admin' && !members.has(`${n.to}|${t.project_id}`)))) continue;
     const prefs = prefsOf(u.notify);
@@ -162,6 +189,8 @@ async function deliver(env: Env, keys: PushKeys, raw: Notice[]) {
           break;
       }
     }
+    if (theirRelays.length) await sendToRelays(env, theirRelays, { title: payload.title, body: payload.body, tag: payload.tag, taskId: n.taskId ?? null });
+    if (!keys || !mine.length) continue;
     payload.badge = await openToday(db, n.to, day);
     await sendAll(env, keys, mine, payload, { topic: n.taskId?.replace(/-/g, ''), urgency: n.kind === 'assigned' ? 'high' : 'normal' });
   }
@@ -173,10 +202,10 @@ const hourIn = (tz: string) => Number(new Intl.DateTimeFormat('en-US', { timeZon
 /** At 8 in the morning in each person's time zone: how many tasks are on their plate today. Once a day, and only if there are some. */
 export async function morningSummaries(env: Env) {
   const keys = pushKeys(env);
-  if (!keys) return;
   const db = env.DB;
   const { results } = await db.prepare(
-    "SELECT * FROM users u WHERE u.status = 'active' AND EXISTS (SELECT 1 FROM push_subscriptions s WHERE s.user_id = u.id)",
+    `SELECT * FROM users u WHERE u.status = 'active' AND (${keys ? 'EXISTS (SELECT 1 FROM push_subscriptions s WHERE s.user_id = u.id) OR ' : ''}
+       EXISTS (SELECT 1 FROM push_relays r WHERE r.user_id = u.id))`,
   ).all<{ id: string; notify: string | null; time_zone: string | null; morning_sent_on: string | null }>();
   for (const u of results) {
     // One person's failure never stops the others' summaries.
@@ -184,7 +213,7 @@ export async function morningSummaries(env: Env) {
   }
 }
 
-async function morningFor(env: Env, keys: PushKeys, u: { id: string; notify: string | null; time_zone: string | null; morning_sent_on: string | null }) {
+async function morningFor(env: Env, keys: PushKeys | null, u: { id: string; notify: string | null; time_zone: string | null; morning_sent_on: string | null }) {
   const db = env.DB;
   if (!prefsOf(u.notify).morning) return;
   const tz = validTz(u.time_zone) || defaultTz(env);
@@ -200,12 +229,13 @@ async function morningFor(env: Env, keys: PushKeys, u: { id: string; notify: str
   ).bind(u.id, day).all<{ title: string; due_date: string }>();
   if (!list.length) return;
   const late = list.filter((t) => t.due_date < day).length;
+  const title = `Today: ${list.length} task${list.length > 1 ? 's' : ''}`;
+  const body = `${late ? `${late} carried over · ` : ''}First: ${clip(list[0].title, 100)}`;
+  const relays = (await db.prepare('SELECT id, user_id, url FROM push_relays WHERE user_id = ?').bind(u.id).all<RelayRow>()).results;
+  if (relays.length) await sendToRelays(env, relays, { title, body, tag: 'morning' });
+  if (!keys) return;
   const subs = (await db.prepare('SELECT * FROM push_subscriptions WHERE user_id = ?').bind(u.id).all<SubRow>()).results;
-  await sendAll(env, keys, subs, {
-    title: `Today: ${list.length} task${list.length > 1 ? 's' : ''}`,
-    body: `${late ? `${late} carried over · ` : ''}First: ${clip(list[0].title, 100)}`,
-    url: '/', tag: 'morning', badge: list.length,
-  }, { topic: 'morning' });
+  if (subs.length) await sendAll(env, keys, subs, { title, body, url: '/', tag: 'morning', badge: list.length }, { topic: 'morning' });
 }
 
 // ---------- the app's routes (/api/push) ----------
