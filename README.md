@@ -258,7 +258,7 @@ Deploying to every instance after a code change is one command per instance; the
 
 `DEV_LOGIN` is never set in production, so the development sign-in route returns 404 there.
 
-**A public demo** anyone can try (sample sign-in, hourly reset, uploads kept as sample files) lives in [`demo/`](demo/README.md): a separate Worker that wraps this one, deployed with `node demo/deploy.mjs <instance>`.
+**A public demo** anyone can try (sample sign-in, reset every 8 hours, uploads kept as sample files) lives in [`demo/`](demo/README.md): a separate Worker that wraps this one, deployed with `node demo/deploy.mjs <instance>`.
 
 ## Not built yet
 

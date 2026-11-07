@@ -128,7 +128,7 @@ forgets it), and drops the instance's data from the store.
 - **The demo** (`demo/`): anyone can connect it to their own instance, signing in there as one of its sample
   people. It doesn't register relays (everyone shares those people, so others' doings would reach your devices),
   and swaps uploads from `/v1` for its sample files, as it does for `/api`. Connections aren't meant to outlast its
-  hourly reset (they may, since sign-ins are kept outside its database); reconnect if one stops working.
+  reset every 8 hours (they may, since sign-ins are kept outside its database); reconnect if one stops working.
 
 ## Trying it locally
 

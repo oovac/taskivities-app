@@ -6,7 +6,7 @@
 //   node demo/deploy.mjs <instance> [--dry-run]   migrate, build and deploy to tenants/<instance>.env
 //
 // The instance is an ordinary tenants/<instance>.env (create it with `npm run tenant -- create demo`, without
-// Google secrets: the demo signs people in as sample users). Optional there: DEMO_RESET_CRON (default "0 * * * *").
+// Google secrets: the demo signs people in as sample users). Optional there: DEMO_RESET_CRON (default "0 */8 * * *": every 8 hours).
 // R2_BUCKET is ignored: demo uploads are kept as sample files, not stored.
 // Notifications: the first deploy creates the Web Push keys (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY) as secrets, like `npm run deploy`.
 import { spawnSync } from 'node:child_process';
@@ -71,7 +71,7 @@ function config(name, t) {
     kv_namespaces: base.kv_namespaces.map((k) => (k.binding === 'OAUTH_KV' ? { ...k, id: t.OAUTH_KV_ID || '000000000000000000000000000de000' } : k)),
     // No "Update available" notice in the demo: visitors don't deploy anything.
     vars: { ...base.vars, ...(t.TEAM_TZ ? { TEAM_TZ: t.TEAM_TZ } : {}), UPDATE_REPO: 'off' },
-    triggers: { crons: [t.DEMO_RESET_CRON || '0 * * * *'] },
+    triggers: { crons: [t.DEMO_RESET_CRON || '0 */8 * * *'] },
   };
   delete cfg.r2_buckets; // uploads are kept as samples (demo/files.ts)
   if (!local) {
@@ -99,7 +99,7 @@ if (!cmd) {
 } else if (cmd === 'reset-local') {
   // The local dev server runs a Worker's scheduled() handler through its explorer API.
   const r = await fetch(`http://localhost:${port}/cdn-cgi/local/explorer/api/local/scheduled?worker=taskivities-demo-local`, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cron: '0 * * * *' }),
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cron: '0 */8 * * *' }),
   }).catch((e) => die(`Is the demo running (node demo/deploy.mjs dev)? ${e.message}`));
   const out = await r.json().catch(() => ({}));
   console.log(out?.result?.outcome === 'ok' ? '✔ Reset to the sample data (everyone is signed out).' : `✘ ${JSON.stringify(out)}`);
@@ -120,5 +120,5 @@ if (!cmd) {
   run('npx', ['vite', 'build'], { TASKIVITIES_WRANGLER_CONFIG: cfg });
   run(WRANGLER, ['deploy', ...(dry ? ['--dry-run'] : []), ...as], acct);
   if (!dry) ensurePushKeys({ config: cfg, args: as, env: acct });
-  if (!dry) console.log(`\n✔ Deployed. The first sign-in loads the sample data; after that it resets on "${t.DEMO_RESET_CRON || '0 * * * *'}" (UTC).\n`);
+  if (!dry) console.log(`\n✔ Deployed. The first sign-in loads the sample data; after that it resets on "${t.DEMO_RESET_CRON || '0 */8 * * *'}" (UTC).\n`);
 }

@@ -14,7 +14,7 @@ const ACCOUNTS = [
   { key: 'jordan', email: 'jordan@example.com', name: 'Jordan Lee', role: 'Admin', about: 'Sees every project, and manages the team and settings.' },
   { key: 'sara', email: 'sara@example.com', name: 'Sara Lopez', role: 'Member', about: 'Sees only the projects she is on.' },
 ];
-const RESET = 'every hour';
+const RESET = 'every 8 hours';
 const OWN = 'https://www.taskivities.com/open-source';
 
 /** The app's environment, with the stand-in bucket so attachments are on (and keep nothing). */
