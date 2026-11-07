@@ -442,7 +442,7 @@ function SwitchPop({ p, s }: { p: Pop; s: State }) {
                 const sec = list?.querySelector<HTMLElement>(`[data-sec="${k}"]`);
                 if (list && sec) list.scrollTo({ top: sec.offsetTop - 4, behavior: 'smooth' });
               }}>
-              {home ? <>{home} <span>{people.length + projects.length}</span></> : <>{k === 'people' ? 'People' : 'Projects'} <span>{k === 'people' ? people.length : projects.length}</span></>}
+              {home ? <><i className="sw-mark home" />{home} <span>{people.length + projects.length}</span></> : <>{k === 'people' ? 'People' : 'Projects'} <span>{k === 'people' ? people.length : projects.length}</span></>}
             </button>
           ))}
           {remote.map(({ src, ppl, prj }) => (
@@ -452,7 +452,7 @@ function SwitchPop({ p, s }: { p: Pop; s: State }) {
                 const sec = list?.querySelector<HTMLElement>(`[data-sec="src-${src.id}"]`);
                 if (list && sec) list.scrollTo({ top: sec.offsetTop - 4, behavior: 'smooth' });
               }}>
-              {src.name} <span>{ppl.length + prj.length}</span>
+              <i className="sw-mark" style={{ background: src.color }} />{src.name} <span>{ppl.length + prj.length}</span>
             </button>
           ))}
         </div>

@@ -11,6 +11,7 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ### Changed
 
+- **Switcher:** with other instances connected, the instance buttons at the top stay on one line, with each instance's colour, and scroll sideways when there are many.
 - **Demo:** apps that connect the public demo (Other instances) show it as **Taskivities Demo**, so its tasks and people stand apart from your own instance's. The demo itself looks the same.
 
 ## v0.6.0 (2026-11-07)
