@@ -9,7 +9,7 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
-- **Other instances:** use one app for all your Taskivities instances. In the account menu, open **Other instances**, give another instance's address and approve there (you sign in to it as usual). Your tasks there then show in your day, week and board, labelled with where they're from, and you can do anything with them you could there, from done and dates to comments, files and handing over. Their inbox entries show under the bell, and their notifications reach your devices through this instance. Each device connects once; a new one offers your instances in one tap. Both instances need this version.
+- **Other instances:** use one app for all your Taskivities instances. In the account menu, open **Other instances**, give another instance's address and approve there (you sign in to it as usual). Your tasks there then show in your day, week and board, labelled with where they're from, and you can do anything with them you could there, from done and dates to comments, files and handing over. Their inbox entries show under the bell, and their notifications reach your devices through this instance. The switcher lists each connected instance's people and projects too, so you can open anyone's week or any project there, tick several across instances, and add tasks there from the quick-add. Each device connects once; a new one offers your instances in one tap. Both instances need this version.
 
 ### Added
 

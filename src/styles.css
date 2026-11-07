@@ -925,3 +925,7 @@ a.att-n:hover{color:var(--accent);text-decoration:underline}
 /* A task from another instance: where it lives, and a way there */
 .dr-ext{display:inline-flex;align-items:center;gap:4px;margin-right:4px;padding:4px 9px;border-radius:999px;background:var(--accent-soft);color:var(--accent-ink);font-size:12px;font-weight:600;text-decoration:none}
 .dr-ext svg{transform:rotate(45deg)}
+/* Switcher: another instance's section heading */
+.sw-src{display:flex;align-items:center;gap:6px}
+.sw-src i{width:8px;height:8px;border-radius:2px;flex:none}
+.sw-src span{font-weight:500;color:var(--faint)}

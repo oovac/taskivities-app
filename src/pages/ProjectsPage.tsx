@@ -36,7 +36,8 @@ export function projectView(s: State) {
       key: 'multi', multi: true as const, people, projects, project, showProject: !project,
       name: (who && what ? `${who} in ${what}` : who || what) || all,
       effort: types.size === 1 ? [...types][0] : null,
-      inP: (t: Task) => seen(t) && (!projects.length || projects.includes(t.projectId)) && (!people.length || people.includes(t.assigneeId)),
+      // Picked people and projects may be on other instances too (src/sources.ts).
+      inP: (t: Task) => !!s.projects[t.projectId] && (!projects.length || projects.includes(t.projectId)) && (!people.length || people.includes(t.assigneeId)),
     };
   }
   const pid = s.projSel !== 'all' && s.projects[s.projSel] ? s.projSel : 'all';

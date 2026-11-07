@@ -12,6 +12,7 @@
 // (localProjects / localUsers). Requests about any task go through clientFor(id), which picks the right server.
 import type { Bootstrap, InboxItem, InboxPage, Project, SyncResponse, Task, TaskEvent, User } from '../shared/types';
 import { PROJECT_COLORS, appName } from '../shared/types';
+import { onProject } from '../shared/rules';
 import { api, ApiError } from './api';
 import { S, set, type State } from './store';
 
@@ -55,6 +56,22 @@ export const remoteTaskUrl = (src: SourceInfo, id: string) => `${src.origin}/?ta
 /** This instance's own projects and people, without other instances'. */
 export const localProjects = (s: State): Project[] => Object.values(s.projects).filter((p) => !p.feed);
 export const localUsers = (s: State): User[] => Object.values(s.users).filter((u) => !u.feed);
+const srcOfId = (id: string | null | undefined) => (isFeed(id) ? feedParts(id!).src : null);
+/** Can this person (me included, as I am there) be on this project? Only within one instance. */
+export function personOn(s: State, userId: string, projectId: string): boolean {
+  const ps = srcOfId(projectId);
+  if (userId === s.me?.id) { const u = ps ? s.feedDir.me[ps] : s.me; return !!u && onProject(u, projectId); }
+  const u = s.users[userId];
+  return !!u && srcOfId(userId) === ps && onProject(u, projectId);
+}
+/** Projects I can add tasks to: this instance's, then each connected instance's. */
+export const myProjectsEverywhere = (s: State): Project[] =>
+  Object.values(s.projects).filter((p) => personOn(s, s.me!.id, p.id))
+    .sort((a, b) => Number(!!a.feed) - Number(!!b.feed) || a.name.localeCompare(b.name));
+/** Same instance? (This one's ids have no prefix.) */
+export const sameSource = (a: string, b: string) => srcOfId(a) === srcOfId(b);
+/** People of one other instance (ids starting with its prefix, "f~<connection>~"). */
+export const localUsersOf = (s: State, prefix: string): User[] => Object.values(s.users).filter((u) => u.id.startsWith(prefix));
 
 interface Ctx { src: string; theirMe: string; me: string }
 const ctxFor = (src: string): Ctx | null => {

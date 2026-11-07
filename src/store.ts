@@ -52,7 +52,11 @@ export interface InboxState {
 
 export interface Upload { id: string; taskId: string; name: string; loaded: number; total: number }
 export interface Toast { id: number; text: string; undo?: () => void; error?: boolean; action?: { label: string; run: () => void } }
-export interface Draft { title: string; notes: string; open: boolean; projectId: string | null; dueDate: string | null; assigneeId: string | null; priority: Priority; repeat: Repeat | null }
+export interface Draft {
+  title: string; notes: string; open: boolean; projectId: string | null; dueDate: string | null; assigneeId: string | null; priority: Priority; repeat: Repeat | null;
+  /** The project was picked in the quick-add's menu (not carried over from the last task or the page). */
+  projectPicked?: boolean;
+}
 export interface InviteDraft { emails: string; role: Role; projects: string[]; err: string | null; busy?: boolean }
 export interface ProjEdit {
   id: string | null; name: string; color: string; description: string; members: string[]; err: string | null; returnSel: string | null; busy?: boolean;

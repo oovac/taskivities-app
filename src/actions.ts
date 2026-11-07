@@ -2,7 +2,7 @@
 import { addDays, rel, weekStart } from '../shared/dates';
 import { type Repeat, describe } from '../shared/repeat';
 import { onProject } from '../shared/rules';
-import { applyFeedDir, clientFor, connByOrigin, finishConnect, isFeed, loadSources, localUsers, moveOnSources, sourcesRange, syncSources, taskFromSource, uploadTarget } from './sources';
+import { applyFeedDir, clientFor, connByOrigin, feedParts, finishConnect, isFeed, srcCall, loadSources, localUsers, moveOnSources, sourcesRange, syncSources, taskFromSource, uploadTarget } from './sources';
 import { type EffortType, effortFor, storedEffortLabel } from '../shared/effort';
 import { ATTACH_MAX_BYTES } from '../shared/types';
 import type { AppSettings, ArchivedProject, Bootstrap, InviteEmailResult, WebhookInfo, WebhookRequestInfo, Priority, Project, Role, SyncResponse, Task, TaskEvent, User } from '../shared/types';
@@ -338,7 +338,11 @@ export async function createTask(): Promise<boolean> {
   if (!projectId) { toast("You're not on any project yet. Ask an admin to add you to one.", undefined, true); return false; }
   const due = d.dueDate || defaultDraftDate(s);
   try {
-    const { task } = await api.post<{ task: Task }>('/api/tasks', { title, notes: d.notes, projectId, assigneeId, dueDate: due, priority, repeat: d.repeat ?? undefined });
+    const body = { title, notes: d.notes, projectId, assigneeId, dueDate: due, priority, repeat: d.repeat ?? undefined };
+    // A project on another instance: the task is made there (src/sources.ts).
+    const { task } = isFeed(projectId)
+      ? await srcCall<{ task: Task }>(feedParts(projectId).src, 'POST', '/tasks', body)
+      : await api.post<{ task: Task }>('/api/tasks', body);
     mine.set(task.id, Date.now());
     localStorage.setItem('tv:lastProject', projectId);
     set((st) => ({ tasks: { ...st.tasks, [task.id]: task }, draft: { ...emptyDraft(projectId), open: true } }));
@@ -978,7 +982,9 @@ export async function restoreTask(id: string) {
 /** A project view's Archived section ('all' = every project you can see). */
 export async function loadArchived(project: string) {
   try {
-    const { tasks } = await api.get<{ tasks: Task[] }>(`/api/archived?project=${encodeURIComponent(project)}`);
+    const { tasks } = isFeed(project)
+      ? await srcCall<{ tasks: Task[] }>(feedParts(project).src, 'GET', `/archived?project=${encodeURIComponent(feedParts(project).rid)}`)
+      : await api.get<{ tasks: Task[] }>(`/api/archived?project=${encodeURIComponent(project)}`);
     set({ archived: { project, tasks } });
   } catch (e) {
     toastError(e);

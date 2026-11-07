@@ -1,5 +1,5 @@
 import { addDays, fmt, rel, weekStart, MONS } from '../shared/dates';
-import { localProjects, localUsers } from './sources';
+import { localProjects, localUsers, myProjectsEverywhere, personOn, sameSource } from './sources';
 import { isLate, onProject, shownOn } from '../shared/rules';
 import { NORMAL, PRIORITIES, type Project, type Task, type User } from '../shared/types';
 import { upcoming } from '../shared/repeat';
@@ -17,12 +17,17 @@ export const sharesWith = (s: State, u: User) => myProjects(s).some((p) => onPro
 
 /** Quick-add defaults that respect access: a project I'm on, and an assignee who is on that project. */
 export const draftEffective = (s: State) => {
+  const me = s.me!.id;
   const mine = myProjects(s);
-  const projectId = s.draft.projectId && s.projects[s.draft.projectId] && onProject(s.me!, s.draft.projectId) ? s.draft.projectId : mine[0]?.id ?? null;
+  let projectId = s.draft.projectId && s.projects[s.draft.projectId] && personOn(s, me, s.draft.projectId) ? s.draft.projectId : mine[0]?.id ?? null;
   // A person's view adds for that person; a project's view adds for me.
-  let assigneeId = s.draft.assigneeId || (s.page === 'tasks' ? s.viewUser : null) || s.me!.id;
-  const a = s.users[assigneeId];
-  if (!a || !projectId || !onProject(a, projectId) || a.status === 'disabled') assigneeId = s.me!.id;
+  let assigneeId = s.draft.assigneeId || (s.page === 'tasks' ? s.viewUser : null) || me;
+  // Someone on another instance: a project of theirs there (one I'm on too), unless one was picked.
+  if (assigneeId !== me && !s.draft.projectPicked && (!projectId || !sameSource(projectId, assigneeId))) {
+    const theirs = myProjectsEverywhere(s).find((p) => sameSource(p.id, assigneeId) && personOn(s, assigneeId, p.id));
+    if (theirs) projectId = theirs.id;
+  }
+  if (!projectId || !personOn(s, assigneeId, projectId) || s.users[assigneeId]?.status === 'disabled') assigneeId = me;
   return { projectId, assigneeId };
 };
 
