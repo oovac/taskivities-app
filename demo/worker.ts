@@ -14,7 +14,7 @@ const ACCOUNTS = [
   { key: 'jordan', email: 'jordan@example.com', name: 'Jordan Lee', role: 'Admin', about: 'Sees every project, and manages the team and settings.' },
   { key: 'sara', email: 'sara@example.com', name: 'Sara Lopez', role: 'Member', about: 'Sees only the projects she is on.' },
 ];
-const RESET = 'every hour';
+const RESET = 'every 8 hours';
 const OWN = 'https://www.taskivities.com/open-source';
 
 /** The app's environment, with the stand-in bucket so attachments are on (and keep nothing). */
@@ -118,16 +118,20 @@ export default {
     // No Google, Microsoft or WorkOS sign-in in the demo.
     if (path === '/auth/login' || path.startsWith('/auth/microsoft') || path.startsWith('/auth/workos')) return Response.redirect(new URL(`/login${url.search}`, url).toString(), 302);
     if (path === '/auth/gmail') return Response.redirect(new URL('/settings?gmail=unavailable', url).toString(), 302);
-    if (method === 'PUT' && /^\/api\/admin\/settings\/(logo|icon|wordmark|name)$/.test(path))
+    // Anyone can connect the demo to their own Taskivities (docs/multi-instance.md), as a sample person. But everyone
+    // shares those people, so it doesn't send their notifications to anyone's home instance (other visitors' doings).
+    if (method === 'POST' && path === '/v1/push-relays')
+      return json({ error: 'The demo doesn’t send notifications to other instances: everyone shares its sample people.' }, 403);
+    if (method === 'PUT' && /^\/(api|v1)\/admin\/settings\/(logo|icon|wordmark|name)$/.test(path))
       return json({ error: 'Changing the logo, name or app icon is turned off in the demo. On your own instance, admins change them here.' }, 403);
 
     let request = req;
-    if (method === 'POST' && (/^\/api\/tasks\/[^/]+\/attachments$/.test(path) || /^\/upload\/[^/]+$/.test(path))) request = await demoUpload(req);
+    if (method === 'POST' && (/^\/(api|v1)\/tasks\/[^/]+\/attachments$/.test(path) || /^\/upload\/[^/]+$/.test(path))) request = await demoUpload(req);
 
     const res = await app.fetch(request as Parameters<typeof app.fetch>[0], demoEnv(env), ctx);
 
     // Files attached by AI assistants are recorded with their own size; the sample served for them has another.
-    if (method === 'GET' && /^\/api\/tasks\/[^/]+\/attachments\/[^/]+$/.test(path) && res.ok) {
+    if (method === 'GET' && /^\/(api|v1)\/tasks\/[^/]+\/attachments\/[^/]+$/.test(path) && res.ok) {
       const headers = new Headers(res.headers);
       headers.delete('content-length');
       return new Response(res.body, { status: res.status, headers });

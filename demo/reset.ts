@@ -8,7 +8,7 @@ const TABLES = [
   'task_events', 'task_followers', 'checklist_items', 'attachments', 'upload_links',
   'webhook_keys', 'webhook_requests', 'webhooks',
   'tasks', 'series', 'project_members',
-  'google_tokens', 'push_subscriptions', 'sessions', 'settings', 'audit_log',
+  'google_tokens', 'push_subscriptions', 'push_relays', 'relays', 'sessions', 'settings', 'audit_log',
   'projects', 'users',
 ];
 

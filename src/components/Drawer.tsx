@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { appName } from '../../shared/types';
+import { attachmentBlob, isFeed, remoteTaskUrl, sourceOf } from '../sources';
 import { EFFORT_TYPES, effortFor, effortLabel, storedEffortLabel } from '../../shared/effort';
 import { addDays, fmt } from '../../shared/dates';
 import { isLate, shownOn } from '../../shared/rules';
@@ -28,6 +30,7 @@ export function Drawer() {
   const creator = s.users[t.createdBy];
   const p = s.projects[t.projectId];
   const eff = p?.effort ? effortFor(t.effort, p.effort) : null;
+  const ext = sourceOf(s, t.id); // a task on another instance (src/sources.ts)
   const B = ({ children }: { children: ReactNode }) => <b>{children}</b>;
   const showNotes = !!(t.notes || notes || s.notesOpen);
   const showList = t.checklist.length > 0 || s.checklistOpen;
@@ -52,6 +55,9 @@ export function Drawer() {
         <div className="dr-top">
           <ProjPill p={p} />
           <span className="spacer" />
+          {/* With other instances connected, every task says where it lives: this one too. */}
+          {!ext && s.sources.length > 0 && <span className="dr-ext home" title="This task is on this instance">{appName(s.settings)}</span>}
+          {ext && <a className="dr-ext" href={remoteTaskUrl(ext, t.id)} target="_blank" rel="noopener" title={`This task is on ${ext.name} (${ext.origin.replace(/^https?:\/\//, '')})`}>{ext.name} {I.arrowUp(12)}</a>}
           <button className="icon-btn" data-act="task-menu" title="More" aria-label="More actions" aria-haspopup="menu"
             onClick={(e) => openPop({ type: 'taskmenu', mode: 'task', id: t.id }, e.currentTarget)}>{I.dots()}</button>
           <button className="icon-btn" data-act="close-drawer" title="Close  Esc" aria-label="Close" onClick={() => closeDrawer()}>{I.x()}</button>
@@ -374,6 +380,24 @@ const isImage = (type: string) => /^image\/(png|jpeg|gif|webp|avif)$/.test(type)
 const OPENS = /^(image\/(png|jpeg|gif|webp|avif)|application\/pdf|text\/plain)$/;
 
 /** The task's files: images as thumbnails, other files as a list. Opening goes through the app, which checks access. */
+/**
+ * A file on a task. On this instance, its address; on another, fetched with the token there and shown from memory
+ * (an address can't carry the token).
+ */
+function FileLink({ taskId, f, img, download, className, title, children }: {
+  taskId: string; f: AttachmentInfo; img?: boolean; download?: boolean; className?: string; title?: string; children?: ReactNode;
+}) {
+  const remote = isFeed(taskId);
+  const [blob, setBlob] = useState<string | null>(null);
+  useEffect(() => { if (remote) void attachmentBlob(taskId, f.id).then(setBlob).catch(() => {}); }, [remote, taskId, f.id]);
+  const href = remote ? blob ?? undefined : attachmentUrl(taskId, f.id, !!download && !img);
+  const inner = img ? (href ? <img src={href} alt={f.name} loading="lazy" /> : <span className="att-wait" />) : children ?? f.name;
+  return (
+    <a href={href} className={className} title={title} aria-label={download && children ? `Download ${f.name}` : undefined}
+      {...(download && remote ? { download: f.name } : {})} target={!download ? '_blank' : undefined} rel="noopener">{inner}</a>
+  );
+}
+
 function Attachments({ taskId, files, uploading, s }: { taskId: string; files: AttachmentInfo[]; uploading: State['uploads']; s: State }) {
   const images = files.filter((f) => isImage(f.type));
   const others = files.filter((f) => !isImage(f.type));
@@ -388,9 +412,7 @@ function Attachments({ taskId, files, uploading, s }: { taskId: string; files: A
         <div className="att-grid">
           {images.map((f) => (
             <div key={f.id} className="att-img">
-              <a href={attachmentUrl(taskId, f.id)} target="_blank" rel="noopener" title={`${f.name} · ${meta(f)}`}>
-                <img src={attachmentUrl(taskId, f.id)} alt={f.name} loading="lazy" />
-              </a>
+              <FileLink taskId={taskId} f={f} title={`${f.name} · ${meta(f)}`} img />
               {canRemove(f) && <button className="att-x" aria-label={`Remove ${f.name}`} title="Remove" onClick={() => void removeAttachment(taskId, f.id, f.name)}>{I.x(11)}</button>}
             </div>
           ))}
@@ -401,9 +423,9 @@ function Attachments({ taskId, files, uploading, s }: { taskId: string; files: A
           {others.map((f) => (
             <li key={f.id}>
               <span className="att-ic">{I.clip(14)}</span>
-              <a href={attachmentUrl(taskId, f.id, !OPENS.test(f.type))} target={OPENS.test(f.type) ? '_blank' : undefined} rel="noopener" className="att-n">{f.name}</a>
+              <FileLink taskId={taskId} f={f} className="att-n" download={!OPENS.test(f.type)} />
               <span className="att-m">{meta(f)}</span>
-              <a className="att-dl" href={attachmentUrl(taskId, f.id, true)} title="Download" aria-label={`Download ${f.name}`}>{I.download(13)}</a>
+              <FileLink taskId={taskId} f={f} className="att-dl" download title="Download">{I.download(13)}</FileLink>
               {canRemove(f) && <button className="att-x inline" aria-label={`Remove ${f.name}`} title="Remove" onClick={() => void removeAttachment(taskId, f.id, f.name)}>{I.x(11)}</button>}
             </li>
           ))}

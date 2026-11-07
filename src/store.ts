@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { SourceInfo } from './sources';
 import type { AppSettings, ArchivedProject, InboxItem, NotifyPrefs, Priority, Project, Role, Task, TaskEvent, User, WebhookInfo } from '../shared/types';
 import type { EffortType } from '../shared/effort';
 import { NORMAL, NOTIFY_DEFAULTS } from '../shared/types';
@@ -51,7 +52,11 @@ export interface InboxState {
 
 export interface Upload { id: string; taskId: string; name: string; loaded: number; total: number }
 export interface Toast { id: number; text: string; undo?: () => void; error?: boolean; action?: { label: string; run: () => void } }
-export interface Draft { title: string; notes: string; open: boolean; projectId: string | null; dueDate: string | null; assigneeId: string | null; priority: Priority; repeat: Repeat | null }
+export interface Draft {
+  title: string; notes: string; open: boolean; projectId: string | null; dueDate: string | null; assigneeId: string | null; priority: Priority; repeat: Repeat | null;
+  /** The project was picked in the quick-add's menu (not carried over from the last task or the page). */
+  projectPicked?: boolean;
+}
 export interface InviteDraft { emails: string; role: Role; projects: string[]; err: string | null; busy?: boolean }
 export interface ProjEdit {
   id: string | null; name: string; color: string; description: string; members: string[]; err: string | null; returnSel: string | null; busy?: boolean;
@@ -132,6 +137,11 @@ export interface State {
   multi: MultiSel;
   /** The switcher picks several at once (checkboxes) instead of one. Remembered on this device. */
   multiPick: boolean;
+  /** Other instances connected on this device (src/sources.ts), and their people, projects, my account there and unread inbox. */
+  sources: SourceInfo[];
+  feedDir: { users: Record<string, User>; projects: Record<string, Project>; me: Record<string, User>; unread: Record<string, number> };
+  /** The "Other instances" sheet (account menu). */
+  instancesOpen: boolean | string;
   projDay: string;
   projOpen: boolean;
   /** A project's view: archived tasks of the selected project (null = not loaded), and whether the section is open. */
@@ -214,6 +224,9 @@ export const useStore = create<State>()(() => ({
   projSel: localStorage.getItem('tv:proj') || 'all', // a project that's gone falls back to 'all' (ProjectsPage)
   multi: savedMulti(),
   multiPick: localStorage.getItem('tv:multiPick') === '1',
+  sources: [],
+  feedDir: { users: {}, projects: {}, me: {}, unread: {} },
+  instancesOpen: false,
   projDay: '',
   projOpen: true,
   archived: null,

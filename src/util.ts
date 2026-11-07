@@ -1,4 +1,5 @@
 import { addDays, fmt, rel, weekStart, MONS } from '../shared/dates';
+import { localProjects, localUsers, myProjectsEverywhere, personOn, sameSource } from './sources';
 import { isLate, onProject, shownOn } from '../shared/rules';
 import { NORMAL, PRIORITIES, type Project, type Task, type User } from '../shared/types';
 import { upcoming } from '../shared/repeat';
@@ -8,20 +9,25 @@ export const displayName = (u: User | undefined) => (!u ? 'Someone' : u.status =
 export const firstName = (u: User | undefined) => (!u ? 'Someone' : u.name ? u.name.split(' ')[0] : (u.email || 'Someone').split('@')[0]);
 
 export const myProjects = (s: State): Project[] =>
-  !s.me ? [] : Object.values(s.projects).filter((p) => onProject(s.me!, p.id)).sort((a, b) => a.name.localeCompare(b.name));
+  !s.me ? [] : localProjects(s).filter((p) => onProject(s.me!, p.id)).sort((a, b) => a.name.localeCompare(b.name));
 export const people = (s: State): User[] =>
-  Object.values(s.users).filter((u) => u.status !== 'disabled').sort((a, b) => displayName(a).localeCompare(displayName(b)));
+  localUsers(s).filter((u) => u.status !== 'disabled').sort((a, b) => displayName(a).localeCompare(displayName(b)));
 /** Someone whose work I can see at least some of. */
 export const sharesWith = (s: State, u: User) => myProjects(s).some((p) => onProject(u, p.id));
 
 /** Quick-add defaults that respect access: a project I'm on, and an assignee who is on that project. */
 export const draftEffective = (s: State) => {
+  const me = s.me!.id;
   const mine = myProjects(s);
-  const projectId = s.draft.projectId && s.projects[s.draft.projectId] && onProject(s.me!, s.draft.projectId) ? s.draft.projectId : mine[0]?.id ?? null;
+  let projectId = s.draft.projectId && s.projects[s.draft.projectId] && personOn(s, me, s.draft.projectId) ? s.draft.projectId : mine[0]?.id ?? null;
   // A person's view adds for that person; a project's view adds for me.
-  let assigneeId = s.draft.assigneeId || (s.page === 'tasks' ? s.viewUser : null) || s.me!.id;
-  const a = s.users[assigneeId];
-  if (!a || !projectId || !onProject(a, projectId) || a.status === 'disabled') assigneeId = s.me!.id;
+  let assigneeId = s.draft.assigneeId || (s.page === 'tasks' ? s.viewUser : null) || me;
+  // Someone on another instance: a project of theirs there (one I'm on too), unless one was picked.
+  if (assigneeId !== me && !s.draft.projectPicked && (!projectId || !sameSource(projectId, assigneeId))) {
+    const theirs = myProjectsEverywhere(s).find((p) => sameSource(p.id, assigneeId) && personOn(s, assigneeId, p.id));
+    if (theirs) projectId = theirs.id;
+  }
+  if (!projectId || !personOn(s, assigneeId, projectId) || s.users[assigneeId]?.status === 'disabled') assigneeId = me;
   return { projectId, assigneeId };
 };
 

@@ -88,6 +88,7 @@ export function onKeyDown(e: KeyboardEvent) {
 
   if (s.projEdit) { if (k === 'Tab') trapTab(e, document.querySelector('.sheet')); return; } // the editor handles Esc / Enter itself
   if (s.hookEdit) { if (k === 'Escape') { e.preventDefault(); closeHook(); } else if (k === 'Tab') trapTab(e, document.querySelector('.sheet')); return; }
+  if (s.instancesOpen) { if (k === 'Tab') trapTab(e, document.querySelector('.sheet')); return; } // the sheet handles Esc
   if (s.connect) { if (k === 'Escape') { e.preventDefault(); closeConnect(); } else if (k === 'Tab') trapTab(e, document.querySelector('.sheet')); return; }
   if (s.help) { if (k === 'Escape' || isQuestion) { e.preventDefault(); closeHelp(); } else if (k === 'Tab') trapTab(e, document.querySelector('.help')); return; }
   if (s.pop) { popKeys(e); return; }

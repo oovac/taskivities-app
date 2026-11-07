@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
+import { InstancesSheet } from './components/InstancesSheet';
 import { boot, closePop, goHome, openConnect, openHelp, openPop, openTask, sync } from './actions';
 import { updateBadge } from './push';
 import { checkForUpdate, updateSeen } from './updates';
@@ -78,6 +79,8 @@ export function App() {
 
   if (!s.ready || !s.me) return <div className="loading">Loading…</div>;
   const admin = s.me.role === 'admin';
+  // The bell counts what's new here and on every connected instance.
+  const unread = s.inboxUnread + Object.values(s.feedDir.unread).reduce((a, b) => a + b, 0);
 
   return (
     <div className="app">
@@ -95,9 +98,9 @@ export function App() {
         <button className="icon-btn kb-btn" title="Keyboard shortcuts  (?)" aria-label="Keyboard shortcuts" onClick={openHelp}>{I.kbd()}</button>
         <SyncPill />
         <button className={`icon-btn inbox-btn${s.pop?.type === 'inbox' ? ' on' : ''}`} data-act="inbox" aria-haspopup="dialog"
-          aria-label={s.inboxUnread ? `Inbox, ${s.inboxUnread} new` : 'Inbox'} title="Inbox  (G I)" onClick={(e) => openInbox(e.currentTarget)}>
+          aria-label={unread ? `Inbox, ${unread} new` : 'Inbox'} title="Inbox  (G I)" onClick={(e) => openInbox(e.currentTarget)}>
           {I.bell(17)}
-          {s.inboxUnread > 0 && <span className="inbox-n">{s.inboxUnread > 99 ? '99+' : s.inboxUnread}</span>}
+          {unread > 0 && <span className="inbox-n">{unread > 99 ? '99+' : unread}</span>}
         </button>
         <button className="me" data-act="account" title={`${s.me.name} · ${admin ? 'Admin' : 'Member'}${s.update ? ' · Update available' : ''}`}
           onClick={(e) => openPop({ type: 'account' }, e.currentTarget)}>
@@ -113,6 +116,7 @@ export function App() {
       <Drawer />
       {s.help && <HelpSheet />}
       {s.connect && <ConnectSheet />}
+      {s.instancesOpen && <InstancesSheet s={s} />}
       {s.hookEdit && <WebhookSheet key={s.hookEdit} />}
       {s.projEdit && <ProjectEditor pe={s.projEdit} s={s} />}
       {s.toast && (

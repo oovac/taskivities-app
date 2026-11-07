@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { feedParts, isFeed, localProjects, localUsers, localUsersOf, myProjectsEverywhere, personOn } from '../sources';
 import { DOW, MONL, addDays, fmt, parseDate, toDate, weekStart } from '../../shared/dates';
 import { type Freq, type Repeat, cleanRepeat, describe, presets, sameRule } from '../../shared/repeat';
 import { isAdmin, onProject } from '../../shared/rules';
-import { PRIORITIES, type NotifyPrefs, type Priority, type Task } from '../../shared/types';
+import { PRIORITIES, appName, type NotifyPrefs, type Priority, type Project, type Task, type User } from '../../shared/types';
 import {
   assignable, closePop, defaultDraftDate, moveTasks, openConnect, openPop, viewProject, disableUser, enableUser, setPage, setPriority, setProject, setRepeat, signOut, switchablePeople, transfer,
   updateUser, viewPerson, editNotes, editChecklist, pickAttachments, archiveTask, setFollowing, setEffort, currentSel, setMultiPick, viewMulti,
@@ -263,11 +264,15 @@ function ProjPop({ p, s }: { p: Pop; s: State }) {
   const qa = p.mode === 'qa';
   const t = qa ? null : s.tasks[p.id!];
   const cur = qa ? draftEffective(s).projectId : t?.projectId;
-  const owner = t ? s.users[t.assigneeId] : null;
+  // A task on another instance moves between that instance's projects (and I'm whoever I am there).
+  const src = t && isFeed(t.id) ? feedParts(t.id).src : null;
+  const list = src ? Object.values(s.projects).filter((pr) => pr.id.startsWith(`f~${src}~`)).sort((a, b) => a.name.localeCompare(b.name))
+    : qa ? myProjectsEverywhere(s) : myProjects(s); // a new task can go to any instance's project
+  const owner = t ? (src && t.assigneeId === s.me!.id ? s.feedDir.me[src] : s.users[t.assigneeId]) : null;
   return (
     <>
       <div className="pop-h">Project</div>
-      {myProjects(s).map((pr) => {
+      {list.map((pr) => {
         const blocked = !!owner && !onProject(owner, pr.id);
         return (
           <button key={pr.id} className={`opt ${pr.id === cur ? 'cur' : ''}`} disabled={blocked} title={pr.description}
@@ -277,7 +282,7 @@ function ProjPop({ p, s }: { p: Pop; s: State }) {
               if (qa) {
                 const d = S().draft;
                 const a = d.assigneeId ? s.users[d.assigneeId] : null;
-                setDraft({ projectId: pr.id, ...(a && !onProject(a, pr.id) ? { assigneeId: null } : {}) });
+                setDraft({ projectId: pr.id, projectPicked: true, ...(a && !personOn(s, a.id, pr.id) ? { assigneeId: null } : {}) });
               } else void setProject(p.id!, pr.id);
             }}>
             <Dot color={pr.color} />{pr.name}
@@ -307,7 +312,7 @@ function SwitchPop({ p, s }: { p: Pop; s: State }) {
   const TD = s.view === 'today';
   // Week and board: what's open that week. Today: what's open today (people) / done that day (a project).
   const inView = (t: Task) => t.status === 'open' && (TD ? shownOn(t, s.today) === s.today : shownOn(t, s.today) >= ws && shownOn(t, s.today) <= we);
-  const inP = (id: string) => (t: Task) => (id === 'all' ? !!s.projects[t.projectId] : t.projectId === id);
+  const inP = (id: string) => (t: Task) => (id === 'all' ? !!s.projects[t.projectId] && !s.projects[t.projectId].feed : t.projectId === id);
   const projCount = (id: string) => (onProjects && TD
     ? `${projectDayData(s, inP(id), s.projDay).done.length} done`
     : `${tasks.filter((t) => inP(id)(t) && inView(t)).length} open`);
@@ -337,26 +342,42 @@ function SwitchPop({ p, s }: { p: Pop; s: State }) {
     else viewProject(id);
   };
 
+  // Order by the button that opened it (not the page), so picking several doesn't reshuffle the list under you.
+  const projFirst = p.type === 'projpick';
+  const personBtn = (u: User) => {
+    const open = tasks.filter((t) => t.assigneeId === u.id && inView(t)).length;
+    const late = tasks.filter((t) => t.assigneeId === u.id && isLate(t, s.today)).length;
+    return (
+      <button key={u.id} className={`opt ${!several && u.id === curPerson ? 'cur' : ''}`} data-u={u.id}
+        {...(several ? { role: 'menuitemcheckbox', 'aria-checked': picked.people.includes(u.id) } : {})}
+        onClick={() => (several ? pickPerson(u.id) : goPerson(u.id))}>
+        {several && <Chk on={picked.people.includes(u.id)} />}<Avatar user={u} size={22} /><span className="sw-name">{u.id === me ? 'Me' : displayName(u)}</span>
+        <span className="r">{late > 0 && <><span style={{ color: 'var(--late)' }}>{late} late</span> · </>}{open} open</span>
+      </button>
+    );
+  };
+  const projBtn = (pr: Project) => (
+    <button key={pr.id} className={`opt ${!several && pr.id === curProj ? 'cur' : ''}`} data-p={pr.id} title={pr.description}
+      {...(several ? { role: 'menuitemcheckbox', 'aria-checked': picked.projects.includes(pr.id) } : {})}
+      onClick={() => (several ? pickProject(pr.id) : goProject(pr.id))}>
+      {several && <Chk on={picked.projects.includes(pr.id)} />}<span className="sw-dot"><Dot color={pr.color} /></span>
+      {/* Under its instance's heading, without the instance's name in front. */}
+      <span className="sw-name">{pr.feed ? pr.name.slice(pr.feed.length + 3) : pr.name}</span><span className="r">{projCount(pr.id)}</span>
+    </button>
+  );
+
+  // With other instances connected, this one's sections are named too, like theirs.
+  const home = s.sources.length ? appName(s.settings) : null;
+  const head = (label: string) => (home ? <div className="pop-h sw-src"><i className="home" />{home}<span>· {label}</span></div> : <div className="pop-h">{label}</div>);
   const peopleSec = people.length > 0 && (
     <div key="people" data-sec="people">
-      <div className="pop-h">People</div>
-      {people.map((u) => {
-        const open = tasks.filter((t) => t.assigneeId === u.id && inView(t)).length;
-        const late = tasks.filter((t) => t.assigneeId === u.id && isLate(t, s.today)).length;
-        return (
-          <button key={u.id} className={`opt ${!several && u.id === curPerson ? 'cur' : ''}`} data-u={u.id}
-            {...(several ? { role: 'menuitemcheckbox', 'aria-checked': picked.people.includes(u.id) } : {})}
-            onClick={() => (several ? pickPerson(u.id) : goPerson(u.id))}>
-            {several && <Chk on={picked.people.includes(u.id)} />}<Avatar user={u} size={22} /><span className="sw-name">{u.id === me ? 'Me' : displayName(u)}</span>
-            <span className="r">{late > 0 && <><span style={{ color: 'var(--late)' }}>{late} late</span> · </>}{open} open</span>
-          </button>
-        );
-      })}
+      {head('People')}
+      {people.map(personBtn)}
     </div>
   );
   const projectsSec = (showAll || projects.length > 0) && (
     <div key="projects" data-sec="projects">
-      <div className="pop-h">Projects</div>
+      {head('Projects')}
       {showAll && (
         <button className={`opt ${!several && curProj === 'all' ? 'cur' : ''}`} data-p="all"
           {...(several ? { role: 'menuitemcheckbox', 'aria-checked': !picked.projects.length } : {})}
@@ -365,20 +386,30 @@ function SwitchPop({ p, s }: { p: Pop; s: State }) {
           {several && <Chk on={!picked.projects.length} />}<ProjBadge project="all" size={22} /><span className="sw-name">{isAdmin(s.me!) ? 'All projects' : 'All my projects'}</span><span className="r">{projCount('all')}</span>
         </button>
       )}
-      {projects.map((pr) => (
-        <button key={pr.id} className={`opt ${!several && pr.id === curProj ? 'cur' : ''}`} data-p={pr.id} title={pr.description}
-          {...(several ? { role: 'menuitemcheckbox', 'aria-checked': picked.projects.includes(pr.id) } : {})}
-          onClick={() => (several ? pickProject(pr.id) : goProject(pr.id))}>
-          {several && <Chk on={picked.projects.includes(pr.id)} />}<span className="sw-dot"><Dot color={pr.color} /></span><span className="sw-name">{pr.name}</span><span className="r">{projCount(pr.id)}</span>
-        </button>
-      ))}
+      {projects.map(projBtn)}
     </div>
   );
-  // Order by the button that opened it (not the page), so picking several doesn't reshuffle the list under you.
-  const projFirst = p.type === 'projpick';
-  const sections = projFirst ? [projectsSec, peopleSec] : [peopleSec, projectsSec];
+  // Other instances connected on this device (src/sources.ts): each its own section, its people and its projects.
+  const remote = s.sources.map((src) => {
+    const pre = `f~${src.id}~`;
+    const ppl = localUsersOf(s, pre).filter((u) => u.status === 'active' && match(u.name, u.email)).sort((a, b) => displayName(a).localeCompare(displayName(b)));
+    const prj = Object.values(s.projects).filter((pr) => pr.id.startsWith(pre) && match(pr.name)).sort((a, b) => a.name.localeCompare(b.name));
+    return { src, ppl, prj };
+  }).filter((x) => x.ppl.length + x.prj.length > 0);
+  const remoteSecs = remote.map(({ src, ppl, prj }) => (
+    <div key={src.id} data-sec={`src-${src.id}`}>
+      {(projFirst ? [['Projects', prj], ['People', ppl]] as const : [['People', ppl], ['Projects', prj]] as const).map(([label, list]) => list.length > 0 && (
+        <div key={label}>
+          <div className="pop-h sw-src"><i style={{ background: src.color }} />{src.name}<span>· {label}</span></div>
+          {label === 'People' ? (list as User[]).map(personBtn) : (list as Project[]).map(projBtn)}
+        </div>
+      ))}
+    </div>
+  ));
+  const sections = [...(projFirst ? [projectsSec, peopleSec] : [peopleSec, projectsSec]), ...remoteSecs];
   const first = () => document.querySelector<HTMLElement>('.pop .sw-list .opt:not(.cur)') || document.querySelector<HTMLElement>('.pop .sw-list .opt');
-  const sel = onProjects && s.projSel !== 'all' ? s.projects[s.projSel] : null;
+  // Editing a project is done on its own instance.
+  const sel = onProjects && s.projSel !== 'all' && !s.projects[s.projSel]?.feed ? s.projects[s.projSel] : null;
   return (
     // As tall as the space under the button allows, so the whole list is always reachable (it scrolls).
     <div className="switch" style={{ maxHeight: Math.max(200, viewH() - p.rect.b - 48) }}>
@@ -401,23 +432,34 @@ function SwitchPop({ p, s }: { p: Pop; s: State }) {
         </div>
       )}
       {/* Big teams: jump straight to a section instead of scrolling past the other one. */}
-      {!q && people.length + projects.length > 12 && (
+      {!q && people.length + projects.length + remote.reduce((n, x) => n + x.ppl.length + x.prj.length, 0) > 12 && (
         <div className="sw-jump">
-          {(projFirst ? (['projects', 'people'] as const) : (['people', 'projects'] as const)).map((k) => (
+          {/* One button per instance once others are connected (this one's goes to its first section). */}
+          {(home ? [projFirst ? 'projects' as const : 'people' as const] : projFirst ? (['projects', 'people'] as const) : (['people', 'projects'] as const)).map((k) => (
             <button key={k} className="no-arrow" data-act={`jump-${k}`}
               onClick={() => {
                 const list = document.querySelector<HTMLElement>('.pop .sw-list');
                 const sec = list?.querySelector<HTMLElement>(`[data-sec="${k}"]`);
                 if (list && sec) list.scrollTo({ top: sec.offsetTop - 4, behavior: 'smooth' });
               }}>
-              {k === 'people' ? 'People' : 'Projects'} <span>{k === 'people' ? people.length : projects.length}</span>
+              {home ? <>{home} <span>{people.length + projects.length}</span></> : <>{k === 'people' ? 'People' : 'Projects'} <span>{k === 'people' ? people.length : projects.length}</span></>}
+            </button>
+          ))}
+          {remote.map(({ src, ppl, prj }) => (
+            <button key={src.id} className="no-arrow" data-act={`jump-src-${src.id}`}
+              onClick={() => {
+                const list = document.querySelector<HTMLElement>('.pop .sw-list');
+                const sec = list?.querySelector<HTMLElement>(`[data-sec="src-${src.id}"]`);
+                if (list && sec) list.scrollTo({ top: sec.offsetTop - 4, behavior: 'smooth' });
+              }}>
+              {src.name} <span>{ppl.length + prj.length}</span>
             </button>
           ))}
         </div>
       )}
       <div className="sw-list">
         {sections.filter(Boolean).map((sec, i) => <div key={i}>{i > 0 && <div className="pop-sep" />}{sec}</div>)}
-        {!people.length && !projects.length && !showAll && <div className="pop-empty">No one and no project matches “{p.q}”.</div>}
+        {!people.length && !projects.length && !showAll && !remote.length && <div className="pop-empty">No one and no project matches “{p.q}”.</div>}
       </div>
       {several && (
         <div className="sw-foot sw-picked">
@@ -445,7 +487,7 @@ function SwitchPop({ p, s }: { p: Pop; s: State }) {
 
 function RolePop({ p, s }: { p: Pop; s: State }) {
   const u = s.users[p.userId!];
-  const admins = Object.values(s.users).filter((x) => x.status !== 'disabled' && x.role === 'admin').length;
+  const admins = localUsers(s).filter((x) => x.status !== 'disabled' && x.role === 'admin').length;
   const lastAdmin = u.role === 'admin' && admins <= 1;
   const choose = (role: 'admin' | 'member') => {
     closePop(true);
@@ -468,7 +510,7 @@ function UserProjectsPop({ p, s }: { p: Pop; s: State }) {
   return (
     <>
       <div className="pop-h">{displayName(u)} can see</div>
-      {Object.values(s.projects).sort((a, b) => a.name.localeCompare(b.name)).map((pr) => {
+      {localProjects(s).sort((a, b) => a.name.localeCompare(b.name)).map((pr) => {
         const on = u.projects.includes(pr.id);
         const n = openIn(pr.id);
         const lock = on && (n > 0 || u.projects.length === 1);
@@ -489,9 +531,9 @@ function DisablePop({ p, s }: { p: Pop; s: State }) {
   const u = s.users[p.userId!];
   const open = Object.values(s.tasks).filter((t) => t.assigneeId === u.id && t.status === 'open');
   const projs = [...new Set(open.map((t) => t.projectId))];
-  const admins = Object.values(s.users).filter((x) => x.status !== 'disabled' && x.role === 'admin').length;
+  const admins = localUsers(s).filter((x) => x.status !== 'disabled' && x.role === 'admin').length;
   if (u.role === 'admin' && admins <= 1) return <><div className="pop-h">Can't disable the last admin</div><div className="pop-body">Make someone else an admin first.</div></>;
-  const targets = Object.values(s.users).filter((x) => x.id !== u.id && x.status === 'active' && projs.every((pid) => onProject(x, pid)));
+  const targets = localUsers(s).filter((x) => x.id !== u.id && x.status === 'active' && projs.every((pid) => onProject(x, pid)));
   const go = (to?: string) => { closePop(false); focusLater('[data-act="inv-open"]'); void disableUser(u.id, to); };
   return (
     <>
@@ -516,7 +558,7 @@ function DisablePop({ p, s }: { p: Pop; s: State }) {
 /** Enable a disabled person again. Members pick their projects (preselected: the ones they had). */
 function EnablePop({ p, s }: { p: Pop; s: State }) {
   const u = s.users[p.userId!];
-  const all = Object.values(s.projects).sort((a, b) => a.name.localeCompare(b.name));
+  const all = localProjects(s).sort((a, b) => a.name.localeCompare(b.name));
   const [picked, setPicked] = useState<string[]>(() => u.projects.filter((id) => s.projects[id]));
   const member = u.role === 'member';
   const go = () => { closePop(false); focusLater('[data-act="disabled-toggle"]'); void enableUser(u.id, member ? picked : undefined); };
@@ -570,6 +612,7 @@ function AccountPop({ s }: { s: State }) {
         </button>
       )}
       <button className="opt" onClick={() => { closePop(false); openConnect(); }}>{I.bolt(15)}Connect an AI assistant</button>
+      <button className="opt" data-act="instances" onClick={() => { closePop(false); set({ instancesOpen: true }); }}>{I.link(15)}Other instances{s.sources.length > 0 && <span className="r">{s.sources.length} connected</span>}</button>
       {isAdmin(me) && s.updateRepo && (
         <button className={`opt ${s.update ? 'opt-update' : ''}`} data-act="update"
           onClick={() => { const a = document.querySelector<HTMLElement>('[data-act="account"]'); if (a) openPop({ type: 'update', returnSel: '[data-act="account"]' }, a); }}>

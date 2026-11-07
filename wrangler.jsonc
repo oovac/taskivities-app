@@ -34,7 +34,10 @@
 			"/authorize",
 			"/token",
 			"/register",
-			"/.well-known/*"
+			"/.well-known/*",
+			// Other instances: the API their apps call with a token, and notifications passed on (worker/v1.ts, worker/relay.ts).
+			"/v1/*",
+			"/relay/*"
 		]
 	},
 	"d1_databases": [

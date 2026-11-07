@@ -44,6 +44,10 @@ e.g. `jordan@example.com` as an admin or `sara@example.com` as a member).
   its history.
 - **Access:** members only see their projects; check it on the server for every route and MCP tool (see `visible()`
   and `canSeeProject()` in `worker/`).
+- **Several instances in one app:** servers stay single-tenant; the app connects to other instances itself. Before
+  touching `src/sources.ts`, `src/router.ts`, `worker/v1.ts`, `worker/relay.ts`, notifications, or any list of
+  people or projects, read [docs/multi-instance.md](docs/multi-instance.md) and follow its rules (new routes on both
+  `/api` and `/v1`, `clientFor(id)` for task requests, `localProjects` / `localUsers` for this instance's lists).
 - **The demo** (`demo/`) wraps the app without changing it. Keep demo-only behaviour there, and update it if a
   change affects sign-in, uploads, settings or the reset.
 - **Docs:** update the README when behaviour, setup or deployment changes.
