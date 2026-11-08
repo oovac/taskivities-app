@@ -13,6 +13,7 @@ import {
   HttpError, TASK_COLS, bad, canSeeProject, loadViewer, mapProject, mapTask, mapUser, today,
 } from './lib';
 import type { McpProps } from './oauth';
+import { attachPastedLink } from './cloud-files';
 import { UPLOAD_LINK_MINUTES, addAttachmentBytes, addAttachmentFromUrl, createUploadLink, readAttachment, typeFromName } from './attachments';
 import { addComment, changeChecklist, createTask, setArchived, loadVisibleTask, updateTask, updateTaskWithNext, visible } from './tasks';
 import { setFollowing } from './followers';
@@ -465,7 +466,7 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
         title: 'Attach a file to a task',
         description:
           'Attach a file to a task, as you. Give exactly one of: `text` (a file you write, such as notes.md or a CSV), ' +
-          '`base64` (a small binary file, up to 2 MB), or `url` (a public https link the server downloads, up to 25 MB). ' +
+          '`base64` (a small binary file, up to 2 MB), or `url` (a public https link the server downloads, up to 25 MB; with `link: true`, the link itself is attached instead). ' +
           'Everyone on the project sees it, and the task history records it as attached via this assistant. ' +
           "Only attach what the user asked for. If attachments aren't set up on this instance, it says so.",
         inputSchema: {
@@ -474,6 +475,7 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
           text: z.string().max(2_000_000).optional().describe('File contents as text (saved as UTF-8).'),
           base64: z.string().max(2_800_000).optional().describe('File contents, base64-encoded (up to 2 MB once decoded).'),
           url: z.string().url().optional().describe('A public https link to download and attach.'),
+          link: z.boolean().optional().describe('With url: attach the link itself instead of downloading a copy. Use it for documents people open where they live (Google Docs, OneDrive, Figma…) and for private links the server can\'t download. Works even where file storage isn\'t set up.'),
           type: z.string().max(100).optional().describe('MIME type, e.g. "text/csv". Usually worked out from the name.'),
         },
       },
@@ -482,7 +484,10 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
           const given = [args.text !== undefined, args.base64 !== undefined, args.url !== undefined].filter(Boolean).length;
           if (given !== 1) throw bad('Give exactly one of text, base64 or url.');
           let task: Task;
-          if (args.url) {
+          if (args.link && !args.url) throw bad('link needs a url.');
+          if (args.url && args.link) {
+            task = await attachPastedLink(this.env, v, args.id, args.url, args.name, this.via);
+          } else if (args.url) {
             task = await addAttachmentFromUrl(this.env, v, args.id, args.url, args.name, args.type, this.via);
           } else {
             if (!args.name?.trim()) throw bad('Give the file a name, e.g. "notes.md".');
@@ -495,7 +500,7 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
             task = await addAttachmentBytes(this.env, v, args.id, bytes, args.name, args.type ?? (args.text !== undefined && !/\.[a-z0-9]+$/i.test(args.name) ? 'text/plain' : undefined), this.via);
           }
           const added = task.attachments[task.attachments.length - 1];
-          return { attached: { id: added.id, name: added.name, type: added.type, size: added.size }, task: describeTask(task, dir, t0) };
+          return { attached: added.link ? { id: added.id, name: added.name, link: added.link } : { id: added.id, name: added.name, type: added.type, size: added.size }, task: describeTask(task, dir, t0) };
         }),
     );
 

@@ -1095,22 +1095,16 @@ export async function removeAttachment(id: string, aid: string, name: string) {
   }
 }
 
-const hasDrives = (s: State) => !!s.cloud.google || !!s.cloud.microsoft;
-/** Files can be attached here: uploaded (R2), or picked from a drive (links need no R2). */
-export const canAttach = (s: State) => s.attachmentsOn || hasDrives(s);
-
-/** "Attach files": the computer's file picker, or with drives set up, a menu of where from. */
+/** "Attach files": a menu of where from (this device, drives that are set up, or a pasted link, which always works). */
 export function attachMenu(id: string, anchor: HTMLElement | Pop['rect']) {
-  if (!hasDrives(S())) { pickAttachments(id); return; }
   const p = { type: 'attach' as const, mode: 'task' as const, id };
   if (anchor instanceof HTMLElement) openPop(p, anchor);
   else set({ pop: { ...p, rect: anchor, returnSel: `.drawer[data-id="${id}"]` } });
 }
 
-/** ⇧A: opens the task (if needed) and its file picker (or, without uploads here, the menu of drives). */
+/** ⇧A: opens the task (if needed) and its file picker (or, without uploads here, the attach menu). */
 export function pickAttachments(id: string) {
   const s = S();
-  if (!canAttach(s)) { toast("Attachments aren't set up on this instance."); return; }
   const wasOpen = s.drawer === id;
   if (!wasOpen) openDrawer(id);
   // The picker input is in the drawer; give it a moment to render when the drawer was just opened.
@@ -1119,6 +1113,23 @@ export function pickAttachments(id: string) {
     const a = document.querySelector<HTMLElement>('.drawer [data-act="attach"], .drawer .att-add');
     if (a) attachMenu(id, a);
   }, wasOpen ? 0 : 60);
+}
+
+/** Attaches a pasted link (never fetched; its sharing decides who can open it). False if it didn't work. */
+export async function attachLink(id: string, url: string, name: string) {
+  const taskId = liveId(id);
+  pending.add(taskId);
+  mine.set(taskId, Date.now());
+  try {
+    const { task } = await clientFor(taskId).post<{ task: Task }>('/attachments/link', { url, ...(name.trim() ? { name: name.trim() } : {}) });
+    putTask(task);
+    return true;
+  } catch (e) {
+    toastError(e);
+    return false;
+  } finally {
+    pending.delete(taskId);
+  }
 }
 
 /**

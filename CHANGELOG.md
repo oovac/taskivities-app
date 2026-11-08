@@ -12,6 +12,7 @@ section into the new version's; `git push --follow-tags` publishes it.
 ### Added
 
 - **Attachments:** attach files from Google Drive or OneDrive / SharePoint, picked in their own file pickers. Attach a copy, kept here like any other file, or a link that always opens the latest version for people the file is shared with. Links work even on instances without file storage. Admins turn each drive on separately: see "Files from Google Drive and OneDrive" in the README (a Google API key and project number, or file permissions and a new redirect on the Microsoft app registration, then `MS_FILES=on`).
+- **Attachments:** paste a link to attach any https address, such as a Google Doc, OneDrive file, Dropbox file or Figma design, on every instance, with no setup and even without file storage. It's named from the address unless you give it a name, and shows which site it's on. AI assistants can attach a link too, instead of downloading a copy.
 
 ## v0.9.0 (2026-11-08)
 

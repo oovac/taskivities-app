@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { appName } from '../../shared/types';
+import { linkSite, linkWhere } from '../../shared/links';
 import { attachmentBlob, isFeed, remoteTaskUrl, sourceOf } from '../sources';
 import { EFFORT_TYPES, effortFor, effortLabel, storedEffortLabel } from '../../shared/effort';
 import { addDays, fmt, rel } from '../../shared/dates';
@@ -7,7 +8,7 @@ import { blockedUntil, expectedOn, holdingUp, openBlockers } from '../../shared/
 import { isLate, shownOn } from '../../shared/rules';
 import { describe } from '../../shared/repeat';
 import { CHECK_TEXT_MAX, COMMENT_MAX, PRIORITIES, type AttachmentInfo, type ChecklistItem, type Priority, type Task, type TaskEvent, type TaskLink } from '../../shared/types';
-import { setFollowing, addChecklistItems, addComment, attachmentUrl, closeDrawer, pickAttachments, removeAttachment, uploadFiles, attachMenu, canAttach, editChecklist, editNotes, removeChecklistItem, renameChecklistItem, toggleChecklistItem, loadEvents, moveTasks, openDrawer, openPop, patchTask, setBlocker, skipTask, toggleDone } from '../actions';
+import { setFollowing, addChecklistItems, addComment, attachmentUrl, closeDrawer, removeAttachment, uploadFiles, attachMenu, editChecklist, editNotes, removeChecklistItem, renameChecklistItem, toggleChecklistItem, loadEvents, moveTasks, openDrawer, openPop, patchTask, setBlocker, skipTask, toggleDone } from '../actions';
 import { set, useStore, type State } from '../store';
 import { displayName, firstName, lateDays, linksOf, stamp } from '../util';
 import { openMove, LateBadge } from './rows';
@@ -36,7 +37,7 @@ export function Drawer() {
   const showNotes = !!(t.notes || notes || s.notesOpen);
   const showList = t.checklist.length > 0 || s.checklistOpen;
   const uploading = s.uploads.filter((u) => u.taskId === t.id);
-  const showFiles = canAttach(s) && (t.attachments.length > 0 || uploading.length > 0);
+  const showFiles = t.attachments.length > 0 || uploading.length > 0;
   const showDeps = (t.blockedBy?.length ?? 0) + (t.blocks?.length ?? 0) > 0;
 
   return (
@@ -134,14 +135,14 @@ export function Drawer() {
             <input id="attach-input" type="file" multiple hidden tabIndex={-1} aria-hidden="true"
               onChange={(e) => { const f = [...(e.target.files ?? [])]; e.target.value = ''; if (f.length) void uploadFiles(t.id, f); }} />
           )}
-          {(!showNotes || !showList || !showDeps || (canAttach(s) && !showFiles)) && (
+          {(!showNotes || !showList || !showDeps || !showFiles) && (
             // Empty notes / no checklist: just small buttons, so the history sits higher up.
             <div className="dr-adds">
               {!showNotes && <button className="notes-add" data-act="notes" title="Add notes  (⇧N)" onClick={() => editNotes(t.id)}>{I.plus(13)} Add notes</button>}
               {!showList && <button className="notes-add" data-act="checklist" title="Add a checklist  (⇧C)" onClick={() => editChecklist(t.id)}>{I.check(12)} Add checklist</button>}
               {!showDeps && <button className="notes-add" data-act="deps" title="Tasks this one waits on, or that wait on it"
                 onClick={(e) => openPop({ type: 'deps', mode: 'task', id: t.id, side: 'blockedBy' }, e.currentTarget)}>{I.link(13)} Add dependency</button>}
-              {canAttach(s) && !showFiles && <button className="notes-add" data-act="attach" title={s.attachmentsOn ? 'Attach files  (⇧A) · or drop / paste them here' : 'Attach links to files  (⇧A)'} onClick={(e) => attachMenu(t.id, e.currentTarget)}>{I.clip(13)} Attach files</button>}
+              {!showFiles && <button className="notes-add" data-act="attach" title={s.attachmentsOn ? 'Attach files or links  (⇧A) · or drop / paste files here' : 'Attach links to files  (⇧A)'} onClick={(e) => attachMenu(t.id, e.currentTarget)}>{I.clip(13)} {s.attachmentsOn ? 'Attach files' : 'Attach a link'}</button>}
             </div>
           )}
           <div className="lbl">Comments &amp; history <span className="muted">· permanently recorded</span></div>
@@ -494,11 +495,11 @@ function Attachments({ taskId, files, uploading, s }: { taskId: string; files: A
   const images = files.filter((f) => isImage(f.type) && !f.link);
   const others = files.filter((f) => !isImage(f.type) || f.link);
   const canRemove = (f: AttachmentInfo) => f.by === s.me!.id || s.me!.role === 'admin';
-  const meta = (f: AttachmentInfo) => `${f.link ? `Link · ${DRIVES[f.from ?? ''] ?? 'Online'}` : `${fileSize(f.size)}${f.from ? ` · from ${DRIVES[f.from] ?? ''}` : ''}`} · ${firstName(s.users[f.by])} · ${stamp(f.at, s.today)}`;
+  const meta = (f: AttachmentInfo) => `${f.link ? `Link · ${linkWhere(f.link)}` : `${fileSize(f.size)}${f.from ? ` · from ${DRIVES[f.from] ?? ''}` : ''}`} · ${firstName(s.users[f.by])} · ${stamp(f.at, s.today)}`;
   return (
     <div className="att">
       <div className="lbl">Attachments {files.length > 0 && <span className="muted">· {files.length}</span>}
-        <button className="att-add" title={s.attachmentsOn ? 'Attach files  (⇧A) · or drop / paste them here' : 'Attach links to files  (⇧A)'} onClick={(e) => attachMenu(taskId, e.currentTarget)}>{I.plus(12)} Add</button>
+        <button className="att-add" title={s.attachmentsOn ? 'Attach files or links  (⇧A) · or drop / paste files here' : 'Attach links to files  (⇧A)'} onClick={(e) => attachMenu(taskId, e.currentTarget)}>{I.plus(12)} Add</button>
       </div>
       {images.length > 0 && (
         <div className="att-grid">
@@ -516,7 +517,7 @@ function Attachments({ taskId, files, uploading, s }: { taskId: string; files: A
             <li key={f.id}>
               <span className="att-ic">{f.link ? I.link(14) : I.clip(14)}</span>
               {f.link
-                ? <a href={f.link} className="att-n" target="_blank" rel="noopener noreferrer" title={`Open in ${DRIVES[f.from ?? ''] ?? 'a new tab'}`}>{f.name}</a>
+                ? <a href={f.link} className="att-n" target="_blank" rel="noopener noreferrer" title={`Open in ${linkSite(f.link) ?? 'a new tab'} · ${f.link}`}>{f.name}</a>
                 : <FileLink taskId={taskId} f={f} className="att-n" download={!OPENS.test(f.type)} />}
               <span className="att-m">{meta(f)}</span>
               {!f.link && <FileLink taskId={taskId} f={f} className="att-dl" download title="Download">{I.download(13)}</FileLink>}

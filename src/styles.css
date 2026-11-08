@@ -813,6 +813,11 @@ a.att-n:hover{color:var(--accent);text-decoration:underline}
 .att-bar.busy i{width:35%!important;animation:att-busy 1.2s ease-in-out infinite}
 @keyframes att-busy{from{transform:translateX(-100%)}to{transform:translateX(290%)}}
 @media (prefers-reduced-motion:reduce){.att-bar.busy i{animation:none;width:100%!important;opacity:.5}}
+/* Attach a link (src/components/Popover.tsx) */
+.link-form{padding-bottom:4px}
+.link-form .pin{display:block}
+.link-acts{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:2px 2px 4px}
+.link-acts .muted-s{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* Microsoft's file picker (src/cloudFiles.ts), in a frame over the app */
 .ms-picker{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.45);display:grid;place-items:center;padding:48px 16px 16px}
 .ms-picker-box{position:relative;width:min(1080px,100%);height:min(680px,100%);background:#fff;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.35)}

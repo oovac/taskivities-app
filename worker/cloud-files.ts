@@ -1,4 +1,4 @@
-// Files picked from Google Drive or OneDrive / SharePoint, attached as a copy or as a link.
+// Files picked from Google Drive or OneDrive / SharePoint, attached as a copy or as a link; and pasted links.
 //
 // The person picks files in the provider's own picker, in the browser, signed in to their own account there. The
 // browser sends us the picked ids and the short-lived access token the picker used. We use it once, here, to ask the
@@ -15,6 +15,7 @@ import type { CloudPickers, CloudProvider, Task } from '../shared/types';
 import { type AppEnv, type Env, type Viewer, HttpError, bad, eventStmt, mapTask, nowIso, uid } from './lib';
 import { addAttachmentBytes, cleanName, readCapped, taskWithRoom, touch, typeFromName } from './attachments';
 import { loadTask, loadVisibleTask } from './tasks';
+import { LINK_TYPE, nameForLink } from '../shared/links';
 
 /** What the browser needs to open each picker. All of it is public (the API key is limited to this site in Google Cloud). */
 export function cloudPickers(env: Env): CloudPickers {
@@ -95,7 +96,9 @@ async function describeMicrosoft(id: string, driveId: string, token: string): Pr
   return { name, type, size: f.size ?? 0, link, download };
 }
 
-async function addLink(env: Env, v: Viewer, taskId: string, provider: CloudProvider, f: CloudFile, via: string | null): Promise<Task> {
+/** Stores a link (no bytes; key ''). provider is set for files picked from a drive, null for pasted links. */
+export async function addLinkAttachment(env: Env, v: Viewer, taskId: string, f: { name: string; link: string; type: string; size: number },
+  provider: CloudProvider | null, via: string | null): Promise<Task> {
   const db = env.DB;
   const t = await taskWithRoom(db, v, taskId);
   const now = nowIso();
@@ -109,6 +112,22 @@ async function addLink(env: Env, v: Viewer, taskId: string, provider: CloudProvi
   return mapTask((await loadTask(db, t.id))!);
 }
 
+export const LINK_MAX = 2000;
+
+/**
+ * Attaches a pasted link, on any instance (no drive or bucket needed). It's never fetched: the name is the one given,
+ * or one worked out from the address (shared/links.ts). Only https addresses.
+ */
+export function attachPastedLink(env: Env, v: Viewer, taskId: string, rawUrl: unknown, rawName: unknown, via: string | null = null) {
+  const url = typeof rawUrl === 'string' ? rawUrl.trim() : '';
+  if (!url) throw bad('Paste a link.');
+  if (url.length > LINK_MAX) throw bad('That link is too long.');
+  const link = safeLink(/^[a-z][a-z0-9+.-]*:/i.test(url) ? url : `https://${url}`);
+  if (!link || !link.startsWith('https://')) throw bad('Only https links can be attached.');
+  const name = typeof rawName === 'string' && rawName.trim() ? rawName.trim() : nameForLink(link);
+  return addLinkAttachment(env, v, taskId, { name, link, type: LINK_TYPE, size: 0 }, null, via);
+}
+
 export interface CloudPick { provider: CloudProvider; token: string; mode: 'copy' | 'link'; files: { id: string; driveId?: string }[] }
 
 /** Attaches picked files, one after another. Stops at the first that fails, keeping the ones before it. */
@@ -119,7 +138,7 @@ export async function attachFromCloud(env: Env, v: Viewer, taskId: string, pick:
   for (const p of pick.files) {
     const f = pick.provider === 'google' ? await describeGoogle(p.id, pick.token) : await describeMicrosoft(p.id, p.driveId!, pick.token);
     if (pick.mode === 'link') {
-      task = await addLink(env, v, taskId, pick.provider, f, via);
+      task = await addLinkAttachment(env, v, taskId, f, pick.provider, via);
       continue;
     }
     if (!f.download) throw bad(`“${f.name}” can't be copied (it's a folder or a form). Attach it as a link instead.`);
@@ -152,6 +171,12 @@ function parsePick(b: unknown): CloudPick {
 
 // ---------- routes: /api/tasks/:id/attachments/cloud (and /v1) ----------
 export const cloudFileRoutes = new Hono<AppEnv>();
+
+/** A pasted link: { url, name? }. */
+cloudFileRoutes.post('/:id/attachments/link', async (c) => {
+  const b = ((await c.req.json().catch(() => null)) ?? {}) as { url?: unknown; name?: unknown };
+  return c.json({ task: await attachPastedLink(c.env, c.get('viewer'), c.req.param('id'), b.url, b.name) });
+});
 
 cloudFileRoutes.post('/:id/attachments/cloud', async (c) => {
   const pick = parsePick(await c.req.json().catch(() => null));

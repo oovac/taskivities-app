@@ -6,7 +6,7 @@ import { isAdmin, onProject } from '../../shared/rules';
 import { PRIORITIES, appName, type NotifyPrefs, type Priority, type Project, type Task, type User } from '../../shared/types';
 import {
   assignable, closePop, defaultDraftDate, moveTasks, openConnect, openPop, viewProject, disableUser, enableUser, setPage, setPriority, setProject, setRepeat, signOut, switchablePeople, transfer,
-  updateUser, viewPerson, editNotes, editChecklist, pickAttachments, attachMenu, attachFromDrive, canAttach, archiveTask, setFollowing, setEffort, currentSel, setMultiPick, viewMulti, setBlocker,
+  updateUser, viewPerson, editNotes, editChecklist, attachMenu, attachFromDrive, attachLink, archiveTask, setFollowing, setEffort, currentSel, setMultiPick, viewMulti, setBlocker,
 } from '../actions';
 import { focusLater } from '../focus';
 import { EFFORT_TYPES, effortFor, effortFromInput, fmtTime } from '../../shared/effort';
@@ -21,6 +21,7 @@ import { openProjEdit } from '../pages/TeamPage';
 import { Avatar, Dot, I, PrioIcon, ProjBadge } from './ui';
 import { InboxPop } from './InboxPop';
 import { preloadPickers } from '../cloudFiles';
+import { linkWhere, nameForLink } from '../../shared/links';
 
 const setDraft = (p: Partial<State['draft']>) => set((s) => ({ draft: { ...s.draft, ...p } }));
 const updatePop = (p: Partial<Pop>) => set((s) => (s.pop ? { pop: { ...s.pop, ...p } } : {}));
@@ -947,19 +948,23 @@ function PagesPop({ s }: { s: State }) {
   );
 }
 
-/** Where to attach files from: this device, or a drive (as a copy kept here, or a link to the file there). */
+/** Where to attach files from: this device, a drive (as a copy kept here, or a link to the file there), or a pasted link. */
 function AttachPop({ p, s }: { p: Pop; s: State }) {
   const t = s.tasks[p.id!];
-  useEffect(() => { preloadPickers(s.cloud); }, [s.cloud]);
-  if (!t) return null;
   const copies = s.attachmentsOn;
   const drives = ([['google', 'Google Drive'], ['microsoft', 'OneDrive & SharePoint']] as const).filter(([k]) => s.cloud[k]);
+  // Nothing else to choose from: straight to the link box.
+  const [pasting, setPasting] = useState(!copies && !drives.length);
+  useEffect(() => { preloadPickers(s.cloud); }, [s.cloud]);
+  if (!t) return null;
+  if (pasting) return <LinkForm taskId={t.id} />;
   // Straight from the click: the drive's sign-in opens in a popup, which browsers only allow from a click.
   const pick = (k: 'google' | 'microsoft', mode: 'copy' | 'link') => { closePop(true); void attachFromDrive(t.id, k, mode); };
   return (
     <>
       {copies && <button className="opt" data-act="attach-device" onClick={() => { closePop(false); document.querySelector<HTMLInputElement>('#attach-input')?.click(); }}>
         {I.upload(15)}From this device<span className="r">⇧A</span></button>}
+      <button className="opt" data-act="attach-paste" onClick={() => setPasting(true)}>{I.link(15)}Paste a link<span className="r">any https address</span></button>
       {drives.map(([k, name]) => (
         <div key={k}>
           <div className="pop-h">{name}</div>
@@ -969,10 +974,41 @@ function AttachPop({ p, s }: { p: Pop; s: State }) {
       ))}
       <div className="pop-foot">
         {copies
-          ? 'A copy is kept here, so everyone on the project can open it. A link opens the file itself, for people it\u2019s shared with.'
-          : 'A link opens the file itself, for people it\u2019s shared with.'}
+          ? 'A copy is kept here, so everyone on the project can open it. A link opens the file where it lives, for people it\u2019s shared with.'
+          : 'A link opens the file where it lives, for people it\u2019s shared with.'}
       </div>
     </>
+  );
+}
+
+/** Paste a link, and optionally name it (otherwise the name comes from the address). */
+function LinkForm({ taskId }: { taskId: string }) {
+  const [url, setUrl] = useState('');
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const full = url.trim() && !/^[a-z][a-z0-9+.-]*:/i.test(url.trim()) ? `https://${url.trim()}` : url.trim();
+  const ok = /^https:\/\/[^\s/]+\.[^\s]+/i.test(full);
+  const urlRef = useRef<HTMLInputElement>(null);
+  // Opened from the menu (not on open), so the popover's own focusing has already happened: focus the link box here.
+  useEffect(() => { if (!isTouch()) urlRef.current?.focus({ preventScroll: true }); }, []);
+  const save = async () => {
+    if (!ok || busy) return;
+    setBusy(true);
+    if (await attachLink(taskId, full, name)) closePop(true);
+    else setBusy(false);
+  };
+  return (
+    <form className="link-form" onSubmit={(e) => { e.preventDefault(); void save(); }}>
+      <div className="pop-h">Attach a link</div>
+      <input className="pin" id="pop-q" ref={urlRef} name="url" value={url} placeholder="https://docs.google.com/…" autoComplete="off" inputMode="url" aria-label="Link"
+        onChange={(e) => setUrl(e.target.value)} />
+      <input className="pin" name="name" value={name} placeholder={ok ? nameForLink(full) : 'Name (optional)'} autoComplete="off" aria-label="Name (optional)"
+        maxLength={180} onChange={(e) => setName(e.target.value)} />
+      <div className="link-acts">
+        <span className="muted-s">{ok ? `Link · ${linkWhere(full)}` : url.trim() ? 'Use an https:// address.' : 'Google Docs, OneDrive, Dropbox, Figma, any https link.'}</span>
+        <button className="btn-primary sm" type="submit" data-act="link-save" disabled={!ok || busy}>{busy ? 'Attaching…' : 'Attach'}</button>
+      </div>
+    </form>
   );
 }
 
@@ -983,9 +1019,7 @@ function TaskMenu({ p, s }: { p: Pop; s: State }) {
     <>
       <button className="opt" data-act="menu-notes" onClick={() => { closePop(false); editNotes(t.id); }}>{I.list(15)}Notes<span className="r">⇧N</span></button>
       <button className="opt" data-act="menu-checklist" onClick={() => { closePop(false); editChecklist(t.id); }}>{I.check(14)}Checklist<span className="r">⇧C</span></button>
-      {canAttach(s) && <button className="opt" data-act="menu-attach" onClick={() => {
-        if (s.cloud.google || s.cloud.microsoft) attachMenu(t.id, p.rect); else { closePop(false); pickAttachments(t.id); }
-      }}>{I.clip(15)}Attach files…<span className="r">⇧A</span></button>}
+      <button className="opt" data-act="menu-attach" onClick={() => attachMenu(t.id, p.rect)}>{I.clip(15)}Attach…<span className="r">⇧A</span></button>
       <button className="opt" data-act="menu-deps" onClick={(e) => {
         const a = document.querySelector<HTMLElement>('.drawer [data-act="task-menu"]') ?? e.currentTarget;
         openPop({ type: 'deps', mode: 'task', id: t.id, side: 'blockedBy' }, a);
