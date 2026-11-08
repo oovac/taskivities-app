@@ -16,6 +16,15 @@ MS_CLIENT_ID=
 MS_CLIENT_SECRET=
 MS_TENANT_ID=
 
+# Optional: attach files from Google Drive (see the README). Needs GOOGLE_CLIENT_ID, with http://localhost:5173 as an
+# Authorized JavaScript origin on it. The API key is the Picker's; the app id is the Cloud project's number.
+GOOGLE_PICKER_API_KEY=
+GOOGLE_APP_ID=
+
+# Optional: attach files from OneDrive / SharePoint (see the README). Needs MS_CLIENT_ID and MS_TENANT_ID, and the SPA
+# redirect URI http://localhost:5173/picker-signin.html on the app registration.
+MS_FILES=
+
 # Optional: notifications (Web Push). Make a pair for local use with:  npm run -s push-keys >> .dev.vars
 # (Deployed instances get their own automatically on the first `npm run deploy`.)
 VAPID_PUBLIC_KEY=

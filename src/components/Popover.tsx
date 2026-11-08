@@ -6,7 +6,7 @@ import { isAdmin, onProject } from '../../shared/rules';
 import { PRIORITIES, appName, type NotifyPrefs, type Priority, type Project, type Task, type User } from '../../shared/types';
 import {
   assignable, closePop, defaultDraftDate, moveTasks, openConnect, openPop, viewProject, disableUser, enableUser, setPage, setPriority, setProject, setRepeat, signOut, switchablePeople, transfer,
-  updateUser, viewPerson, editNotes, editChecklist, pickAttachments, archiveTask, setFollowing, setEffort, currentSel, setMultiPick, viewMulti, setBlocker,
+  updateUser, viewPerson, editNotes, editChecklist, pickAttachments, attachMenu, attachFromDrive, canAttach, archiveTask, setFollowing, setEffort, currentSel, setMultiPick, viewMulti, setBlocker,
 } from '../actions';
 import { focusLater } from '../focus';
 import { EFFORT_TYPES, effortFor, effortFromInput, fmtTime } from '../../shared/effort';
@@ -20,6 +20,7 @@ import { projectDayData } from '../pages/ProjectsPage';
 import { openProjEdit } from '../pages/TeamPage';
 import { Avatar, Dot, I, PrioIcon, ProjBadge } from './ui';
 import { InboxPop } from './InboxPop';
+import { preloadPickers } from '../cloudFiles';
 
 const setDraft = (p: Partial<State['draft']>) => set((s) => ({ draft: { ...s.draft, ...p } }));
 const updatePop = (p: Partial<Pop>) => set((s) => (s.pop ? { pop: { ...s.pop, ...p } } : {}));
@@ -90,6 +91,7 @@ function Content({ p, s }: { p: Pop; s: State }) {
     case 'inbox': return <InboxPop s={s} />;
     case 'followers': return <FollowersPop p={p} s={s} />;
     case 'deps': return <DepsPop p={p} s={s} />;
+    case 'attach': return <AttachPop p={p} s={s} />;
     case 'account': return <AccountPop s={s} />;
     case 'taskmenu': return <TaskMenu p={p} s={s} />;
     case 'repeat': return <RepeatPop p={p} s={s} />;
@@ -945,6 +947,35 @@ function PagesPop({ s }: { s: State }) {
   );
 }
 
+/** Where to attach files from: this device, or a drive (as a copy kept here, or a link to the file there). */
+function AttachPop({ p, s }: { p: Pop; s: State }) {
+  const t = s.tasks[p.id!];
+  useEffect(() => { preloadPickers(s.cloud); }, [s.cloud]);
+  if (!t) return null;
+  const copies = s.attachmentsOn;
+  const drives = ([['google', 'Google Drive'], ['microsoft', 'OneDrive & SharePoint']] as const).filter(([k]) => s.cloud[k]);
+  // Straight from the click: the drive's sign-in opens in a popup, which browsers only allow from a click.
+  const pick = (k: 'google' | 'microsoft', mode: 'copy' | 'link') => { closePop(true); void attachFromDrive(t.id, k, mode); };
+  return (
+    <>
+      {copies && <button className="opt" data-act="attach-device" onClick={() => { closePop(false); document.querySelector<HTMLInputElement>('#attach-input')?.click(); }}>
+        {I.upload(15)}From this device<span className="r">⇧A</span></button>}
+      {drives.map(([k, name]) => (
+        <div key={k}>
+          <div className="pop-h">{name}</div>
+          {copies && <button className="opt" data-act={`attach-${k}-copy`} onClick={() => pick(k, 'copy')}>{I.copy(15)}Attach a copy<span className="r">stays as it is</span></button>}
+          <button className="opt" data-act={`attach-${k}-link`} onClick={() => pick(k, 'link')}>{I.link(15)}Attach a link<span className="r">always current</span></button>
+        </div>
+      ))}
+      <div className="pop-foot">
+        {copies
+          ? 'A copy is kept here, so everyone on the project can open it. A link opens the file itself, for people it\u2019s shared with.'
+          : 'A link opens the file itself, for people it\u2019s shared with.'}
+      </div>
+    </>
+  );
+}
+
 function TaskMenu({ p, s }: { p: Pop; s: State }) {
   const t = s.tasks[p.id!];
   if (!t) return null;
@@ -952,7 +983,9 @@ function TaskMenu({ p, s }: { p: Pop; s: State }) {
     <>
       <button className="opt" data-act="menu-notes" onClick={() => { closePop(false); editNotes(t.id); }}>{I.list(15)}Notes<span className="r">⇧N</span></button>
       <button className="opt" data-act="menu-checklist" onClick={() => { closePop(false); editChecklist(t.id); }}>{I.check(14)}Checklist<span className="r">⇧C</span></button>
-      {s.attachmentsOn && <button className="opt" data-act="menu-attach" onClick={() => { closePop(false); pickAttachments(t.id); }}>{I.clip(15)}Attach files<span className="r">⇧A</span></button>}
+      {canAttach(s) && <button className="opt" data-act="menu-attach" onClick={() => {
+        if (s.cloud.google || s.cloud.microsoft) attachMenu(t.id, p.rect); else { closePop(false); pickAttachments(t.id); }
+      }}>{I.clip(15)}Attach files…<span className="r">⇧A</span></button>}
       <button className="opt" data-act="menu-deps" onClick={(e) => {
         const a = document.querySelector<HTMLElement>('.drawer [data-act="task-menu"]') ?? e.currentTarget;
         openPop({ type: 'deps', mode: 'task', id: t.id, side: 'blockedBy' }, a);

@@ -121,7 +121,7 @@ function describeTask(t: Task, dir: Directory, t0: string) {
     ...(t.series?.active ? { repeats: describeRepeat(t.series.rule, t.series.anchor) } : {}),
     ...(t.comments ? { comments: t.comments } : {}),
     ...(t.followers.some((f) => f !== t.assigneeId) ? { followers: t.followers.filter((f) => f !== t.assigneeId).map((f) => userLabel(dir, f)) } : {}),
-    ...(t.attachments.length ? { attachments: t.attachments.map((a) => ({ id: a.id, name: a.name, type: a.type, size: a.size })) } : {}),
+    ...(t.attachments.length ? { attachments: t.attachments.map((a) => (a.link ? { id: a.id, name: a.name, type: a.type, link: a.link } : { id: a.id, name: a.name, type: a.type, size: a.size })) } : {}),
     ...(t.checklist.length ? { checklist: t.checklist.map((c) => ({ id: c.id, item: c.text, done: c.done })) } : {}),
     ...depsOf(t, t0),
   };
@@ -441,7 +441,7 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
         title: 'Read an attached file',
         description:
           'Read a text file attached to a task (plain text, Markdown, CSV, JSON and similar, up to 200 KB). ' +
-          'Tasks list their files under "attachments"; refer to one by id or exact name. Other files (images, PDFs…) can only be listed.',
+          'Tasks list their files under "attachments"; refer to one by id or exact name. Other files (images, PDFs…) and linked files (with a `link`) can only be listed.',
         inputSchema: { id: z.string().describe('Task id from list_tasks.'), file: z.string().describe('Attachment id or exact file name.') },
         annotations: { readOnlyHint: true },
       },
@@ -450,6 +450,7 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
           const t = mapTask(await loadVisibleTask(this.env.DB, v, args.id));
           const a = t.attachments.find((x) => x.id === args.file) ?? t.attachments.find((x) => x.name.toLowerCase() === args.file.trim().toLowerCase());
           if (!a) throw bad(`No file "${args.file}" on this task.`);
+          if (a.link) return { name: a.name, link: a.link, note: 'This is a link to a file in Google Drive or OneDrive, not a copy, so its contents can\'t be read here.' };
           const texty = /^text\//.test(a.type) || /(json|csv|xml|markdown|yaml|x-sh|javascript|typescript)/.test(a.type) || /\.(md|txt|csv|json|ya?ml|log|tsv)$/i.test(a.name);
           if (!texty) return { name: a.name, type: a.type, size: a.size, note: "This isn't a text file, so its contents can't be read here." };
           if (a.size > 200 * 1024) return { name: a.name, size: a.size, note: 'Too large to read here (over 200 KB).' };

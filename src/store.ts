@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { SourceInfo } from './sources';
-import type { AppSettings, ArchivedProject, InboxItem, MailboxVia, NotifyPrefs, Priority, Project, Role, Task, TaskEvent, User, WebhookInfo } from '../shared/types';
+import type { AppSettings, ArchivedProject, CloudPickers, InboxItem, MailboxVia, NotifyPrefs, Priority, Project, Role, Task, TaskEvent, User, WebhookInfo } from '../shared/types';
 import type { EffortType } from '../shared/effort';
 import { NORMAL, NOTIFY_DEFAULTS } from '../shared/types';
 import type { PushState } from './push';
@@ -22,7 +22,7 @@ const savedMulti = (): MultiSel => {
 };
 export const BOARD_WEEKS_MAX = 52;
 export type View = 'today' | 'list' | 'board';
-export type PopType = 'move' | 'assign' | 'prio' | 'proj' | 'person' | 'projpick' | 'urole' | 'uproj' | 'udisable' | 'uenable' | 'notify' | 'update' | 'inbox' | 'followers' | 'account' | 'repeat' | 'taskmenu' | 'pages' | 'effort' | 'deps';
+export type PopType = 'move' | 'assign' | 'prio' | 'proj' | 'person' | 'projpick' | 'urole' | 'uproj' | 'udisable' | 'uenable' | 'notify' | 'update' | 'inbox' | 'followers' | 'account' | 'repeat' | 'taskmenu' | 'pages' | 'effort' | 'deps' | 'attach';
 
 export interface Pop {
   type: PopType;
@@ -52,7 +52,11 @@ export interface InboxState {
   error?: boolean;
 }
 
-export interface Upload { id: string; taskId: string; name: string; loaded: number; total: number }
+export interface Upload {
+  id: string; taskId: string; name: string; loaded: number; total: number;
+  /** Shown instead of a percentage when the server does the fetching (files from a drive). */
+  note?: string;
+}
 export interface Toast { id: number; text: string; undo?: () => void; error?: boolean; action?: { label: string; run: () => void } }
 export interface Draft {
   title: string; notes: string; open: boolean; projectId: string | null; dueDate: string | null; assigneeId: string | null; priority: Priority; repeat: Repeat | null;
@@ -112,6 +116,8 @@ export interface State {
   uploads: Upload[];
   /** Attachments are on for this instance (it has an R2 bucket). */
   attachmentsOn: boolean;
+  /** Drives files can be picked from (Google Drive, OneDrive): links work without attachments on, copies don't. */
+  cloud: CloudPickers;
   /** The browser offered to install the app (account menu shows "Install app"). */
   canInstall: boolean;
   /** Notifications: the instance's push key (null = not set up), this device's state, and what I'm notified about. */
@@ -209,6 +215,7 @@ export const useStore = create<State>()(() => ({
   checklistOpen: false,
   uploads: [],
   attachmentsOn: false,
+  cloud: { google: null, microsoft: null },
   canInstall: false,
   pushKey: null,
   pushState: 'unknown',

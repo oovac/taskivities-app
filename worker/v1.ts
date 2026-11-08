@@ -9,6 +9,7 @@ import { Hono } from 'hono';
 import { admin } from './admin';
 import { api } from './api';
 import { attachmentRoutes } from './attachments';
+import { cloudFileRoutes } from './cloud-files';
 import { dependencyRoutes } from './dependencies';
 import { followRoutes } from './followers';
 import { inboxRoutes } from './inbox';
@@ -55,6 +56,7 @@ v1.use('*', async (c, next) => {
 });
 
 v1.route('/v1/admin', admin);
+v1.route('/v1/tasks', cloudFileRoutes);
 v1.route('/v1/tasks', attachmentRoutes);
 v1.route('/v1/tasks', followRoutes);
 v1.route('/v1/tasks', dependencyRoutes);

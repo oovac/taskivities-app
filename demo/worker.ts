@@ -19,8 +19,8 @@ const RESET = 'every 8 hours';
 const DEMO_NAME = 'Taskivities Demo';
 const OWN = 'https://www.taskivities.com/open-source';
 
-/** The app's environment, with the stand-in bucket so attachments are on (and keep nothing). */
-const demoEnv = (env: Env): Env => ({ ...env, FILES: demoFiles(env) });
+/** The app's environment, with the stand-in bucket so attachments are on (and keep nothing), and no drives to pick files from. */
+const demoEnv = (env: Env): Env => ({ ...env, FILES: demoFiles(env), GOOGLE_PICKER_API_KEY: undefined, MS_FILES: undefined });
 
 /** AI assistants' sessions get the same stand-in bucket. */
 export class TaskivitiesMCP extends AppMCP {
@@ -128,6 +128,8 @@ export default {
     if (method === 'PUT' && /^\/(api|v1)\/admin\/settings\/(logo|icon|wordmark|name)$/.test(path))
       return json({ error: 'Changing the logo, name or app icon is turned off in the demo. On your own instance, admins change them here.' }, 403);
 
+    if (method === 'POST' && /^\/(api|v1)\/tasks\/[^/]+\/attachments\/cloud$/.test(path))
+      return json({ error: 'Attaching from Google Drive or OneDrive is turned off in the demo. On your own instance, admins can set it up.' }, 403);
     let request = req;
     if (method === 'POST' && (/^\/(api|v1)\/tasks\/[^/]+\/attachments$/.test(path) || /^\/upload\/[^/]+$/.test(path))) request = await demoUpload(req);
 

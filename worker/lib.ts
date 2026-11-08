@@ -29,6 +29,11 @@ export interface Env {
   UPDATE_REPO?: string;
   /** Optional: key for encrypting stored invite-mailbox tokens. Defaults to one derived from GOOGLE_CLIENT_SECRET (Gmail) or MS_CLIENT_SECRET (Outlook). */
   TOKEN_KEY?: string;
+  /** Google Drive files (worker/cloud-files.ts): the Picker's API key and the Cloud project number. With GOOGLE_CLIENT_ID, all three turn it on. */
+  GOOGLE_PICKER_API_KEY?: string;
+  GOOGLE_APP_ID?: string;
+  /** OneDrive / SharePoint files: "on" once the Entra app has a SPA redirect and file permissions (README). Needs MS_CLIENT_ID and MS_TENANT_ID. */
+  MS_FILES?: string;
   /** Attachments (R2). Missing on instances without a bucket: attachments are then off. */
   FILES?: R2Bucket;
   DEV_LOGIN?: string;
@@ -120,7 +125,7 @@ export const TASK_COLS =
   "(SELECT COUNT(*) FROM task_events e WHERE e.task_id = tasks.id AND e.type = 'comment') AS comment_count, " +
   "(SELECT json_group_array(json_object('id', c.id, 'text', c.text, 'done', c.done)) " +
   'FROM (SELECT id, text, done FROM checklist_items WHERE task_id = tasks.id ORDER BY position, created_at) c) AS checklist_json, ' +
-  "(SELECT json_group_array(json_object('id', a.id, 'name', a.name, 'size', a.size, 'type', a.type, 'by', a.uploaded_by, 'at', a.uploaded_at)) " +
+  "(SELECT json_group_array(json_object('id', a.id, 'name', a.name, 'size', a.size, 'type', a.type, 'by', a.uploaded_by, 'at', a.uploaded_at, 'link', a.url, 'from', a.provider)) " +
   'FROM (SELECT * FROM attachments WHERE task_id = tasks.id AND removed_at IS NULL ORDER BY uploaded_at) a) AS attachments_json, ' +
   '(SELECT json_group_array(json_array(f.user_id, f.following)) FROM (SELECT * FROM task_followers WHERE task_id = tasks.id ORDER BY at) f) AS followers_json, ' +
   // Dependencies (migrations/0019): [id, open, due] of each linked task, leaving out archived tasks and archived projects'.

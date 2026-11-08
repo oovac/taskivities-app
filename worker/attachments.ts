@@ -10,6 +10,8 @@ import { loadEditableTask, loadTask, loadVisibleTask } from './tasks';
 
 interface AttachmentRow {
   id: string; task_id: string; key: string; name: string; size: number; type: string; uploaded_by: string; uploaded_at: string;
+  /** Linked files (worker/cloud-files.ts): no bytes here, key is ''. */
+  url: string | null; provider: string | null;
 }
 
 /** Shown in the browser (with a sandboxing CSP); everything else is a download. SVG and HTML are deliberately not here. */
@@ -21,7 +23,7 @@ const bucket = (env: Env) => {
 };
 
 /** A safe file name: no paths or control characters, and not too long. */
-function cleanName(raw: string | undefined) {
+export function cleanName(raw: string | undefined) {
   let name = '';
   try { name = decodeURIComponent(raw ?? ''); } catch { name = raw ?? ''; }
   name = name.split(/[\\/]/).pop()!.replace(/[\u0000-\u001f\u007f"]/g, '').replace(/\s+/g, ' ').trim();
@@ -39,19 +41,25 @@ const cleanType = (t: string | undefined) => {
   return /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(v) ? v : 'application/octet-stream';
 };
 
-const touch = (db: D1Database, taskId: string, now: string) => [
+export const touch = (db: D1Database, taskId: string, now: string) => [
   bumpVersion(db),
   db.prepare(`UPDATE tasks SET updated_at = ?, version = ${CURRENT_VERSION} WHERE id = ?`).bind(now, taskId),
 ];
 
-export async function addAttachment(env: Env, v: Viewer, taskId: string, body: ReadableStream | null, size: number, rawName: string | undefined, rawType: string | undefined, via: string | null = null): Promise<Task> {
-  const files = bucket(env);
-  const db = env.DB;
+/** The task, if it has room for one more file (copies and links count alike). */
+export async function taskWithRoom(db: D1Database, v: Viewer, taskId: string) {
   const t = await loadEditableTask(db, v, taskId);
-  if (!body || !Number.isFinite(size) || size <= 0) throw bad('That file is empty.');
-  if (size > ATTACH_MAX_BYTES) throw new HttpError(400, `Files can be at most ${ATTACH_MAX_BYTES / 1024 / 1024} MB.`);
   const { n } = (await db.prepare('SELECT COUNT(*) AS n FROM attachments WHERE task_id = ? AND removed_at IS NULL').bind(t.id).first<{ n: number }>())!;
   if (n >= ATTACH_PER_TASK_MAX) throw bad(`A task can have at most ${ATTACH_PER_TASK_MAX} attachments.`);
+  return t;
+}
+
+export async function addAttachment(env: Env, v: Viewer, taskId: string, body: ReadableStream | null, size: number, rawName: string | undefined, rawType: string | undefined, via: string | null = null, provider: string | null = null): Promise<Task> {
+  const files = bucket(env);
+  const db = env.DB;
+  if (!body || !Number.isFinite(size) || size <= 0) throw bad('That file is empty.');
+  if (size > ATTACH_MAX_BYTES) throw new HttpError(400, `Files can be at most ${ATTACH_MAX_BYTES / 1024 / 1024} MB.`);
+  const t = await taskWithRoom(db, v, taskId);
 
   const id = uid();
   const name = cleanName(rawName);
@@ -64,8 +72,8 @@ export async function addAttachment(env: Env, v: Viewer, taskId: string, body: R
   const now = nowIso();
   await db.batch([
     ...touch(db, t.id, now),
-    db.prepare('INSERT INTO attachments (id, task_id, key, name, size, type, uploaded_by, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, t.id, key, name, size, type, v.id, now),
+    db.prepare('INSERT INTO attachments (id, task_id, key, name, size, type, uploaded_by, uploaded_at, provider) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, t.id, key, name, size, type, v.id, now, provider),
     eventStmt(db, { taskId: t.id, actorId: v.id, via, type: 'attached', to: name, at: now }),
   ]);
   return mapTask((await loadTask(db, t.id))!);
@@ -89,13 +97,14 @@ export async function removeAttachment(env: Env, v: Viewer, taskId: string, id: 
     env.DB.prepare('UPDATE attachments SET removed_at = ?, removed_by = ? WHERE id = ?').bind(now, v.id, a.id),
     eventStmt(env.DB, { taskId: t.id, actorId: v.id, via, type: 'detached', to: a.name, at: now }),
   ]);
-  await bucket(env).delete(a.key).catch(() => undefined);
+  if (a.key) await bucket(env).delete(a.key).catch(() => undefined);
   return mapTask((await loadTask(env.DB, t.id))!);
 }
 
 /** The file's bytes, for the API route and for AI assistants (small text files). */
 export async function readAttachment(env: Env, v: Viewer, taskId: string, id: string) {
   const { a } = await loadAttachment(env, v, taskId, id);
+  if (a.url) throw new HttpError(409, `This is a link to a file, not a copy: ${a.url}`);
   const obj = await bucket(env).get(a.key);
   if (!obj) throw notFound('That file is missing from storage.');
   return { a, obj };
@@ -112,8 +121,32 @@ const BY_EXT: Record<string, string> = {
 export const typeFromName = (name: string) => BY_EXT[name.toLowerCase().split('.').pop() ?? ''] ?? 'application/octet-stream';
 
 /** Attaches bytes held in memory (text or decoded data from an assistant). */
-export function addAttachmentBytes(env: Env, v: Viewer, taskId: string, bytes: Uint8Array, name: string, type: string | undefined, via: string | null) {
-  return addAttachment(env, v, taskId, new Blob([bytes]).stream(), bytes.byteLength, encodeURIComponent(name), type || typeFromName(name), via);
+export function addAttachmentBytes(env: Env, v: Viewer, taskId: string, bytes: Uint8Array, name: string, type: string | undefined, via: string | null, provider: string | null = null) {
+  return addAttachment(env, v, taskId, new Blob([bytes]).stream(), bytes.byteLength, encodeURIComponent(name), type || typeFromName(name), via, provider);
+}
+
+/**
+ * Reads a download with a running total, so a server that doesn't say (or lies about) the size can't push past
+ * ATTACH_MAX_BYTES. `what` names it in errors ("That file", "That link").
+ */
+export async function readCapped(res: Response, what = 'That file') {
+  const tooBig = () => bad(`${what} is over ${ATTACH_MAX_BYTES / 1024 / 1024} MB.`);
+  if (Number(res.headers.get('content-length') || 0) > ATTACH_MAX_BYTES) { await res.body?.cancel(); throw tooBig(); }
+  if (!res.body) return new Uint8Array(0);
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  const reader = res.body.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > ATTACH_MAX_BYTES) { await reader.cancel(); throw tooBig(); }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let at = 0;
+  for (const c of chunks) { bytes.set(c, at); at += c.byteLength; }
+  return bytes;
 }
 
 /**
@@ -136,22 +169,7 @@ export async function addAttachmentFromUrl(env: Env, v: Viewer, taskId: string, 
     throw bad("Couldn't download that link.");
   }
   if (!res.ok || !res.body) throw bad(`Couldn't download that link (it answered ${res.status}).`);
-  const claimed = Number(res.headers.get('content-length') || 0);
-  if (claimed > ATTACH_MAX_BYTES) throw bad(`That file is over ${ATTACH_MAX_BYTES / 1024 / 1024} MB.`);
-  // Read it with a running total, so a server that doesn't say (or lies about) the size can't push past the limit.
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  const reader = res.body.getReader();
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > ATTACH_MAX_BYTES) { await reader.cancel(); throw bad(`That file is over ${ATTACH_MAX_BYTES / 1024 / 1024} MB.`); }
-    chunks.push(value);
-  }
-  const bytes = new Uint8Array(total);
-  let at = 0;
-  for (const c of chunks) { bytes.set(c, at); at += c.byteLength; }
+  const bytes = await readCapped(res);
   const fromHeader = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(res.headers.get('content-disposition') ?? '')?.[1];
   const fromPath = decodeURIComponent(url.pathname.split('/').filter(Boolean).pop() ?? '');
   const finalName = name || (fromHeader ? decodeURIComponent(fromHeader) : '') || fromPath || url.hostname;
@@ -175,6 +193,9 @@ attachmentRoutes.delete('/:id/attachments/:aid', async (c) =>
 
 /** Download / view. ?download forces a download even for images. */
 attachmentRoutes.get('/:id/attachments/:aid', async (c) => {
+  // A linked file: send the browser to it (its own sharing decides who can open it).
+  const linked = await loadAttachment(c.env, c.get('viewer'), c.req.param('id'), c.req.param('aid'));
+  if (linked.a.url) return c.redirect(linked.a.url, 302);
   const { a, obj } = await readAttachment(c.env, c.get('viewer'), c.req.param('id'), c.req.param('aid'));
   const inline = INLINE.has(a.type) && c.req.query('download') === undefined;
   const ascii = a.name.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');

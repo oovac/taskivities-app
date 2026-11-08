@@ -32,6 +32,7 @@ export const I = {
   kbd: (s = 17) => <Svg s={s}><rect x="1.5" y="4" width="13" height="8.5" rx="1.8" /><path d="M4 6.6h.01M6.7 6.6h.01M9.3 6.6h.01M12 6.6h.01M4.5 9.9h7" /></Svg>,
   chat: (s = 15) => <Svg s={s}><path d="M3 3.5h10a1.5 1.5 0 0 1 1.5 1.5v5.5A1.5 1.5 0 0 1 13 12H7l-3 2.5V12H3a1.5 1.5 0 0 1-1.5-1.5V5A1.5 1.5 0 0 1 3 3.5z" /></Svg>,
   clip: (s = 15) => <Svg s={s}><path d="M13.2 7.6l-5.3 5.3a3.3 3.3 0 0 1-4.7-4.7l5.6-5.6a2.2 2.2 0 0 1 3.1 3.1L6.4 11.2a1.1 1.1 0 0 1-1.6-1.6L9.9 4.5" /></Svg>,
+  upload: (s = 15) => <Svg s={s}><path d="M8 10.5v-8M4.8 5.7L8 2.5l3.2 3.2M3 13.5h10" /></Svg>,
   download: (s = 15) => <Svg s={s}><path d="M8 2.5v8M4.8 7.6L8 10.8l3.2-3.2M3 13.5h10" /></Svg>,
   phone: (s = 15) => <Svg s={s}><rect x="4.5" y="1.5" width="7" height="13" rx="1.8" /><path d="M7.2 12.2h1.6" /></Svg>,
   mail: (s = 15) => <Svg s={s}><rect x="2" y="3.5" width="12" height="9" rx="1.8" /><path d="M2.5 4.5L8 8.6l5.5-4.1" /></Svg>,

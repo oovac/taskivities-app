@@ -20,7 +20,7 @@ worker/   index.ts (routes + OAuth provider) · auth.ts (Google, Microsoft, Work
           mcp.ts (MCP tools) · dependencies.ts (tasks waiting on tasks) · oauth.ts (/authorize consent page for assistants) · admin.ts (people, projects, settings) · settings.ts (logo) · mailbox.ts + invite-mail.ts (invite emails from Gmail or Outlook) · microsoft.ts · token-crypto.ts · webhooks.ts · lib.ts
 shared/   types, date helpers and rules used by both the Worker and the app
 src/      React app: pages/ (Tasks and Projects: a person's or a project's view; Team: the People & projects page; Settings; Login), components/, actions.ts (all writes), keyboard.ts, focus.ts
-migrations/ (0001 schema, 0002 time zones, 0003 repeating tasks, 0004 settings, 0005 Gmail tokens, 0006 webhooks, 0007 checklists, 0008 attachments, 0009 upload links, 0010 archive, 0011 disabled people, 0012 archived projects, 0013 notifications, 0014 inbox, 0015 followers, 0016 effort, 0017 other instances, 0018 mailboxes, 0019 dependencies)   seed/dev.sql (local sample data)
+migrations/ (0001 schema, 0002 time zones, 0003 repeating tasks, 0004 settings, 0005 Gmail tokens, 0006 webhooks, 0007 checklists, 0008 attachments, 0009 upload links, 0010 archive, 0011 disabled people, 0012 archived projects, 0013 notifications, 0014 inbox, 0015 followers, 0016 effort, 0017 other instances, 0018 mailboxes, 0019 dependencies, 0020 linked files)   seed/dev.sql (local sample data)
 scripts/tenant.mjs (per-instance deploys)   tenants/ (each instance's Cloudflare IDs; only example.env is committed)
 ```
 
@@ -56,6 +56,7 @@ scripts/tenant.mjs (per-instance deploys)   tenants/ (each instance's Cloudflare
   - The instance's key pair is created by the first `npm run deploy` and stored as the secrets `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`. Locally: `npm run -s push-keys >> .dev.vars`. Without keys the menu item is hidden. The morning summary runs on a Cron Trigger every 30 minutes (`wrangler.jsonc`).
 - **Light and dark themes:** Dark is the default; each person can pick Light, Dark or System (follows the OS, live) in the account menu, and it's saved in that browser. Every colour in `src/styles.css` comes from variables in `:root`, and `[data-theme="dark"]` swaps them; `index.html` applies the choice before the page draws, so there's no flash. Logos sit on a light tile in the dark theme, since they're usually drawn for light backgrounds. The assistant consent page follows the OS setting.
 - **Attachments** (optional per instance; `worker/attachments.ts`, migration 0008): files live in an R2 bucket (binding `FILES`, `R2_BUCKET` in the tenants file); without one the app hides "Attach". Drop files on a task, paste a screenshot, or press **⇧A**. Up to 25 MB per file and 50 per task. Every download goes through the Worker, which checks the person can see the task; only images, PDFs and plain text open in the browser (under a sandboxing CSP), everything else downloads, so an uploaded HTML or SVG file can't run code. Only the uploader or an admin can remove a file: it's deleted from R2 and the history keeps its name. Rows show a 📎 count.
+- **Files from Google Drive and OneDrive / SharePoint** (optional per instance; `worker/cloud-files.ts`, `src/cloudFiles.ts`, migration 0020): with a drive set up (below), "Attach files" opens a menu: from this device, or from each drive **as a copy** or **as a link**. People pick files in the provider's own picker, signed in to their own account there, and the browser hands the Worker the picked ids and the picker's short-lived token. The Worker uses it once, only with `googleapis.com` or `graph.microsoft.com`, and never stores it. A **copy** is an ordinary attachment (it needs R2, follows the rules above, and doesn't change when the original does; Google Docs and Slides are copied as PDF, Sheets as Excel, Drawings as PNG). A **link** stores the file's name and address, no bytes, so it works without R2 and is always current, but the provider's sharing decides who can open it. Folders and Google Forms can only be linked. Links count toward the 50 per task and are removed like files; AI assistants see them with a `link` and can't read them. Uploading to a task on another instance sends it the token too, so that instance fetches the file.
 - **Checklist:** each task can have one checklist (`checklist_items`, migration 0007). Anyone who can see the task can add items (pasting several lines adds them all), tick, rename or remove them, and every change is logged in the history. Rows show progress ("2/5"). A repeating task's next copy starts with the same items, unticked. Press **⇧C** to jump to it (and **⇧N** for notes); empty notes and checklists fold into small "Add" buttons.
 - **Comments** live in the task's history (`type = 'comment'`), so they're permanent like everything else there: no editing or deleting. Anyone who can see the task can comment, on open or done tasks, up to 4,000 characters. A comment moves the task's version on, so everyone's app picks it up on the next poll, and the assignee and creator get a "New comment" notice. Rows show a comment count. Press **C** on a task to comment.
 - **Archive, not delete:** **Archive task** in a task's ⋯ menu archives it (deliberately not a one-click button or a shortcut): it leaves every list, count, sync and assistant listing at once (with Undo), and nothing is lost. Archived tasks, open or done, are listed only in a project's view, in a collapsed "Archived" section, where anyone on the project can restore them. An archived task can't be edited, commented on or ticked until it's restored. A repeating task whose open copy is archived pauses (no next copy) and carries on when restored. Migration 0010.
@@ -235,6 +236,37 @@ Nothing else changes: WorkOS only proves the email address. The address still ha
 5. Deploy. The sign-in page shows **Continue with email** whenever both are set; without them it shows Google only. An instance can also run on WorkOS alone, without the Google secrets (invite emails then need Gmail or Outlook, so they aren't available).
 
 One WorkOS environment can serve several instances: add each one's redirect URI.
+
+### Files from Google Drive and OneDrive (optional)
+
+Each drive turns on by itself once it's set up; the attach menu only lists the ones that are. Links work without an R2 bucket; copies need one.
+
+**Google Drive** uses the Google Picker with the `drive.file` scope: the app can only reach files people pick for it, so Google treats it as non-sensitive and the app needs no verification for it. In the [Google Cloud console](https://console.cloud.google.com), in the project that has the instance's OAuth client:
+
+1. *APIs & Services → Library*: enable the **Google Drive API** and the **Google Picker API**.
+2. *APIs & Services → Credentials → Create credentials → API key*. Restrict it: *Application restrictions → Websites*, `https://<your-app-host>/*` (and each custom domain, plus `http://localhost:5173/*` if you use it locally); *API restrictions →* the Google Picker API only.
+3. On the OAuth client (*Credentials →* the Web client the instance signs in with), add `https://<your-app-host>` under **Authorized JavaScript origins** (each custom domain too).
+4. *Google Auth Platform → Data access → Add or remove scopes*: add `https://www.googleapis.com/auth/drive.file`.
+5. Find the **project number** on the project's dashboard (*Cloud overview*), then set the two values:
+   ```bash
+   npm run tenant -- secret acme GOOGLE_PICKER_API_KEY
+   ```
+   ```bash
+   npm run tenant -- secret acme GOOGLE_APP_ID
+   ```
+   `GOOGLE_APP_ID` is the project number. Neither is really secret (the browser gets both), but setting them this way keeps them with the instance.
+
+**OneDrive and SharePoint** use Microsoft's File Picker, with the same app registration as Microsoft sign-in (above), so `MS_CLIENT_ID` and `MS_TENANT_ID` must be set. In the Entra admin center, on that app registration:
+
+1. *Authentication → Add a platform → Single-page application*, redirect URI `https://<your-app-host>/picker-signin.html` (each custom domain too, and `http://localhost:5173/picker-signin.html` locally). The existing **Web** redirect for sign-in stays as it is.
+2. *API permissions → Add a permission*: **Microsoft Graph → Files.Read.All** (delegated), and **SharePoint → MyFiles.Read** and **AllSites.Read** (both delegated). Click **Grant admin consent** for your organization: the picker can't ask for SharePoint consent itself.
+3. Turn it on:
+   ```bash
+   npm run tenant -- secret acme MS_FILES
+   ```
+   and enter `on`.
+
+People sign in to Microsoft in a popup the first time they pick (once per tab). Only accounts in your organization's tenant can pick files, and they need a OneDrive (open it once if it's new).
 
 ### Updates
 

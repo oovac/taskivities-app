@@ -10,6 +10,7 @@ import { signInWith } from './auth';
 import { loadSettings } from './settings';
 import { prefsOf, pushKeys } from './push';
 import { inboxUnread } from './inbox';
+import { cloudPickers } from './cloud-files';
 import { type ChecklistChange, type Patch, addComment, applyPatch, changeChecklist, setArchived, commit, createTask, loadVisibleTask, updateTaskWithNext, visible } from './tasks';
 
 export const api = new Hono<AppEnv>();
@@ -54,7 +55,7 @@ api.get('/bootstrap', async (c) => {
   const keys = pushKeys(c.env);
   const myRow = users.results.find((u) => u.id === v.id);
   const body: Bootstrap = {
-    me, users: list, projects: visibleProjects.map(mapProject), today: today(v), tz: v.tz, ...meta, settings, attachments: !!c.env.FILES,
+    me, users: list, projects: visibleProjects.map(mapProject), today: today(v), tz: v.tz, ...meta, settings, attachments: !!c.env.FILES, cloud: cloudPickers(c.env),
     mailbox, mailboxOptions: v.role === 'admin' ? mailboxOptions(c.env) : [], signInWith: signInWith(c.env),
     push: keys ? { publicKey: keys.publicKey } : null, notify: prefsOf(myRow?.notify),
     updates: v.role === 'admin' ? updateRepo(c.env.UPDATE_REPO) : null,

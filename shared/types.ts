@@ -233,6 +233,8 @@ export interface Bootstrap {
   settings: AppSettings;
   /** Attachments are available on this instance (it has an R2 bucket). */
   attachments: boolean;
+  /** Which drives files can be picked from (copies need attachments on; links don't). */
+  cloud: CloudPickers;
   /** Admins: the mailbox invites are emailed from (their Gmail or Outlook), or null when none is connected (then they share the link). */
   mailbox: { via: MailboxVia; email: string } | null;
   /** Admins: which mailboxes can be connected here (each needs its provider's sign-in set up). */
@@ -320,4 +322,17 @@ export interface ChecklistItem { id: string; text: string; done: boolean }
 
 export const ATTACH_MAX_BYTES = 25 * 1024 * 1024;
 export const ATTACH_PER_TASK_MAX = 50;
-export interface AttachmentInfo { id: string; name: string; size: number; type: string; by: string; at: string }
+/** Where a file came from, when it was picked from a drive. */
+export type CloudProvider = 'google' | 'microsoft';
+export interface AttachmentInfo {
+  id: string; name: string; size: number; type: string; by: string; at: string;
+  /** A linked file (no copy here): its address at the provider, whose sharing decides who can open it. */
+  link?: string | null;
+  /** Picked from Google Drive or OneDrive / SharePoint (as a copy or a link). */
+  from?: CloudProvider | null;
+}
+/** Picking files from drives, per instance: what the browser needs to open each provider's picker (all public values). */
+export interface CloudPickers {
+  google: { clientId: string; apiKey: string; appId: string } | null;
+  microsoft: { clientId: string; tenant: string } | null;
+}

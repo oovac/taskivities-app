@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Signing in to Microsoft…</title>
+<style>body{font:15px/1.5 system-ui,sans-serif;color:#555;display:grid;place-items:center;min-height:90vh;margin:0}</style>
+</head>
+<body>
+<p id="m">Opening Microsoft sign-in…</p>
+<script>
+// The Entra app's SPA redirect for picking OneDrive files (src/cloudFiles.ts). It hands the sign-in code to the app's
+// tab over a BroadcastChannel (Microsoft's pages cut this popup off from its opener), and closes when the app says so.
+(function () {
+  var bc = new BroadcastChannel('tv-ms-signin');
+  bc.onmessage = function (e) { if (e.data && e.data.close) window.close(); };
+  var q = new URLSearchParams(location.search);
+  if (!q.get('state')) return; // just opened, before going to Microsoft
+  bc.postMessage({ code: q.get('code'), state: q.get('state'), error: q.get('error_description') || q.get('error') });
+  history.replaceState(null, '', location.pathname); // don't leave the code in the address bar
+  document.getElementById('m').textContent = q.get('code') ? 'Signed in. Opening OneDrive…' : 'Sign-in didn’t finish. You can close this window.';
+})();
+</script>
+</body>
+</html>

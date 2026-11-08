@@ -8,7 +8,8 @@ import { isDropped, liveId, newTemp, realId, tempOf } from './tempIds';
 import { type EffortType, effortFor, storedEffortLabel } from '../shared/effort';
 import { ATTACH_MAX_BYTES } from '../shared/types';
 import type { AppSettings, ArchivedProject, Bootstrap, InviteEmailResult, MailboxVia, WebhookInfo, WebhookRequestInfo, Priority, Project, Role, SyncResponse, Task, TaskEvent, TaskLink, User } from '../shared/types';
-import { PRIORITIES } from '../shared/types';
+import { PRIORITIES, type CloudProvider } from '../shared/types';
+import { PickCancelled, pickFiles } from './cloudFiles';
 import { api, ApiError } from './api';
 import { applyBrand } from './brand';
 import { activeSelector, focusLater, selFor } from './focus';
@@ -76,7 +77,7 @@ function applyDirectory(b: Bootstrap): Partial<State> {
   applyBrand(b.settings);
   return {
     me: b.me, users, projects, today: b.today, tz: b.tz, dirVersion: b.directoryVersion, settings: b.settings,
-    mailbox: b.mailbox, mailboxOptions: b.mailboxOptions ?? [], signInWith: b.signInWith ?? [], attachmentsOn: b.attachments, viewUser, page,
+    mailbox: b.mailbox, mailboxOptions: b.mailboxOptions ?? [], signInWith: b.signInWith ?? [], attachmentsOn: b.attachments, cloud: b.cloud ?? { google: null, microsoft: null }, viewUser, page,
     pushKey: b.push?.publicKey ?? null, notify: b.notify, updateRepo: b.updates?.repo ?? null, inboxUnread: b.inboxUnread ?? 0,
     // Another instance's project stays (its projects aren't in this directory).
     projSel: s.projSel === 'all' || s.projSel === 'multi' || isFeed(s.projSel) || projects[s.projSel] ? s.projSel : 'all',
@@ -1094,13 +1095,65 @@ export async function removeAttachment(id: string, aid: string, name: string) {
   }
 }
 
-/** ⇧A: opens the task (if needed) and its file picker. */
+const hasDrives = (s: State) => !!s.cloud.google || !!s.cloud.microsoft;
+/** Files can be attached here: uploaded (R2), or picked from a drive (links need no R2). */
+export const canAttach = (s: State) => s.attachmentsOn || hasDrives(s);
+
+/** "Attach files": the computer's file picker, or with drives set up, a menu of where from. */
+export function attachMenu(id: string, anchor: HTMLElement | Pop['rect']) {
+  if (!hasDrives(S())) { pickAttachments(id); return; }
+  const p = { type: 'attach' as const, mode: 'task' as const, id };
+  if (anchor instanceof HTMLElement) openPop(p, anchor);
+  else set({ pop: { ...p, rect: anchor, returnSel: `.drawer[data-id="${id}"]` } });
+}
+
+/** ⇧A: opens the task (if needed) and its file picker (or, without uploads here, the menu of drives). */
 export function pickAttachments(id: string) {
-  if (!S().attachmentsOn) { toast("Attachments aren't set up on this instance."); return; }
-  const wasOpen = S().drawer === id;
+  const s = S();
+  if (!canAttach(s)) { toast("Attachments aren't set up on this instance."); return; }
+  const wasOpen = s.drawer === id;
   if (!wasOpen) openDrawer(id);
   // The picker input is in the drawer; give it a moment to render when the drawer was just opened.
-  setTimeout(() => document.querySelector<HTMLInputElement>('#attach-input')?.click(), wasOpen ? 0 : 60);
+  setTimeout(() => {
+    if (s.attachmentsOn) { document.querySelector<HTMLInputElement>('#attach-input')?.click(); return; }
+    const a = document.querySelector<HTMLElement>('.drawer [data-act="attach"], .drawer .att-add');
+    if (a) attachMenu(id, a);
+  }, wasOpen ? 0 : 60);
+}
+
+/**
+ * Picks files from Google Drive or OneDrive and attaches copies (stored here) or links. Call it straight from a click:
+ * the provider's sign-in opens in a popup.
+ */
+export async function attachFromDrive(id: string, provider: CloudProvider, mode: 'copy' | 'link') {
+  const where = provider === 'google' ? 'Google Drive' : 'OneDrive';
+  let picked;
+  try {
+    picked = await pickFiles(S().cloud, provider, S().me?.email);
+  } catch (e) {
+    if (!(e instanceof PickCancelled)) toastError(e);
+    return;
+  }
+  if (!picked.files.length) return;
+  const taskId = liveId(id);
+  const ups = picked.files.map((f) => ({ id: crypto.randomUUID(), taskId, name: f.name, loaded: 0, total: 0, note: mode === 'copy' ? `Copying from ${where}…` : 'Linking…' }));
+  set((s) => ({ uploads: [...s.uploads, ...ups] }));
+  pending.add(taskId);
+  mine.set(taskId, Date.now());
+  try {
+    const { task } = await clientFor(taskId).post<{ task: Task }>('/attachments/cloud', {
+      provider, mode, token: picked.token, files: picked.files.map((f) => ({ id: f.id, ...(f.driveId ? { driveId: f.driveId } : {}) })),
+    });
+    putTask(task);
+  } catch (e) {
+    toastError(e);
+    // Some may have made it before one failed: show what's there now.
+    void clientFor(taskId).get<{ task: Task }>().then((r) => putTask(r.task)).catch(() => undefined);
+  } finally {
+    pending.delete(taskId);
+    const gone = new Set<string>(ups.map((u) => u.id));
+    set((s) => ({ uploads: s.uploads.filter((u) => !gone.has(u.id)) }));
+  }
 }
 
 // ---------- home-screen icon (admins) ----------

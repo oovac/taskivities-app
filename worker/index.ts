@@ -9,6 +9,7 @@ import { oauthRoutes } from './oauth';
 import { serveIcon, serveLogo, serveManifest, serveWordmark } from './settings';
 import { hookRoutes } from './webhooks';
 import { attachmentRoutes, uploadRoutes } from './attachments';
+import { cloudFileRoutes } from './cloud-files';
 import { morningSummaries, pushRoutes } from './push';
 import { inboxRoutes } from './inbox';
 import { followRoutes } from './followers';
@@ -51,6 +52,7 @@ app.route('/authorize', oauthRoutes);
 
 app.use('/api/*', sameOrigin, requireSession);
 app.route('/api/admin', admin);
+app.route('/api/tasks', cloudFileRoutes);
 app.route('/api/tasks', attachmentRoutes);
 app.route('/api/tasks', followRoutes);
 app.route('/api/tasks', dependencyRoutes);
