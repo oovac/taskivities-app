@@ -9,6 +9,8 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+## v0.9.0 (2026-11-08)
+
 ### Changed
 
 - **Dark theme by default:** the app now opens in the dark theme. Anyone who prefers Light, or following their device's setting, can pick **Light** or **System** in the account menu; people who already picked Light or Dark keep their choice.
