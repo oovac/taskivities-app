@@ -12,6 +12,8 @@ section into the new version's; `git push --follow-tags` publishes it.
 ### Changed
 
 - **Dark theme by default:** the app now opens in the dark theme. Anyone who prefers Light, or following their device's setting, can pick **Light** or **System** in the account menu; people who already picked Light or Dark keep their choice.
+- **Faster edits:** adding a task, checklist items or a comment, linking or unlinking dependencies, removing a file and restoring an archived task now show on screen at once, without waiting for the server. A new task can be ticked, moved or opened straight away. The confirmation (**Done: …**, **Moved to …**) shows at once too. In the rare case the server refuses a change, it's undone on screen with a message saying why, and a task or comment that wasn't added goes back in its box so nothing typed is lost.
+- **Other instances:** after approving the connection on the other instance, **Other instances** opens straight away and shows it connecting, instead of opening only once everything there had loaded. Its tasks show as soon as they've loaded.
 
 ## v0.8.0 (2026-11-07)
 

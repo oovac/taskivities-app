@@ -333,24 +333,24 @@ function linkify(text: string) {
 
 function CommentBox({ taskId }: { taskId: string }) {
   const [text, setText] = useState('');
-  const [busy, setBusy] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
-  const send = async () => {
-    if (!text.trim() || busy) return;
-    setBusy(true);
-    if (await addComment(taskId, text)) setText('');
-    setBusy(false);
+  // Shows in the history at once; if it couldn't be saved, the text comes back (unless something new was typed).
+  const send = () => {
+    const value = text;
+    if (!value.trim()) return;
+    setText('');
     ref.current?.focus();
+    void addComment(taskId, value).then((ok) => { if (!ok) setText((cur) => cur || value); });
   };
   return (
     <div className="cbox">
       <textarea ref={ref} id="comment-box" data-field="comment" rows={text.includes('\n') || text.length > 60 ? 3 : 1} maxLength={COMMENT_MAX}
         placeholder="Write a comment…  (C)" aria-label="Write a comment" value={text} onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send(); } }} />
+        onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send(); } }} />
       {text.trim() && (
         <div className="cbox-f">
           <span>⌘ Enter to post · everyone on the project can see it</span>
-          <button className="btn-primary sm" disabled={busy} onClick={() => void send()}>{busy ? 'Posting…' : 'Comment'}</button>
+          <button className="btn-primary sm" onClick={send}>Comment</button>
         </div>
       )}
     </div>

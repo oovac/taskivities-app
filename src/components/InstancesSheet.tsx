@@ -45,11 +45,23 @@ export function InstancesSheet({ s }: { s: State }) {
             your day, week and board, and you can do anything with them that you could there. Their notifications come to this app too.
           </p>
 
+          {s.connecting !== null && (
+            <div className="card in-list" style={{ marginBottom: s.sources.length ? 10 : 0 }}>
+              <div className="in-row" role="status">
+                <i className="in-spin" aria-hidden="true" />
+                <div className="in-main">
+                  <b>{s.connecting ? host(s.connecting) : 'Connecting…'}</b>
+                  <span>Connecting… finishing the sign-in there.</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {s.sources.length > 0 && (
             <div className="card in-list">
               {s.sources.map((x) => (
                 <div key={x.id} className="in-row">
-                  <i className="in-dot" style={{ background: x.color }} />
+                  {x.status === 'loading' ? <i className="in-spin" aria-hidden="true" /> : <i className="in-dot" style={{ background: x.color }} />}
                   <div className="in-main">
                     <b>{x.name}</b>
                     <span>{host(x.origin)}{x.user ? ` · as ${x.user}` : ''} · <span className={x.status === 'ok' ? '' : 'in-err'}>{x.status === 'error' && x.error ? x.error : STATUS[x.status]}</span></span>

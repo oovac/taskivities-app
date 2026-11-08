@@ -1,12 +1,13 @@
 // Everything that changes data. Edits are applied on screen first, then sent; on failure they're rolled back.
 import { addDays, rel, weekStart } from '../shared/dates';
-import { type Repeat, describe } from '../shared/repeat';
+import { type Repeat, describe, firstDate } from '../shared/repeat';
 import { onProject } from '../shared/rules';
 import { applyUrl, startRouter } from './router';
-import { applyFeedDir, clientFor, feedParts, finishConnect, isFeed, srcCall, loadSources, localUsers, moveOnSources, sourcesRange, syncSources, taskFromSource, uploadTarget } from './sources';
+import { applyFeedDir, clientFor, connectingOrigin, feedParts, finishConnect, isFeed, nsId, srcCall, loadSources, localUsers, moveOnSources, sourcesRange, syncSources, taskFromSource, uploadTarget } from './sources';
+import { isDropped, liveId, newTemp, realId, tempOf } from './tempIds';
 import { type EffortType, effortFor, storedEffortLabel } from '../shared/effort';
 import { ATTACH_MAX_BYTES } from '../shared/types';
-import type { AppSettings, ArchivedProject, Bootstrap, InviteEmailResult, MailboxVia, WebhookInfo, WebhookRequestInfo, Priority, Project, Role, SyncResponse, Task, TaskEvent, User } from '../shared/types';
+import type { AppSettings, ArchivedProject, Bootstrap, InviteEmailResult, MailboxVia, WebhookInfo, WebhookRequestInfo, Priority, Project, Role, SyncResponse, Task, TaskEvent, TaskLink, User } from '../shared/types';
 import { PRIORITIES } from '../shared/types';
 import { api, ApiError } from './api';
 import { applyBrand } from './brand';
@@ -19,6 +20,19 @@ import { displayName, draftEffective, firstName, linksOf, myProjects, sharesWith
 import { expectedOn } from '../shared/deps';
 
 const pending = new Set<string>(); // tasks with an edit in flight (ignore sync for them)
+let creating = 0; // tasks being added here (shown already, under a temporary id)
+const held = new Map<string, Task>(); // new tasks of mine that sync brought while adding: likely the ones being added
+/** Sync leaves these alone: an edit is in flight, or it's a task of mine that's probably still showing under its temporary id. */
+function skipSync(t: Task) {
+  const tmp = tempOf(t.id);
+  if (pending.has(t.id) || (tmp && pending.has(tmp))) return true;
+  if (creating > 0 && !S().tasks[t.id]) {
+    const s = S();
+    const meThere = isFeed(t.id) ? s.feedDir.me[feedParts(t.id).src]?.id : undefined;
+    if (t.createdBy === s.me?.id || (meThere && t.createdBy === meThere)) { held.set(t.id, t); return true; }
+  }
+  return false;
+}
 const mine = new Map<string, number>(); // tasks I changed recently (don't flash my own edits)
 const byId = <T extends { id: string }>(arr: T[]) => Object.fromEntries(arr.map((x) => [x.id, x]));
 const nowIso = () => new Date().toISOString();
@@ -29,11 +43,16 @@ let toastSeq = 0;
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 export function toast(text: string, undo?: () => void, error = false, action?: { label: string; run: () => void }) {
   const id = ++toastSeq;
+  toastShown = id;
   set({ toast: { id, text, undo, error, action } });
   clearTimeout(toastTimer);
   // Toasts with something to click stay a little longer.
   toastTimer = setTimeout(() => S().toast?.id === id && set({ toast: null }), error || action ? 8000 : 4500);
+  return id;
 }
+let toastShown = 0;
+/** Still showing that toast (nothing newer replaced it). */
+const showing = (id: number) => toastShown === id && S().toast?.id === id;
 export const toastError = (e: unknown) => toast(e instanceof Error ? e.message : 'Something went wrong.', undefined, true);
 export function flash(ids: string[]) {
   const now = Date.now();
@@ -74,7 +93,9 @@ export async function boot() {
     // Other instances connected on this device (src/sources.ts), then the address: what to show (src/router.ts).
     const sourcesReady = loadSources();
     if (location.pathname === '/oauth/done') {
-      void finishConnect().then((r) => { set({ instancesOpen: true }); toast(r.message, undefined, !r.ok); });
+      // The sheet opens at once, showing the connection being finished.
+      set({ instancesOpen: true, connecting: connectingOrigin() ?? '' });
+      void finishConnect().then((r) => { set({ connecting: null }); toast(r.message, undefined, !r.ok); });
     } else applyUrl(location, sourcesReady, (id) => void openTask(id), true);
     startRouter(sourcesReady, (id) => void openTask(id));
     const last = localStorage.getItem('tv:lastProject');
@@ -122,7 +143,7 @@ export async function sync() {
       const flashIds: string[] = [];
       const me = s.me!.id;
       for (const t of r.tasks) {
-        if (pending.has(t.id)) continue;
+        if (skipSync(t)) continue;
         const prev = tasks[t.id];
         if (prev && prev.version >= t.version) continue;
         tasks[t.id] = t;
@@ -141,7 +162,7 @@ export async function sync() {
       if (flashIds.length) setTimeout(() => flash(flashIds), 0);
     } else patch.version = r.version;
     set(patch);
-    void syncSources((id) => pending.has(id)); // other instances keep up on the same timer
+    void syncSources((_id, t) => skipSync(t)); // other instances keep up on the same timer
   } catch (e) {
     if (e instanceof ApiError && e.status === 0) set({ offline: true });
   } finally {
@@ -172,7 +193,12 @@ export async function loadEvents(id: string) {
 // ---------- task edits ----------
 type Changes = Partial<Pick<Task, 'title' | 'notes' | 'projectId' | 'assigneeId' | 'dueDate' | 'priority' | 'status' | 'effort'>>;
 
-const putTask = (t: Task) => set((s) => ({ tasks: { ...s.tasks, [t.id]: t }, events: { ...s.events, [t.id]: undefined } }));
+const putTask = (t0: Task) => {
+  if (isDropped(t0.id)) return; // added here, but the server refused it: it's gone
+  const id = liveId(t0.id); // a rollback to how it was while it was being added: it has its real id now
+  const t = id === t0.id ? t0 : { ...t0, id };
+  set((s) => ({ tasks: { ...s.tasks, [id]: t }, events: { ...s.events, [id]: undefined } }));
+};
 
 function optimistic(prev: Task, c: Changes): Task {
   const s = S();
@@ -185,19 +211,25 @@ function optimistic(prev: Task, c: Changes): Task {
 
 interface PatchOpts { note?: string; restore?: boolean; toast?: string; noUndo?: boolean; thisOnly?: boolean }
 
-export async function patchTask(id: string, c: Changes, opts: PatchOpts = {}) {
+export async function patchTask(taskId: string, c: Changes, opts: PatchOpts = {}) {
+  const id = liveId(taskId); // e.g. an Undo for a task that was still being added
   const prev = S().tasks[id];
   if (!prev) return;
   putTask(optimistic(prev, c));
   pending.add(id);
   mine.set(id, Date.now());
   flash([id]);
+  const undoIt = opts.noUndo ? undefined : () => undo(prev, c);
+  const shown = opts.toast ? toast(opts.toast, undoIt) : 0;
   try {
     const { task, next } = await clientFor(id).patch<{ task: Task; next: Task | null }>('', { ...c, note: opts.note, restore: opts.restore, thisOnly: opts.thisOnly });
     putTask(task);
-    if (next) { mine.set(next.id, Date.now()); putTask(next); }
-    const text = opts.toast && next ? `${opts.toast} · next one ${rel(next.dueDate, S().today)}` : opts.toast;
-    if (text) toast(text, opts.noUndo ? undefined : () => undo(prev, c));
+    if (next) {
+      mine.set(next.id, Date.now());
+      putTask(next);
+      // A repeating task's next copy: say when, if the toast is still up.
+      if (shown && showing(shown)) toast(`${opts.toast} · next one ${rel(next.dueDate, S().today)}`, undoIt);
+    }
   } catch (e) {
     putTask(prev);
     toastError(e);
@@ -283,48 +315,49 @@ export const setProject = (id: string, p: string) => patchTask(id, { projectId: 
 
 export async function moveTasks(ids: string[], dueDate: string) {
   const s = S();
-  const prevs = ids.map((i) => s.tasks[i]).filter((t): t is Task => !!t && t.dueDate !== dueDate);
+  const prevs = ids.map((i) => s.tasks[liveId(i)]).filter((t): t is Task => !!t && t.dueDate !== dueDate);
   if (!prevs.length) return;
   prevs.forEach((t) => { putTask({ ...t, dueDate }); pending.add(t.id); mine.set(t.id, Date.now()); });
   flash(prevs.map((t) => t.id));
+  const base = prevs.length > 1 ? `Moved ${prevs.length} tasks to ${rel(dueDate, s.today)}` : `Moved to ${rel(dueDate, s.today)}`;
+  const undoMove = () => {
+    set({ toast: null });
+    prevs.forEach((t) => void patchTask(t.id, { dueDate: t.dueDate }, { restore: true }));
+  };
+  // Dependencies: tasks waiting on these that are now due before them can be moved too (never by themselves).
+  const after = S();
+  const moved = new Set(prevs.map((t) => t.id));
+  const target = expectedOn(dueDate, after.today);
+  const heldIds = [...new Set(prevs.flatMap((t) => linksOf(after, t, 'blocks'))
+    .filter((l) => l.open && !moved.has(l.id) && after.tasks[l.id] && after.tasks[l.id].dueDate < target).map((l) => l.id))];
+  // And moving a waiting task before what it waits on: say so.
+  const one = prevs.length === 1 ? after.tasks[prevs[0].id] : null;
+  const waits = one ? linksOf(after, one, 'blockedBy').filter((l) => l.open && expectedOn(l.dueDate, after.today) > target) : [];
+  if (heldIds.length) {
+    const n = heldIds.length;
+    const first = after.tasks[heldIds[0]];
+    const it = prevs.length > 1 ? 'them' : 'it';
+    toast(`${base} · ${n > 1 ? `${n} tasks due earlier wait on ${it}` : `“${first.title}” waits on ${it}`}`,
+      undoMove, false, { label: n > 1 ? `Move ${n} too` : 'Move it too', run: () => { set({ toast: null }); void moveTasks(heldIds, dueDate); } });
+  } else if (waits.length) {
+    const latest = waits.reduce((a, b) => (expectedOn(b.dueDate, after.today) > expectedOn(a.dueDate, after.today) ? b : a));
+    const bt = after.tasks[latest.id];
+    toast(`${base} · it waits on ${bt ? `“${bt.title}”` : 'a task'}, due ${rel(expectedOn(latest.dueDate, after.today), after.today)}`, undoMove);
+  } else toast(base, undoMove);
   try {
     if (prevs.length === 1) {
       const { task } = await clientFor(prevs[0].id).patch<{ task: Task }>('', { dueDate });
       putTask(task);
     } else {
       // Each instance moves its own (this one's in one go; others' through their /v1).
-      const here = prevs.filter((t) => !isFeed(t.id)), there = prevs.filter((t) => isFeed(t.id));
+      const real = await Promise.all(prevs.map((t) => realId(t.id))); // some may still be being added
+      const here = real.filter((i) => !isFeed(i)), there = real.filter((i) => isFeed(i));
       const moved = await Promise.all([
-        here.length ? api.post<{ tasks: Task[] }>('/api/tasks/move', { ids: here.map((t) => t.id), dueDate }).then((r) => r.tasks) : [],
-        there.length ? moveOnSources(there.map((t) => t.id), dueDate) : [],
+        here.length ? api.post<{ tasks: Task[] }>('/api/tasks/move', { ids: here, dueDate }).then((r) => r.tasks) : [],
+        there.length ? moveOnSources(there, dueDate) : [],
       ]);
       moved.flat().forEach(putTask);
     }
-    const base = prevs.length > 1 ? `Moved ${prevs.length} tasks to ${rel(dueDate, s.today)}` : `Moved to ${rel(dueDate, s.today)}`;
-    const undoMove = () => {
-      set({ toast: null });
-      prevs.forEach((t) => void patchTask(t.id, { dueDate: t.dueDate }, { restore: true }));
-    };
-    // Dependencies: tasks waiting on these that are now due before them can be moved too (never by themselves).
-    const after = S();
-    const moved = new Set(prevs.map((t) => t.id));
-    const target = expectedOn(dueDate, after.today);
-    const heldIds = [...new Set(prevs.flatMap((t) => linksOf(after, t, 'blocks'))
-      .filter((l) => l.open && !moved.has(l.id) && after.tasks[l.id] && after.tasks[l.id].dueDate < target).map((l) => l.id))];
-    // And moving a waiting task before what it waits on: say so.
-    const one = prevs.length === 1 ? after.tasks[prevs[0].id] : null;
-    const waits = one ? linksOf(after, one, 'blockedBy').filter((l) => l.open && expectedOn(l.dueDate, after.today) > target) : [];
-    if (heldIds.length) {
-      const n = heldIds.length;
-      const first = after.tasks[heldIds[0]];
-      const it = prevs.length > 1 ? 'them' : 'it';
-      toast(`${base} · ${n > 1 ? `${n} tasks due earlier wait on ${it}` : `“${first.title}” waits on ${it}`}`,
-        undoMove, false, { label: n > 1 ? `Move ${n} too` : 'Move it too', run: () => { set({ toast: null }); void moveTasks(heldIds, dueDate); } });
-    } else if (waits.length) {
-      const latest = waits.reduce((a, b) => (expectedOn(b.dueDate, after.today) > expectedOn(a.dueDate, after.today) ? b : a));
-      const bt = after.tasks[latest.id];
-      toast(`${base} · it waits on ${bt ? `“${bt.title}”` : 'a task'}, due ${rel(expectedOn(latest.dueDate, after.today), after.today)}`, undoMove);
-    } else toast(base, undoMove);
   } catch (e) {
     prevs.forEach(putTask);
     toastError(e);
@@ -333,6 +366,14 @@ export async function moveTasks(ids: string[], dueDate: string) {
   }
 }
 
+/** Fields that edits made while a task was being added can change (kept when its real copy arrives). */
+const LOCAL_KEYS = ['title', 'notes', 'projectId', 'assigneeId', 'assignedBy', 'dueDate', 'priority', 'status', 'doneAt', 'doneOn', 'doneBy',
+  'effort', 'checklist', 'followers', 'attachments', 'blockedBy', 'blocks', 'comments'] as const satisfies readonly (keyof Task)[];
+
+/**
+ * Adds the draft as a task. It shows at once (under a temporary id) and the box clears; the server makes it in the
+ * background. If that fails, the task goes away again and the draft comes back.
+ */
 export async function createTask(): Promise<boolean> {
   const s = S();
   const d = s.draft;
@@ -343,23 +384,72 @@ export async function createTask(): Promise<boolean> {
   if (bang) { priority = bang[1].length === 2 ? 1 : 2; title = title.slice(bang[0].length) || title; }
   const { projectId, assigneeId } = draftEffective(s);
   if (!projectId) { toast("You're not on any project yet. Ask an admin to add you to one.", undefined, true); return false; }
-  const due = d.dueDate || defaultDraftDate(s);
-  try {
-    const body = { title, notes: d.notes, projectId, assigneeId, dueDate: due, priority, repeat: d.repeat ?? undefined };
-    // A project on another instance: the task is made there (src/sources.ts).
-    const { task } = isFeed(projectId)
-      ? await srcCall<{ task: Task }>(feedParts(projectId).src, 'POST', '/tasks', body)
-      : await api.post<{ task: Task }>('/api/tasks', body);
-    mine.set(task.id, Date.now());
-    localStorage.setItem('tv:lastProject', projectId);
-    set((st) => ({ tasks: { ...st.tasks, [task.id]: task }, draft: { ...emptyDraft(projectId), open: true } }));
-    flash([task.id]);
-    toast(`Added for ${assigneeId === s.me!.id ? 'you' : firstName(s.users[assigneeId])} · ${rel(task.dueDate, s.today)}${task.series ? ` · ${lowerFirst(describe(task.series.rule, task.series.anchor))}` : ''}`);
-    return true;
-  } catch (e) {
-    toastError(e);
-    return false;
-  }
+  const picked = d.dueDate || defaultDraftDate(s);
+  const rule = d.repeat ?? null;
+  const due = rule ? firstDate(rule, picked) : picked;
+  const me = s.me!.id;
+  const notes = d.notes.trim();
+  // On another instance's project the task is made there (src/sources.ts), so its id is in that instance's form.
+  const tmp = newTemp(isFeed(projectId) ? nsId(feedParts(projectId).src, '') : '');
+  const now = nowIso();
+  const shown: Task = {
+    id: tmp.id, title, notes, projectId, assigneeId, createdBy: me, assignedBy: me, dueDate: due, priority, status: 'open',
+    doneAt: null, doneOn: null, doneBy: null, createdAt: now, updatedAt: now, version: 0,
+    series: rule ? { id: tmp.id, rule, anchor: due, active: true, made: 1, assigneeId, title } : null,
+    comments: 0, checklist: [], attachments: [], archivedAt: null, archivedBy: null,
+    followers: [me], effort: null, blockedBy: [], blocks: [],
+  };
+  creating++;
+  mine.set(tmp.id, Date.now());
+  localStorage.setItem('tv:lastProject', projectId);
+  set((st) => ({ tasks: { ...st.tasks, [tmp.id]: shown }, events: { ...st.events, [tmp.id]: [] }, draft: { ...emptyDraft(projectId), open: true } }));
+  flash([tmp.id]);
+  toast(`Added for ${assigneeId === me ? 'you' : firstName(s.users[assigneeId])} · ${rel(due, s.today)}${rule ? ` · ${lowerFirst(describe(rule, due))}` : ''}`);
+  void (async () => {
+    try {
+      const body = { title, notes, projectId, assigneeId, dueDate: picked, priority, repeat: rule ?? undefined };
+      const { task } = isFeed(projectId)
+        ? await srcCall<{ task: Task }>(feedParts(projectId).src, 'POST', '/tasks', body)
+        : await api.post<{ task: Task }>('/api/tasks', body);
+      mine.set(task.id, Date.now());
+      held.delete(task.id);
+      // Swap in the real task, keeping anything changed on it meanwhile (those edits are on their way too).
+      set((st) => {
+        const tasks = { ...st.tasks };
+        const cur = tasks[tmp.id];
+        delete tasks[tmp.id];
+        if (cur) {
+          const merged: Task = { ...task };
+          for (const k of LOCAL_KEYS) if (cur[k] !== shown[k]) (merged as unknown as Record<string, unknown>)[k] = cur[k];
+          tasks[task.id] = merged;
+        } // gone meanwhile: archived (that's on its way too)
+        const events = { ...st.events };
+        delete events[tmp.id];
+        const swap = (x: string) => (x === tmp.id ? task.id : x);
+        const pop = st.pop && (st.pop.id === tmp.id || st.pop.ids?.includes(tmp.id)) ? { ...st.pop, id: st.pop.id && swap(st.pop.id), ids: st.pop.ids?.map(swap) } : st.pop;
+        return { tasks, events, drawer: st.drawer && swap(st.drawer), pop };
+      });
+      tmp.done(task.id);
+    } catch (e) {
+      tmp.fail(e);
+      set((st) => {
+        const tasks = { ...st.tasks };
+        delete tasks[tmp.id];
+        // Give the words back, unless something else is being typed already.
+        const back = !st.draft.title.trim() && !st.draft.notes.trim();
+        return { tasks, drawer: st.drawer === tmp.id ? null : st.drawer, ...(back ? { draft: { ...d, open: true } } : {}) };
+      });
+      toast(`“${title}” wasn't added. ${e instanceof Error ? e.message : 'Something went wrong.'}`, undefined, true);
+    } finally {
+      if (--creating === 0 && held.size) {
+        // Tasks sync held back that weren't the ones being added (made in another tab, say).
+        const extra = [...held.values()];
+        held.clear();
+        set((st) => ({ tasks: { ...st.tasks, ...Object.fromEntries(extra.filter((t) => !st.tasks[t.id]).map((t) => [t.id, t])) } }));
+      }
+    }
+  })();
+  return true;
 }
 
 export function defaultDraftDate(s: State) {
@@ -781,23 +871,34 @@ export async function replayHookRequest(id: string, rid: string) {
  * Both tasks come back from the server (the other one only if I can see it).
  */
 export async function setBlocker(taskId: string, otherId: string, side: 'blockedBy' | 'blocks', add: boolean, quiet = false) {
-  const [waiter, blocker] = side === 'blockedBy' ? [taskId, otherId] : [otherId, taskId];
+  const [waiter, blocker] = (side === 'blockedBy' ? [taskId, otherId] : [otherId, taskId]).map(liveId);
   const s = S();
   const wt = s.tasks[waiter], bt = s.tasks[blocker];
   [waiter, blocker].forEach((id) => { pending.add(id); mine.set(id, Date.now()); });
+  // Show the link (or its removal) at once; the server's answer fills in the rest.
+  const link = (t: Task): TaskLink => ({ id: t.id, open: t.status !== 'done', dueDate: t.dueDate });
+  set((st) => {
+    const tasks = { ...st.tasks };
+    const w = tasks[waiter], b = tasks[blocker];
+    if (w) tasks[waiter] = { ...w, blockedBy: add ? (w.blockedBy.some((l) => l.id === blocker) || !b ? w.blockedBy : [...w.blockedBy, link(b)]) : w.blockedBy.filter((l) => l.id !== blocker) };
+    if (b) tasks[blocker] = { ...b, blocks: add ? (b.blocks.some((l) => l.id === waiter) || !w ? b.blocks : [...b.blocks, link(w)]) : b.blocks.filter((l) => l.id !== waiter) };
+    return { tasks };
+  });
+  flash([waiter, blocker]);
+  if (!quiet) {
+    const w = wt ? `“${wt.title}”` : 'That task', b = bt ? `“${bt.title}”` : 'a task you can’t see';
+    toast(add ? `${w} now waits on ${b}` : `${w} no longer waits on ${b}`, () => { set({ toast: null }); void setBlocker(taskId, otherId, side, !add, true); });
+  }
   try {
+    const [rw, rb] = await Promise.all([realId(waiter), realId(blocker)]); // either may still be being added
     const r = add
-      ? await clientFor(waiter).post<{ task: Task; tasks: Task[] }>('/blockers', { blockerId: blocker })
-      : await clientFor(waiter).del<{ task: Task; tasks: Task[] }>(`/blockers/${encodeURIComponent(isFeed(blocker) ? feedParts(blocker).rid : blocker)}`);
+      ? await clientFor(rw).post<{ task: Task; tasks: Task[] }>('/blockers', { blockerId: rb })
+      : await clientFor(rw).del<{ task: Task; tasks: Task[] }>(`/blockers/${encodeURIComponent(isFeed(rb) ? feedParts(rb).rid : rb)}`);
     putTask(r.task);
     (r.tasks ?? []).forEach(putTask);
-    flash([r.task.id, ...(r.tasks ?? []).map((t) => t.id)]);
-    if (!quiet) {
-      const w = wt ? `“${wt.title}”` : 'That task', b = bt ? `“${bt.title}”` : 'a task you can’t see';
-      toast(add ? `${w} now waits on ${b}` : `${w} no longer waits on ${b}`, () => { set({ toast: null }); void setBlocker(taskId, otherId, side, !add, true); });
-    }
     return true;
   } catch (e) {
+    [wt, bt].forEach((t) => t && putTask(t));
     toastError(e);
     return false;
   } finally {
@@ -811,15 +912,25 @@ async function openCreated(taskId: string) {
 }
 
 // ---------- comments ----------
-/** Posts a comment. Returns true when it was saved (so the box can clear). */
-export async function addComment(id: string, text: string): Promise<boolean> {
+/** Posts a comment. It shows in the history at once; returns false if it couldn't be saved (so the box can get it back). */
+export async function addComment(taskId: string, text: string): Promise<boolean> {
+  const id = liveId(taskId);
+  const prev = S().tasks[id];
+  const me = S().me!.id;
+  if (!prev) return false;
   pending.add(id);
   mine.set(id, Date.now());
+  const ev: TaskEvent = { id: `tmp-${crypto.randomUUID()}`, taskId: id, actorId: me, via: null, type: 'comment', fromValue: null, toValue: null, note: text.trim(), at: nowIso() };
+  set((s) => ({
+    tasks: { ...s.tasks, [id]: { ...prev, comments: prev.comments + 1, followers: prev.followers.includes(me) ? prev.followers : [...prev.followers, me] } },
+    events: s.events[id] ? { ...s.events, [id]: [...s.events[id]!, ev] } : s.events,
+  }));
   try {
     const { task } = await clientFor(id).post<{ task: Task }>('/comments', { text });
-    putTask(task); // drops the cached history, so the drawer reloads it with the comment
+    putTask(task); // drops the cached history, so the drawer reloads it with the saved comment
     return true;
   } catch (e) {
+    putTask(prev);
     toastError(e);
     return false;
   } finally {
@@ -828,7 +939,8 @@ export async function addComment(id: string, text: string): Promise<boolean> {
 }
 
 /** Follow or stop following a task: me, or (`userId`) someone else on its project. */
-export async function setFollowing(id: string, follow: boolean, userId?: string) {
+export async function setFollowing(taskId: string, follow: boolean, userId?: string) {
+  const id = liveId(taskId);
   const prev = S().tasks[id];
   if (!prev) return;
   const me = S().me!.id;
@@ -838,12 +950,12 @@ export async function setFollowing(id: string, follow: boolean, userId?: string)
   mine.set(id, Date.now());
   const followers = follow ? [...new Set([...prev.followers, who])] : prev.followers.filter((f) => f !== who);
   set((s) => ({ tasks: { ...s.tasks, [id]: { ...prev, followers } } }));
+  if (who === me) toast(follow ? `Following “${prev.title}”` : `Stopped following “${prev.title}”`, () => { set({ toast: null }); void setFollowing(id, !follow); });
   try {
     const { task } = await clientFor(id).post<{ task: Task }>('/follow', { follow, ...(who !== me ? { userId: who } : {}) });
     putTask(task);
-    if (who === me) toast(follow ? `Following “${prev.title}”` : `Stopped following “${prev.title}”`, () => { set({ toast: null }); void setFollowing(id, !follow); });
   } catch (e) {
-    set((s) => ({ tasks: { ...s.tasks, [id]: prev } }));
+    putTask(prev);
     toastError(e);
   } finally {
     pending.delete(id);
@@ -864,33 +976,60 @@ export function editChecklist(id: string) {
   set({ drawer: id, pop: null, checklistOpen: true, ...(S().drawer !== id ? { notesOpen: false } : {}) });
 }
 
-async function checklistCall(id: string, call: () => Promise<{ task: Task }>, optimistic?: (t: Task) => Task) {
+// Checklist changes to one task are sent one after another (an item just added may be ticked before the server has
+// given it its id). Each shows at once; the server's copy is put back only when the last one is answered.
+const ckChain = new Map<string, Promise<unknown>>();
+const ckLeft = new Map<string, number>();
+const ckReal = new Map<string, string>(); // temporary item id → the server's
+const itemRef = (itemId: string) => encodeURIComponent(ckReal.get(itemId) ?? itemId);
+
+function checklistCall(taskId: string, call: (id: string) => Promise<{ task: Task }>, optimistic: (t: Task) => Task, answered?: (t: Task) => void): Promise<boolean> {
+  const id = liveId(taskId);
   const before = S().tasks[id];
+  if (!before) return Promise.resolve(false);
   pending.add(id);
   mine.set(id, Date.now());
-  if (before && optimistic) set((s) => ({ tasks: { ...s.tasks, [id]: optimistic(before) } }));
-  try {
-    const { task } = await call();
-    putTask(task);
-    return true;
-  } catch (e) {
-    if (before && optimistic) set((s) => ({ tasks: { ...s.tasks, [id]: before } }));
-    toastError(e);
-    return false;
-  } finally {
-    pending.delete(id);
-  }
+  ckLeft.set(id, (ckLeft.get(id) ?? 0) + 1);
+  set((s) => { const t = s.tasks[liveId(id)]; return t ? { tasks: { ...s.tasks, [t.id]: optimistic(t) } } : {}; });
+  const run = (ckChain.get(id) ?? Promise.resolve()).then(async () => {
+    const last = () => ckLeft.get(id) === 1;
+    try {
+      const { task } = await call(id);
+      answered?.(task);
+      if (last()) putTask(task); // otherwise later changes are still on their way: keep showing them
+      return true;
+    } catch (e) {
+      if (last()) putTask(before);
+      toastError(e);
+      return false;
+    } finally {
+      const n = (ckLeft.get(id) ?? 1) - 1;
+      if (n) ckLeft.set(id, n);
+      else { ckLeft.delete(id); ckChain.delete(id); pending.delete(id); }
+    }
+  });
+  ckChain.set(id, run);
+  return run;
 }
 /** Adds one item, or several (one per line, e.g. pasted). */
-export const addChecklistItems = (id: string, text: string) => checklistCall(id, () => clientFor(id).post('/checklist', { text }));
+export const addChecklistItems = (id: string, text: string) => {
+  // Split like the server does (worker/tasks.ts changeChecklist).
+  const lines = text.split(/\r?\n/).map((l) => l.replace(/^\s*(?:[-*•]\s*)?(?:\[[ xX]?\]\s*)?/, '').replace(/\s+/g, ' ').trim()).filter(Boolean);
+  if (!lines.length) return Promise.resolve(false);
+  const temps = lines.map(() => `tmp-${crypto.randomUUID()}`);
+  return checklistCall(id, (rid) => clientFor(rid).post('/checklist', { text }),
+    (t) => ({ ...t, checklist: [...t.checklist, ...lines.map((l, i) => ({ id: temps[i], text: l, done: false }))] }),
+    // New items go at the end, in order.
+    (t) => temps.forEach((x, i) => { const it = t.checklist[t.checklist.length - temps.length + i]; if (it) ckReal.set(x, it.id); }));
+};
 export const toggleChecklistItem = (id: string, itemId: string, done: boolean) =>
-  checklistCall(id, () => clientFor(id).patch(`/checklist/${itemId}`, { done }),
+  checklistCall(id, (rid) => clientFor(rid).patch(`/checklist/${itemRef(itemId)}`, { done }),
     (t) => ({ ...t, checklist: t.checklist.map((c) => (c.id === itemId ? { ...c, done } : c)) }));
 export const renameChecklistItem = (id: string, itemId: string, text: string) =>
-  checklistCall(id, () => clientFor(id).patch(`/checklist/${itemId}`, { text }),
+  checklistCall(id, (rid) => clientFor(rid).patch(`/checklist/${itemRef(itemId)}`, { text }),
     (t) => ({ ...t, checklist: t.checklist.map((c) => (c.id === itemId ? { ...c, text } : c)) }));
 export const removeChecklistItem = (id: string, itemId: string) =>
-  checklistCall(id, () => clientFor(id).del(`/checklist/${itemId}`),
+  checklistCall(id, (rid) => clientFor(rid).del(`/checklist/${itemRef(itemId)}`),
     (t) => ({ ...t, checklist: t.checklist.filter((c) => c.id !== itemId) }));
 
 // ---------- attachments ----------
@@ -936,14 +1075,19 @@ export async function uploadFiles(taskId: string, files: File[]) {
   }
 }
 
-export async function removeAttachment(taskId: string, id: string, name: string) {
+export async function removeAttachment(id: string, aid: string, name: string) {
+  const taskId = liveId(id);
+  const prev = S().tasks[taskId];
+  if (!prev) return;
   pending.add(taskId);
   mine.set(taskId, Date.now());
+  set((s) => ({ tasks: { ...s.tasks, [taskId]: { ...prev, attachments: prev.attachments.filter((a) => a.id !== aid) } } }));
+  toast(`Removed ${name}`);
   try {
-    const { task } = await clientFor(taskId).del<{ task: Task }>(`/attachments/${id}`);
+    const { task } = await clientFor(taskId).del<{ task: Task }>(`/attachments/${aid}`);
     putTask(task);
-    toast(`Removed ${name}`);
   } catch (e) {
+    putTask(prev);
     toastError(e);
   } finally {
     pending.delete(taskId);
@@ -982,7 +1126,8 @@ export async function resetIcon() {
 
 // ---------- archive (instead of delete) ----------
 /** Archives a task: it leaves every list at once (Undo brings it back). Restoring is in the project's view. */
-export async function archiveTask(id: string) {
+export async function archiveTask(taskId: string) {
+  const id = liveId(taskId);
   const t = S().tasks[id];
   if (!t) return;
   pending.add(id);
@@ -993,27 +1138,46 @@ export async function archiveTask(id: string) {
     delete tasks[id];
     return { tasks, drawer: s.drawer === id ? null : s.drawer };
   });
+  toast(`Archived “${t.title}”`, () => { set({ toast: null }); void restoreTask(id, t); });
   try {
     await clientFor(id).post('/archive');
-    toast(`Archived “${t.title}”`, () => { set({ toast: null }); void restoreTask(id); });
     if (S().archived) void loadArchived(S().archived!.project);
   } catch (e) {
-    set((s) => ({ tasks: { ...s.tasks, [id]: t } }));
+    putTask(t);
     toastError(e);
   } finally {
     pending.delete(id);
   }
 }
 
-export async function restoreTask(id: string) {
+/** Brings an archived task back (from the project's Archived section, or Undo with the task as it was). */
+export async function restoreTask(taskId: string, was?: Task) {
+  const id = liveId(taskId);
+  const arch = S().archived;
+  const t = was ?? arch?.tasks.find((x) => x.id === id);
   pending.add(id);
   mine.set(id, Date.now());
+  if (t) {
+    set((s) => ({
+      tasks: { ...s.tasks, [id]: { ...t, id, archivedAt: null, archivedBy: null } },
+      ...(s.archived ? { archived: { ...s.archived, tasks: s.archived.tasks.filter((x) => x.id !== id) } } : {}),
+    }));
+    flash([id]);
+    if (!was) toast(`Restored “${t.title}”`, undefined, false, { label: 'Open', run: () => openDrawer(id) });
+  }
   try {
     const { task } = await clientFor(id).post<{ task: Task }>('/restore');
     putTask(task);
     set((s) => (s.archived ? { archived: { ...s.archived, tasks: s.archived.tasks.filter((x) => x.id !== id) } } : {}));
-    toast(`Restored “${task.title}”`, undefined, false, { label: 'Open', run: () => openDrawer(id) });
+    if (!t) toast(`Restored “${task.title}”`, undefined, false, { label: 'Open', run: () => openDrawer(id) });
   } catch (e) {
+    // Back to the Archived section.
+    set((s) => {
+      const tasks = { ...s.tasks };
+      delete tasks[id];
+      const back = arch && t && s.archived?.project === arch.project && !s.archived.tasks.some((x) => x.id === id);
+      return { tasks, ...(back ? { archived: { ...s.archived!, tasks: [...s.archived!.tasks, t] } } : {}) };
+    });
     toastError(e);
   } finally {
     pending.delete(id);

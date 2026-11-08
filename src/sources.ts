@@ -15,6 +15,7 @@ import { PROJECT_COLORS, appName } from '../shared/types';
 import { onProject } from '../shared/rules';
 import { api, ApiError } from './api';
 import { S, set, type State } from './store';
+import { realId } from './tempIds';
 
 // =====================================================================================================================
 // Connections (this device) and their tokens
@@ -209,8 +210,9 @@ export async function srcCall<T>(src: string, method: string, path: string, body
 const nameOf = (src: string) => S().sources.find((x) => x.id === src)?.name ?? 'That instance';
 
 /** Requests about a task, wherever it lives: /api/tasks/<id>… here, or /v1/tasks/<their id>… on its instance. */
-export function clientFor(id: string) {
+export function clientFor(taskId: string) {
   const call = async <T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', rest: string, body?: unknown): Promise<T> => {
+    const id = await realId(taskId); // a task just added here: wait for its real id
     if (!isFeed(id)) {
       const url = `/api/tasks/${id}${rest}`;
       return method === 'GET' ? api.get<T>(url) : method === 'DELETE' ? api.del<T>(url) : method === 'POST' ? api.post<T>(url, body) : api.patch<T>(url, body);
@@ -255,7 +257,8 @@ export function attachmentBlob(taskId: string, aid: string): Promise<string> {
   return p;
 }
 /** Upload address and headers for a task's files (XHR in actions.uploadFiles). */
-export async function uploadTarget(taskId: string): Promise<{ url: string; headers: Record<string, string> }> {
+export async function uploadTarget(id: string): Promise<{ url: string; headers: Record<string, string> }> {
+  const taskId = await realId(id);
   if (!isFeed(taskId)) return { url: `/api/tasks/${taskId}/attachments`, headers: { 'x-taskivities': '1' } };
   const { src, rid } = feedParts(taskId);
   let c = connById(src);
@@ -329,7 +332,7 @@ export async function loadSources() {
 }
 
 /** Keeps up with each instance, like sync() does with this one (called on the same timer). */
-export async function syncSources(isPending: (id: string) => boolean) {
+export async function syncSources(isPending: (id: string, t: Task) => boolean) {
   for (const c of loadConns()) {
     const st = state.get(c.id);
     if (!st) { void loadSource(c).catch(() => {}); continue; }
@@ -344,7 +347,7 @@ export async function syncSources(isPending: (id: string) => boolean) {
         set((s) => {
           const tasks = { ...s.tasks };
           const events = { ...s.events };
-          for (const t of r.tasks ?? []) { if (isPending(t.id)) continue; tasks[t.id] = t; delete events[t.id]; }
+          for (const t of r.tasks ?? []) { if (isPending(t.id, t)) continue; tasks[t.id] = t; delete events[t.id]; }
           for (const id of r.gone ?? []) delete tasks[nsId(c.id, id)];
           return { tasks, events };
         });
@@ -440,7 +443,12 @@ export async function connectInstance(raw: string, reconnect = false) {
   })}`;
 }
 
-/** Back from approving there (/oauth/done): swap the code for tokens, set up its notifications, load it. */
+/** The instance being connected (back from approving there), before finishConnect() has run. */
+export const connectingOrigin = (): string | null => {
+  try { return (JSON.parse(sessionStorage.getItem(PENDING) || 'null') as { origin?: string } | null)?.origin ?? null; } catch { return null; }
+};
+
+/** Back from approving there (/oauth/done): swap the code for tokens, set up its notifications, load it (in the background). */
 export async function finishConnect(): Promise<{ ok: boolean; message: string }> {
   const q = new URLSearchParams(location.search);
   history.replaceState(null, '', '/');
@@ -473,9 +481,10 @@ export async function finishConnect(): Promise<{ ok: boolean; message: string }>
       color: old?.color ?? PROJECT_COLORS.find((x) => !used.has(x)) ?? PROJECT_COLORS[0],
     };
     putConn(c);
-    await srcCall(c.id, 'POST', '/push-relays', { url: relay }, true).catch(() => { /* notifications only; the rest works */ });
-    await loadSources();
-    return { ok: true, message: `Connected ${S().sources.find((x) => x.id === c.id)?.name ?? pending.origin}. Your tasks there now show with yours.` };
+    void srcCall(c.id, 'POST', '/push-relays', { url: relay }, true).catch(() => { /* notifications only; the rest works */ });
+    // Its row shows at once ("Loading…"); its projects and tasks follow.
+    void loadSources();
+    return { ok: true, message: `Connected ${host}. Your tasks there will show with yours in a moment.` };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : 'Connecting didn’t work.' };
   }

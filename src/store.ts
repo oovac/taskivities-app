@@ -147,6 +147,8 @@ export interface State {
   feedDir: { users: Record<string, User>; projects: Record<string, Project>; me: Record<string, User>; unread: Record<string, number> };
   /** The "Other instances" sheet (account menu). */
   instancesOpen: boolean | string;
+  /** Back from approving on another instance: its address while the connection is being finished (the sheet shows it). */
+  connecting: string | null;
   projDay: string;
   projOpen: boolean;
   /** A project's view: archived tasks of the selected project (null = not loaded), and whether the section is open. */
@@ -234,6 +236,7 @@ export const useStore = create<State>()(() => ({
   sources: [],
   feedDir: { users: {}, projects: {}, me: {}, unread: {} },
   instancesOpen: false,
+  connecting: null,
   projDay: '',
   projOpen: true,
   archived: null,
