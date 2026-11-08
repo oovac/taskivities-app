@@ -9,6 +9,8 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+## v0.10.0 (2026-11-08)
+
 ### Added
 
 - **Attachments:** attach files from Google Drive or OneDrive / SharePoint, picked in their own file pickers. Attach a copy, kept here like any other file, or a link that always opens the latest version for people the file is shared with. Links work even on instances without file storage. Admins turn each drive on separately: see "Files from Google Drive and OneDrive" in the README (a Google API key and project number, or file permissions and a new redirect on the Microsoft app registration, then `MS_FILES=on`).
