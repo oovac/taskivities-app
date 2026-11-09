@@ -9,6 +9,8 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+## v0.11.0 (2026-11-08)
+
 ### Added
 
 - **My day:** a new **Focus** button (or ⇧F) clears the screen down to just your tasks for today, carried-over ones first, with your progress for the day. Tick tasks off, open them or move them to another day without leaving it; **Exit focus**, Esc or the browser's Back button takes you back. Reloading the page keeps you in focus mode, and you can bookmark it.
