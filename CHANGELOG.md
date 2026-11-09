@@ -9,6 +9,11 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+### Fixed
+
+- **My day:** in focus mode, a task you open now covers the focus bar, so its Close button works again instead of
+  sitting under "Exit focus".
+
 ## v0.11.1 (2026-11-08)
 
 ### Changed
