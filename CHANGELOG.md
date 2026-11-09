@@ -9,6 +9,8 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+## v0.11.1 (2026-11-08)
+
 ### Changed
 
 - **Focus mode:** a task someone assigns you for today, or changes while you're focused, now glows for a moment as it arrives, so it doesn't slip in unnoticed.
