@@ -21,7 +21,8 @@ const savedMulti = (): MultiSel => {
   return { people: [], projects: [] };
 };
 export const BOARD_WEEKS_MAX = 52;
-export type View = 'today' | 'list' | 'board';
+/** 'gantt' is a project's view only; a person's page shows Week for it. */
+export type View = 'today' | 'list' | 'board' | 'gantt';
 export type PopType = 'move' | 'assign' | 'prio' | 'proj' | 'person' | 'projpick' | 'urole' | 'uproj' | 'udisable' | 'uenable' | 'notify' | 'update' | 'inbox' | 'followers' | 'account' | 'repeat' | 'taskmenu' | 'pages' | 'effort' | 'deps' | 'attach';
 
 export interface Pop {
@@ -178,7 +179,7 @@ const pageFromPath = (): Page => {
 };
 const savedView = (): View => {
   const v = localStorage.getItem('tv:view');
-  return v === 'today' || v === 'board' ? v : 'list';
+  return v === 'today' || v === 'board' || v === 'gantt' ? v : 'list';
 };
 
 export const emptyDraft = (projectId: string | null = null): Draft => ({

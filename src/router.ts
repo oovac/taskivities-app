@@ -9,7 +9,8 @@
 //   /manage, /manage/projects      People & projects (admins)
 //   /settings                      Settings (admins)
 //   ?task=<id>                     an open task, on any of these
-//   ?view=today|board  ?week=N  ?day=YYYY-MM-DD   the view (Week is the default), week offset, a project's day
+//   ?view=today|board|gantt  ?week=N  ?day=YYYY-MM-DD   the view (Week is the default; Gantt on projects only),
+//                                  week offset, a project's day
 //   ?focus                         focus mode (just my tasks for today) over any of these; leaving it goes back there
 //
 // Ids from another instance (src/sources.ts) are written as <their id>@<host>, so a link works on any device that
@@ -50,7 +51,7 @@ export function urlFor(s: State): string {
     } else path = s.projSel === 'all' ? '/projects' : `/projects/${encodeURIComponent(tok(s.projSel))}`;
   } else if (s.viewUser && s.viewUser !== s.me?.id) path = `/people/${encodeURIComponent(tok(s.viewUser))}`;
   if (s.page === 'tasks' || s.page === 'projects') {
-    if (s.view !== 'list') q.set('view', s.view);
+    if (s.view !== 'list' && !(s.view === 'gantt' && s.page !== 'projects')) q.set('view', s.view);
     if (s.view !== 'today' && s.weekOffset) q.set('week', String(s.weekOffset));
     if (s.page === 'projects' && s.view === 'today' && s.projDay && s.projDay !== s.today) q.set('day', s.projDay);
   }
@@ -84,7 +85,8 @@ export function stateFromUrl(loc: Location | URL, first = false): Parsed {
 
   const v = q.get('view');
   // No view in the URL: Week, except on first load, where this device's last choice stays.
-  if (v === 'today' || v === 'board' || v === 'list' || v === 'week' || !first) st.view = v === 'today' || v === 'board' ? v : 'list';
+  if (v === 'today' || v === 'board' || v === 'gantt' || v === 'list' || v === 'week' || !first)
+    st.view = v === 'today' || v === 'board' || (v === 'gantt' && st.page === 'projects') ? v : 'list';
   st.weekOffset = Number(q.get('week')) || 0;
   st.focusMode = q.has('focus');
   const day = q.get('day');

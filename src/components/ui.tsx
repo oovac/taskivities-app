@@ -27,6 +27,7 @@ export const I = {
   bolt: (s = 15) => <Svg s={s}><path d="M9 1.8L3.5 9H8l-1 5.2L12.5 7H8z" /></Svg>,
   refresh: (s = 13) => <Svg s={s}><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3" /></Svg>,
   list: (s = 14) => <Svg s={s}><path d="M5.5 4h8M5.5 8h8M5.5 12h8" /><circle cx="2.6" cy="4" r=".6" fill="currentColor" /><circle cx="2.6" cy="8" r=".6" fill="currentColor" /><circle cx="2.6" cy="12" r=".6" fill="currentColor" /></Svg>,
+  gantt: (s = 14) => <Svg s={s} sw={2.2}><path d="M2.5 4h5M5.5 8h6M8.5 12h5" /></Svg>,
   board: (s = 14) => <Svg s={s}><rect x="1.8" y="2.5" width="3.4" height="11" rx="1" /><rect x="6.3" y="2.5" width="3.4" height="7.5" rx="1" /><rect x="10.8" y="2.5" width="3.4" height="9.5" rx="1" /></Svg>,
   sun: (s = 14) => <Svg s={s}><circle cx="8" cy="8" r="2.8" /><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1" /></Svg>,
   kbd: (s = 17) => <Svg s={s}><rect x="1.5" y="4" width="13" height="8.5" rx="1.8" /><path d="M4 6.6h.01M6.7 6.6h.01M9.3 6.6h.01M12 6.6h.01M4.5 9.9h7" /></Svg>,

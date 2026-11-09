@@ -147,8 +147,10 @@ export function onKeyDown(e: KeyboardEvent) {
     return;
   }
   if (k === 'v' && (s.page === 'tasks' || s.page === 'projects')) {
-    const order = ['today', 'list', 'board'] as const;
-    setView(order[(order.indexOf(s.view) + 1) % 3]);
+    // Gantt is a project's view only.
+    const order = s.page === 'projects' ? (['today', 'list', 'board', 'gantt'] as const) : (['today', 'list', 'board'] as const);
+    const cur = (order as readonly string[]).indexOf(s.view);
+    setView(order[(cur + 1) % order.length]);
     return;
   }
   if (k === 'p') {

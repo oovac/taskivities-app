@@ -86,13 +86,19 @@ export function TasksPage() {
   );
 }
 
-/** Today / Week / Board: the same three ways to look at a person or a project (the choice is shared). */
+/** Today / Week / Board: the same three ways to look at a person or a project (the choice is shared), and Gantt for a project. */
 export function ViewSeg({ s }: { s: State }) {
+  const proj = s.page === 'projects';
+  const week = s.view === 'list' || (s.view === 'gantt' && !proj); // a person's page shows Week for Gantt
   return (
     <div className="seg" role="group" aria-label="View">
       <button className={s.view === 'today' ? 'on' : ''} data-act="view-mode" data-m="today" onClick={() => setView('today')}>{I.sun()}<span className="sl">Today</span></button>
-      <button className={s.view === 'list' ? 'on' : ''} data-act="view-mode" data-m="list" onClick={() => setView('list')}>{I.list()}<span className="sl">Week</span></button>
+      <button className={week ? 'on' : ''} data-act="view-mode" data-m="list" onClick={() => setView('list')}>{I.list()}<span className="sl">Week</span></button>
       <button className={s.view === 'board' ? 'on' : ''} data-act="view-mode" data-m="board" onClick={() => setView('board')}>{I.board()}<span className="sl">Board</span></button>
+      {proj && (
+        <button className={s.view === 'gantt' ? 'on' : ''} data-act="view-mode" data-m="gantt" title="Gantt: High-priority tasks over five weeks"
+          onClick={() => setView('gantt')}>{I.gantt()}<span className="sl">Gantt</span></button>
+      )}
     </div>
   );
 }

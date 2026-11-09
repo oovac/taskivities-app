@@ -9,6 +9,22 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+### Added
+
+- **Projects:** a new **Gantt** view (next to Today, Week and Board, or press V) charts a project's High-priority
+  tasks over five weeks. Only High tasks are shown, so the chart stays readable. Each bar runs from the due date
+  through the days the task lasts; overdue tasks run on to today in red, finished ones are faded, and arrows show
+  which tasks wait on which, in red when the dates clash. Step through weeks with the arrows or [ and ], and click a
+  task to open it. Drag a bar to move the task to other days, or drag its right edge to change how many days it lasts
+  (with a mouse; Esc cancels, and Undo puts it back).
+
+### Changed
+
+- **AI assistants:** Claude and other assistants are now told what each priority is for. Asked to plan a project,
+  they make its steps High-priority tasks (so they show on the Gantt chart) with how many days each lasts and what
+  waits on what, keep smaller work at Normal, and keep Urgent for real emergencies. Reconnect the assistant, or
+  start a new chat, to pick this up.
+
 ## v0.12.0 (2026-11-09)
 
 ### Added

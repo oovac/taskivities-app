@@ -1100,3 +1100,67 @@ a.att-n:hover{color:var(--accent);text-decoration:underline}
   .fx-row.flash{animation:fx-flash 2.6s steps(1,end)}
   .fx-row,.fx-ring .fg{transition:none}
 }
+
+/* ---------- Gantt (a project's High-priority tasks over five weeks; src/pages/Gantt.tsx) ---------- */
+.gantt-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--panel)}
+.gantt{display:grid;grid-template-columns:minmax(150px,240px) 1fr;min-width:720px}
+.gt-corner{border-bottom:1px solid var(--line);border-right:1px solid var(--line)}
+/* Task names stay put while the days scroll sideways (phones). */
+.gt-corner,.gt-labels{position:sticky;left:0;z-index:2;background:var(--panel)}
+.gt-head{border-bottom:1px solid var(--line);min-width:0}
+.gt-weeks{display:flex}
+.gt-weeks span{padding:7px 6px 2px;border-left:1px solid var(--line2);font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap;overflow:hidden}
+.gt-days{display:grid;grid-template-columns:repeat(var(--days),1fr)}
+.gt-days span{padding:1px 0 6px;text-align:center;font-size:10.5px;color:var(--faint);font-variant-numeric:tabular-nums;overflow:hidden}
+.gt-days i{display:block;font-style:normal;font-size:9px;line-height:1.3}
+.gt-days .we{background:var(--sunken)}
+.gt-days .td{color:var(--accent);font-weight:700}
+.gt-labels{border-right:1px solid var(--line);min-width:0}
+.gt-label{display:flex;align-items:center;gap:7px;padding:0 10px 0 12px;border-bottom:1px solid var(--line2);font-size:13px;cursor:pointer;min-width:0}
+.gt-label:hover{background:var(--fill)}
+.gt-label:focus-visible{outline:none;background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.gt-label .prio{flex:none}
+.gt-t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gt-label.done .gt-t{color:var(--faint);text-decoration:line-through;text-decoration-color:var(--line-strong)}
+.gt-ok{display:inline-flex;color:var(--ok-ink);flex:none}
+.gt-dot{width:8px;height:8px;border-radius:50%;flex:none}
+.gt-area{position:relative;min-width:0}
+.gt-grid{position:absolute;inset:0;display:grid;grid-template-columns:repeat(var(--days),1fr);pointer-events:none}
+.gt-grid span{border-left:1px solid var(--line2)}
+.gt-grid .we{background:var(--sunken)}
+.gt-grid .td{background:var(--accent-soft)}
+.gt-row{position:absolute;left:0;right:0;border-bottom:1px solid var(--line2)}
+.gt-bar{position:absolute;top:50%;transform:translateY(-50%);min-width:6px;padding:0;border:0;border-radius:6px;background:var(--c);opacity:.88;cursor:pointer}
+.gt-bar:hover{opacity:1;box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 30%,transparent)}
+.gt-bar.cut-l{border-top-left-radius:0;border-bottom-left-radius:0}
+.gt-bar.cut-r{border-top-right-radius:0;border-bottom-right-radius:0}
+.gt-row.done .gt-bar{opacity:.32}
+.gt-late{position:absolute;top:50%;transform:translateY(-50%);border-radius:0 6px 6px 0;background:repeating-linear-gradient(135deg,var(--late) 0 4px,color-mix(in srgb,var(--late) 40%,transparent) 4px 8px);opacity:.85}
+.gt-late.was{opacity:.3}
+.gt-today{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--accent);pointer-events:none}
+.gt-links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
+.gt-links path{fill:none;stroke:var(--muted);stroke-width:1.5}
+.gt-links path.bad{stroke:var(--late)}
+#gt-arrow path{fill:var(--muted);stroke:none}
+#gt-arrow-bad path{fill:var(--late);stroke:none}
+.gt-legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:8px;font-size:11.5px;color:var(--muted)}
+.gt-legend span{display:inline-flex;align-items:center;gap:6px}
+.gt-legend i{display:inline-block}
+.gt-legend .lg-bar{width:18px;height:8px;border-radius:3px;background:var(--accent);opacity:.88}
+.gt-legend .lg-late{width:18px;height:8px;border-radius:3px;background:repeating-linear-gradient(135deg,var(--late) 0 3px,color-mix(in srgb,var(--late) 40%,transparent) 3px 6px)}
+.gt-legend .lg-link{width:16px;border-top:1.5px solid var(--muted)}
+.gt-legend .lg-link.bad{border-color:var(--late)}
+.late-txt{color:var(--late);font-weight:600}
+@media (max-width:640px){
+  .gantt{grid-template-columns:132px 1fr;min-width:640px}
+  .gt-label{padding:0 8px 0 10px;gap:6px;font-size:12.5px}
+}
+/* Gantt: dragging a bar moves it; the grip on its right edge changes how many days it lasts. */
+.gt-bar.can-drag{cursor:grab;touch-action:pan-x pan-y}
+.gt-bar.on{cursor:grabbing;opacity:1;box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 35%,transparent),0 4px 12px rgba(0,0,0,.25);z-index:3}
+.gt-grip{position:absolute;right:0;top:0;bottom:0;width:9px;cursor:ew-resize;border-radius:0 6px 6px 0}
+.gt-grip::after{content:"";position:absolute;right:3px;top:4px;bottom:4px;width:2px;border-radius:1px;background:rgba(255,255,255,.7);opacity:0;transition:opacity .12s}
+.gt-bar.can-drag:hover .gt-grip::after,.gt-bar.on .gt-grip::after{opacity:1}
+.gt-dragging,.gt-dragging *{user-select:none}
+.gt-dragging .gt-bar.on .gt-grip{cursor:ew-resize}
+.gt-when{position:absolute;top:-2px;transform:translateY(-100%);z-index:4;padding:3px 8px;border-radius:7px;background:var(--inverse);color:#fff;font-size:11.5px;font-weight:500;white-space:nowrap;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.2)}

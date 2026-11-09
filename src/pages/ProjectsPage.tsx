@@ -12,6 +12,7 @@ import { set, useStore, type State } from '../store';
 import { displayName, firstName, shownOn, byPrioThenOldest, inRange, previewsWhere, weekInfo } from '../util';
 import { CopyDone, Day, ViewSeg, WeekBoard, WeekControls } from './TasksPage';
 import { copyDone } from '../copyDone';
+import { Gantt, GanttControls, ganttRange, ganttTasks } from './Gantt';
 
 /** Names as a short list: "Priya", "Priya and Arjun", "Priya, Arjun and Tom", "Priya, Arjun and 3 more". */
 const listNames = (xs: string[]) =>
@@ -68,9 +69,12 @@ export function ProjectsPage() {
   const day = s.projDay || s.today;
   const all = pv.showProject; // rows say which project each task is in
   const project = pv.project;
-  const mode = s.view; // Today (this page's day report) · Week · Board, shared with people's views
+  const mode = s.view; // Today (this page's day report) · Week · Board, shared with people's views · Gantt (projects only)
   const w = weekInfo(s);
-  useEffect(() => { if (mode === 'today') void ensureRange(day, day); else void ensureRange(w.ws, w.we); }, [mode, day, w.ws, w.we]);
+  const gr = ganttRange(s.today, s.weekOffset);
+  const from = mode === 'today' ? day : mode === 'gantt' ? gr.from : w.ws;
+  const to = mode === 'today' ? day : mode === 'gantt' ? gr.to : w.we;
+  useEffect(() => { void ensureRange(from, to); }, [from, to]);
   // New tasks from here go in this project (you can still pick another).
   useEffect(() => { if (project) set((st) => ({ draft: { ...st.draft, projectId: project.id } })); }, [project?.id]);
 
@@ -103,12 +107,13 @@ export function ProjectsPage() {
           {pv.multi ? <MultiBadge s={s} people={pv.people} projects={pv.projects} /> : <ProjBadge project={project ?? 'all'} />}
           <span>
             <span className="h1">{name} {I.chev()}</span>
-            <span className="sub">{mode === 'today' ? <>{done.length} done{doneEffort && ` · ${doneEffort}`}{open.length > 0 && ` · ${open.length} not finished`}</> : <WeekSub s={s} w={w} inP={inP} et={et} />}</span>
+            <span className="sub">{mode === 'today' ? <>{done.length} done{doneEffort && ` · ${doneEffort}`}{open.length > 0 && ` · ${open.length} not finished`}</>
+              : mode === 'gantt' ? <GanttSub s={s} inP={inP} /> : <WeekSub s={s} w={w} inP={inP} et={et} />}</span>
           </span>
         </button>
         <div className="weeknav">
           <ViewSeg s={s} />
-          {mode !== 'today' ? <>
+          {mode === 'gantt' ? <GanttControls s={s} /> : mode !== 'today' ? <>
             <WeekControls s={s} w={w} />
             <CopyDone onClick={() => void copyDone(s, { title: name, span: w.span, tasks: Object.values(s.tasks).filter(inP), from: w.ws, to: w.we, who: true, project: all })} />
           </> : <>
@@ -124,6 +129,7 @@ export function ProjectsPage() {
         </div>
       </div>
       {mode !== 'today' && <QuickAdd />}
+      {mode === 'gantt' && <Gantt s={s} inP={inP} showProject={all} />}
       {mode === 'list' && <ProjectWeek s={s} w={w} pid={pid} name={name} inP={inP} all={all} />}
       {mode === 'board' && (
         <WeekBoard s={s} w={w} pool={Object.values(s.tasks).filter(inP)} side="by" hideProject={!all}
@@ -149,6 +155,14 @@ export function ProjectsPage() {
       {!pv.multi && <ArchivedSection s={s} pid={pid} all={all} />}
     </>
   );
+}
+
+/** "4 High-priority open · 1 late" for a project's Gantt chart (in the weeks shown). */
+function GanttSub({ s, inP }: { s: State; inP: (t: Task) => boolean }) {
+  const r = ganttRange(s.today, s.weekOffset);
+  const open = ganttTasks(s, inP, r.from, r.to).filter(({ t }) => t.status === 'open');
+  const late = open.filter(({ t }) => isLate(t, s.today)).length;
+  return <>{open.length} High-priority open{late > 0 && <> · <span className="late-txt">{late} late</span></>}</>;
 }
 
 /** "12 open this week · 3 carried over" for a project's week and board. */

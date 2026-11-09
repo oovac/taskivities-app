@@ -169,8 +169,32 @@ const toRepeat = (r: z.infer<typeof repeatArg>) => ({
   freq: r.freq, every: r.every ?? 1, days: r.days, monthBy: r.month_by, afterDone: r.after_done, until: r.until, count: r.count,
 });
 
+/**
+ * Sent to every assistant when it connects: what the priorities mean, and how to lay out a project's plan so the
+ * app's Gantt chart (src/pages/Gantt.tsx, High-priority tasks only) shows it well.
+ */
+const INSTRUCTIONS = `Taskivities is a team's task manager. Every task has a project, a due date, an assignee and a priority. You act as the signed-in person, with their access, and every change you make is recorded in the task's history as made through you.
+
+Priorities, and what each one is for:
+- urgent: drop everything. An interruption that can't wait (an outage, a client emergency). Never use it for planned work.
+- high: a step in a project's plan. The app's Gantt chart for a project shows only High tasks, so High is how a step gets on the plan.
+- normal: everyday work. The default.
+- low: when there is time.
+
+Planning a project (when asked to plan, schedule or break down a project, or lay out a timeline):
+1. Make each step that sets the project's pace (a phase, milestone or deliverable) a High task in that project, owned by someone on the project (list_projects shows who).
+2. Set due_date to the day the step starts, and duration_days to how many days it runs. A step is overdue only after its last day.
+3. Record the order with set_dependencies: a step that can't finish before another one waits on it. Dates never move by themselves; if they clash, ask before moving them.
+4. Keep the smaller work under each step as Normal (or Low) tasks, or as a checklist on the High task, so the plan stays readable.
+5. Don't make every task High, and don't make planned steps Urgent: a plan where everything is a priority shows nothing.
+Due dates can't be in the past. When you're unsure which project or person a task belongs to, check list_projects or ask.`;
+
+const PRIORITY_HELP =
+  'urgent: drop everything, never planned work · high: a step in a project\'s plan (only High tasks show on its Gantt chart; give it duration_days and dependencies) · ' +
+  'normal: everyday work, the default · low: when there is time.';
+
 export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
-  server = new McpServer({ name: 'Taskivities', version: '0.1.0' });
+  server = new McpServer({ name: 'Taskivities', version: '0.1.0' }, { instructions: INSTRUCTIONS });
 
   /** "via …" in task history. */
   private get via() {
@@ -299,14 +323,15 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
         description:
           `Create a task as the signed-in person. All five fields are required: title, project, due_date, assignee and priority. ` +
           `The assignee must be on the project (see list_projects), and the due date can't be in the past (today is ${t0} in ${zone} as of connecting). ` +
-          `Use "normal" priority unless the person says otherwise. Titles are at most ${TITLE_MAX} characters.\n\n` +
+          `Use "normal" priority unless the person says otherwise, or the task is a step in a project's plan: then "high", with duration_days ` +
+          `and set_dependencies (see the server instructions). Titles are at most ${TITLE_MAX} characters.\n\n` +
           `Pick the project from these descriptions (what belongs where, and how tasks are named):\n${projectGuide || '- (call list_projects)'}`,
         inputSchema: {
           title: z.string().min(1).max(TITLE_MAX),
           project: z.string().describe('Project name.'),
           due_date: dateArg.describe('YYYY-MM-DD, today or later.'),
           assignee: z.string().describe('Name, first name, email, or "me".'),
-          priority: z.enum(PRIORITY_NAMES).describe('urgent: drop everything · high: do first · normal: the default · low: when there is time.'),
+          priority: z.enum(PRIORITY_NAMES).describe(PRIORITY_HELP),
           notes: z.string().optional().describe('Optional details.'),
           repeat: repeatArg.optional(),
           effort: effortArg.optional(),
@@ -344,7 +369,7 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
           notes: z.string().optional().describe('Replaces the notes. Pass "" to clear them.'),
           project: z.string().optional().describe('Project name.'),
           due_date: dateArg.optional(),
-          priority: z.enum(PRIORITY_NAMES).optional(),
+          priority: z.enum(PRIORITY_NAMES).optional().describe(PRIORITY_HELP),
           status: z.enum(['open', 'done']).optional(),
           repeat: repeatArg.optional().describe('Repeating tasks only: the new rule.'),
           stop_repeating: z.boolean().optional().describe("Stop repeating for good. The current copy stays as a normal task. Can't be undone."),

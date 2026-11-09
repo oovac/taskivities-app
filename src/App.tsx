@@ -111,7 +111,7 @@ export function App() {
         </button>
       </div>
       <div className="app-scroll">
-        <div className={`page ${(s.page === 'tasks' || s.page === 'projects') && s.view === 'board' ? 'wide' : ''}`}>
+        <div className={`page ${((s.page === 'tasks' || s.page === 'projects') && s.view === 'board') || (s.page === 'projects' && s.view === 'gantt') ? 'wide' : ''}`}>
           {s.page === 'settings' ? <SettingsPage /> : s.page === 'team' ? <TeamPage /> : s.page === 'projects' ? <ProjectsPage /> : <TasksPage />}
         </div>
       </div>
