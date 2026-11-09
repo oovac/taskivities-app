@@ -1,5 +1,5 @@
 // Everything that changes data. Edits are applied on screen first, then sent; on failure they're rolled back.
-import { addDays, rel, weekStart } from '../shared/dates';
+import { addDays, fmt, rel, weekStart } from '../shared/dates';
 import { type Repeat, describe, firstDate } from '../shared/repeat';
 import { onProject } from '../shared/rules';
 import { applyUrl, startRouter } from './router';
@@ -17,7 +17,7 @@ import { BOARD_WEEKS_MAX, type ManageTab, type MultiSel, type Page, type Pop, ty
 import { syncPush } from './push';
 import { checkForUpdate } from './updates';
 import { loadInbox } from './inbox';
-import { displayName, draftEffective, firstName, linksOf, myProjects, sharesWith } from './util';
+import { daysLabel, displayName, draftEffective, firstName, linksOf, myProjects, sharesWith } from './util';
 import { expectedOn } from '../shared/deps';
 
 const pending = new Set<string>(); // tasks with an edit in flight (ignore sync for them)
@@ -192,7 +192,7 @@ export async function loadEvents(id: string) {
 }
 
 // ---------- task edits ----------
-type Changes = Partial<Pick<Task, 'title' | 'notes' | 'projectId' | 'assigneeId' | 'dueDate' | 'priority' | 'status' | 'effort'>>;
+type Changes = Partial<Pick<Task, 'title' | 'notes' | 'projectId' | 'assigneeId' | 'dueDate' | 'durationDays' | 'priority' | 'status' | 'effort'>>;
 
 const putTask = (t0: Task) => {
   if (isDropped(t0.id)) return; // added here, but the server refused it: it's gone
@@ -241,7 +241,7 @@ export async function patchTask(taskId: string, c: Changes, opts: PatchOpts = {}
 
 function undo(prev: Task, c: Changes) {
   const back: Changes = {};
-  for (const k of Object.keys(c) as (keyof Changes)[]) (back as Record<string, unknown>)[k] = prev[k];
+  for (const k of Object.keys(c) as (keyof Changes)[]) (back as Record<string, unknown>)[k] = prev[k] ?? null; // none: 1 day
   set({ toast: null });
   void patchTask(prev.id, back, { restore: true });
 }
@@ -260,6 +260,13 @@ export const toggleDone = (id: string, anchor?: HTMLElement | null) => {
   }
   void patchTask(id, { status: done ? 'done' : 'open' }, done ? { toast: `Done: ${t.title}` } : {});
 };
+/** Sets how many days a task lasts (1: just its due date). */
+export const setDuration = (id: string, days: number) => {
+  const t = S().tasks[id];
+  if (!t || (t.durationDays ?? 1) === days) return;
+  void patchTask(id, { durationDays: days > 1 ? days : null }, { toast: days > 1 ? `Lasts ${daysLabel(days)}: overdue after ${fmt(addDays(t.dueDate, days - 1))}` : 'Lasts 1 day' });
+};
+
 /** Sets a task's effort (stored form, or null), and marks it done too when `thenDone`. */
 export const setEffort = (id: string, effort: string | null, thenDone = false) => {
   const t = S().tasks[id];
@@ -368,7 +375,7 @@ export async function moveTasks(ids: string[], dueDate: string) {
 }
 
 /** Fields that edits made while a task was being added can change (kept when its real copy arrives). */
-const LOCAL_KEYS = ['title', 'notes', 'projectId', 'assigneeId', 'assignedBy', 'dueDate', 'priority', 'status', 'doneAt', 'doneOn', 'doneBy',
+const LOCAL_KEYS = ['title', 'notes', 'projectId', 'assigneeId', 'assignedBy', 'dueDate', 'durationDays', 'priority', 'status', 'doneAt', 'doneOn', 'doneBy',
   'effort', 'checklist', 'followers', 'attachments', 'blockedBy', 'blocks', 'comments'] as const satisfies readonly (keyof Task)[];
 
 /**
@@ -388,13 +395,14 @@ export async function createTask(): Promise<boolean> {
   const picked = d.dueDate || defaultDraftDate(s);
   const rule = d.repeat ?? null;
   const due = rule ? firstDate(rule, picked) : picked;
+  const durationDays = d.durationDays && d.durationDays > 1 ? d.durationDays : null;
   const me = s.me!.id;
   const notes = d.notes.trim();
   // On another instance's project the task is made there (src/sources.ts), so its id is in that instance's form.
   const tmp = newTemp(isFeed(projectId) ? nsId(feedParts(projectId).src, '') : '');
   const now = nowIso();
   const shown: Task = {
-    id: tmp.id, title, notes, projectId, assigneeId, createdBy: me, assignedBy: me, dueDate: due, priority, status: 'open',
+    id: tmp.id, title, notes, projectId, assigneeId, createdBy: me, assignedBy: me, dueDate: due, durationDays, priority, status: 'open',
     doneAt: null, doneOn: null, doneBy: null, createdAt: now, updatedAt: now, version: 0,
     series: rule ? { id: tmp.id, rule, anchor: due, active: true, made: 1, assigneeId, title } : null,
     comments: 0, checklist: [], attachments: [], archivedAt: null, archivedBy: null,
@@ -408,7 +416,7 @@ export async function createTask(): Promise<boolean> {
   toast(`Added for ${assigneeId === me ? 'you' : firstName(s.users[assigneeId])} · ${rel(due, s.today)}${rule ? ` · ${lowerFirst(describe(rule, due))}` : ''}`);
   void (async () => {
     try {
-      const body = { title, notes, projectId, assigneeId, dueDate: picked, priority, repeat: rule ?? undefined };
+      const body = { title, notes, projectId, assigneeId, dueDate: picked, durationDays: durationDays ?? undefined, priority, repeat: rule ?? undefined };
       const { task } = isFeed(projectId)
         ? await srcCall<{ task: Task }>(feedParts(projectId).src, 'POST', '/tasks', body)
         : await api.post<{ task: Task }>('/api/tasks', body);

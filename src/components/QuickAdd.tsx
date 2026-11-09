@@ -4,7 +4,7 @@ import { PRIORITIES } from '../../shared/types';
 import { describe } from '../../shared/repeat';
 import { createTask, defaultDraftDate, openPop } from '../actions';
 import { S, set, useStore } from '../store';
-import { draftEffective, firstName } from '../util';
+import { daysLabel, draftEffective, firstName } from '../util';
 import { Avatar, I, PrioIcon } from './ui';
 
 const setDraft = (p: Partial<ReturnType<typeof S>['draft']>) => set((s) => ({ draft: { ...s.draft, ...p } }));
@@ -87,7 +87,7 @@ export function QuickAdd() {
             </button>
             <button className="chip" data-act="qa-date"
               onClick={(e) => openPop({ type: 'move', mode: 'qa', ids: [], month: due.slice(0, 8) + '01' }, e.currentTarget)}>
-              {I.cal()}{rel(due, s.today)}
+              {I.cal()}{rel(due, s.today)}{(d.durationDays ?? 1) > 1 && ` · ${daysLabel(d.durationDays!)}`}
             </button>
             <button className="chip" data-act="qa-repeat" title="Repeat" aria-label={d.repeat ? `Repeats: ${describe(d.repeat, due)}` : 'Repeat'}
               onClick={(e) => openPop({ type: 'repeat', mode: 'qa' }, e.currentTarget)}>

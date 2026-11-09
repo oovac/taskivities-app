@@ -1,12 +1,13 @@
 import type { DragEvent } from 'react';
+import { truncatedTip } from '../tooltip';
 import { EFFORT_TYPES, effortFor, effortLabel } from '../../shared/effort';
 import { diffDays, fmt, rel } from '../../shared/dates';
-import { isLate, shownOn } from '../../shared/rules';
+import { doneLate, isLate, lastDay, shownOn } from '../../shared/rules';
 import { describe } from '../../shared/repeat';
 import type { Task } from '../../shared/types';
 import { openDrawer, openPop, toggleDone } from '../actions';
 import { useStore } from '../store';
-import { ariaFor, clockTime, firstName, lateDays, linksOf } from '../util';
+import { ariaFor, clockTime, daysLabel, dueRange, firstName, lateDays, linksOf } from '../util';
 import { blockedUntil, holdingUp, openBlockers, waitingBadly } from '../../shared/deps';
 import { Avatar, I, PrioTag, ProjPill } from './ui';
 
@@ -39,7 +40,7 @@ export function TaskRow({ t, ctx, showProject = false }: { t: Task; ctx: RowCtx;
         {ctx === 'pdone-all' && <ProjPill p={p} />}
         <span className="from"><Avatar user={users[t.assigneeId]} size={18} /><span className="ft">{firstName(users[t.assigneeId])}</span></span>
         <span className="due">due {rel(t.dueDate, today)}</span>
-        {t.doneOn && t.doneOn > t.dueDate && <span className="late">{diffDays(t.doneOn, t.dueDate)}d late</span>}
+        {doneLate(t) > 0 && <span className="late">{doneLate(t)}d late</span>}
         {t.doneBy && t.doneBy !== t.assigneeId && <span className="due">ticked by {firstName(users[t.doneBy])}</span>}
         <span className="datep tm">{clockTime(t.doneAt)}</span>
       </>
@@ -79,7 +80,7 @@ export function TaskRow({ t, ctx, showProject = false }: { t: Task; ctx: RowCtx;
         onClick={() => (ghost ? openDrawer(t.id) : toggleDone(t.id))}>{I.check()}</button>
       <div className="row-main" data-act="open" onClick={() => openDrawer(t.id)}>
         {(!done || report) && <PrioTag p={t.priority} />}
-        <div className="row-title">{t.title}{!done && t.series?.active && <RepeatMark t={t} />}{t.checklist.length > 0 && <CheckMark t={t} />}{t.attachments.length > 0 && <span className="clipmark" title={`${t.attachments.length} attachment${t.attachments.length > 1 ? 's' : ''}`} aria-label={`${t.attachments.length} attachments`}>{I.clip(11)}{t.attachments.length}</span>}{t.comments > 0 && <CommentMark n={t.comments} />}<EffortMark t={t} /><DepMark t={t} /></div>
+        <div className="row-title"><span className="rt" {...truncatedTip(t.title)}>{t.title}</span><span className="rt-marks"><Marks t={t} /></span></div>
       </div>
       <div className="meta">{meta}</div>
       {!done && !ghost && (
@@ -119,7 +120,8 @@ export function TaskCard({ t, side, hideProject = false }: { t: Task; side: 'to'
       data-nav={`task:${t.id}`} tabIndex={-1} aria-label={ariaFor(t, today)} draggable={!done} onDragStart={onDragStart} onDragEnd={onDragEnd}>
       <button className="chk" tabIndex={-1} data-act="toggle" title={done ? 'Mark not done' : 'Mark done'} onClick={() => toggleDone(t.id)}>{I.check()}</button>
       <div className="tc-body" data-act="open" onClick={() => openDrawer(t.id)}>
-        <div className="tc-title">{!done && <PrioTag p={t.priority} />}{t.title}{!done && t.series?.active && <RepeatMark t={t} />}{t.checklist.length > 0 && <CheckMark t={t} />}{t.attachments.length > 0 && <span className="clipmark" title={`${t.attachments.length} attachment${t.attachments.length > 1 ? 's' : ''}`} aria-label={`${t.attachments.length} attachments`}>{I.clip(11)}{t.attachments.length}</span>}{t.comments > 0 && <CommentMark n={t.comments} />}<EffortMark t={t} /><DepMark t={t} /></div>
+        <div className="tc-title" {...truncatedTip(t.title)}>{!done && <PrioTag p={t.priority} />}{t.title}</div>
+        <div className="tc-marks"><Marks t={t} /></div>
         <div className="tc-meta">
           {!hideProject && <span className="tc-proj"><i style={{ background: p?.color }} />{p?.name}</span>}
           {late && <LateBadge t={t} today={today} />}
@@ -127,6 +129,22 @@ export function TaskCard({ t, side, hideProject = false }: { t: Task; side: 'to'
         </div>
       </div>
     </div>
+  );
+}
+
+/** The small badges after a title: repeats, checklist, files, comments, effort, duration, dependencies. Kept apart
+ *  from the title, so a long title is cut short instead of them. */
+function Marks({ t }: { t: Task }) {
+  const done = t.status === 'done';
+  const n = t.attachments.length;
+  return (
+    <>
+      {!done && t.series?.active && <RepeatMark t={t} />}
+      {t.checklist.length > 0 && <CheckMark t={t} />}
+      {n > 0 && <span className="clipmark" title={`${n} attachment${n > 1 ? 's' : ''}`} aria-label={`${n} attachments`}>{I.clip(11)}{n}</span>}
+      {t.comments > 0 && <CommentMark n={t.comments} />}
+      <EffortMark t={t} /><DurationMark t={t} /><DepMark t={t} />
+    </>
   );
 }
 
@@ -139,6 +157,16 @@ const CheckMark = ({ t }: { t: Task }) => {
 };
 
 /** The task's effort, if its project tracks it and it has one: "M", "5 pts", "1h 30m". */
+/** Lasts several days: "Day 2 of 3" while it runs (open), otherwise "3 days". */
+function DurationMark({ t }: { t: Task }) {
+  const today = useStore().today;
+  const n = t.durationDays ?? 1;
+  if (n < 2) return null;
+  const running = t.status === 'open' && t.dueDate <= today && today <= lastDay(t);
+  const label = running ? `Day ${diffDays(today, t.dueDate) + 1} of ${n}` : daysLabel(n);
+  return <span className="efmark" title={`Lasts ${daysLabel(n)}: ${dueRange(t)}. Overdue after the last day.`} aria-label={label}>{label}</span>;
+}
+
 function EffortMark({ t }: { t: Task }) {
   const p = useStore().projects[t.projectId];
   const v = p?.effort ? effortFor(t.effort, p.effort) : null;
@@ -190,7 +218,7 @@ export function PreviewRow({ t, date }: { t: Task; date: string }) {
   return (
     <div className="row preview" data-nav={`preview:${t.id}:${date}`} tabIndex={-1} aria-label={previewLabel(t, date)} title="Upcoming copy" onClick={() => openDrawer(t.id)}>
       <span className="chk pv">{I.refresh(11)}</span>
-      <div className="row-main"><div className="row-title">{t.series!.title}</div></div>
+      <div className="row-main"><div className="row-title"><span className="rt" {...truncatedTip(t.series!.title)}>{t.series!.title}</span></div></div>
       <div className="meta"><ProjPill p={projects[t.projectId]} /><span className="ghost-tag pv-tag">upcoming</span></div>
     </div>
   );

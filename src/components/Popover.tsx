@@ -6,7 +6,7 @@ import { isAdmin, onProject } from '../../shared/rules';
 import { PRIORITIES, appName, type NotifyPrefs, type Priority, type Project, type Task, type User } from '../../shared/types';
 import {
   assignable, closePop, defaultDraftDate, moveTasks, openConnect, openPop, viewProject, disableUser, enableUser, setPage, setPriority, setProject, setRepeat, signOut, switchablePeople, transfer,
-  updateUser, viewPerson, editNotes, editChecklist, attachMenu, attachFromDrive, attachLink, archiveTask, setFollowing, setEffort, currentSel, setMultiPick, viewMulti, setBlocker,
+  updateUser, viewPerson, editNotes, editChecklist, attachMenu, attachFromDrive, attachLink, archiveTask, setFollowing, setEffort, setDuration, currentSel, setMultiPick, viewMulti, setBlocker,
 } from '../actions';
 import { focusLater } from '../focus';
 import { EFFORT_TYPES, effortFor, effortFromInput, fmtTime } from '../../shared/effort';
@@ -15,7 +15,7 @@ import { installApp, isInstalled, isIOS } from '../install';
 import { setNotifyPrefs, testPush, turnOffPush, turnOnPush } from '../push';
 import { APP_COMMIT, APP_VERSION, checkForUpdate, markUpdateSeen } from '../updates';
 import { S, set, useStore, type Pop, type State } from '../store';
-import { displayName, draftEffective, firstName, isLate, myProjects, shownOn } from '../util';
+import { daysLabel, displayName, draftEffective, firstName, isLate, myProjects, shownOn } from '../util';
 import { projectDayData } from '../pages/ProjectsPage';
 import { openProjEdit } from '../pages/TeamPage';
 import { Avatar, Dot, I, PrioIcon, ProjBadge } from './ui';
@@ -23,6 +23,8 @@ import { InboxPop } from './InboxPop';
 import { preloadPickers } from '../cloudFiles';
 import { linkWhere, nameForLink } from '../../shared/links';
 
+/** The choices for how many days a task lasts (a task set to another number through an assistant shows that too). */
+const DURATION_PRESETS = [1, 2, 3, 4, 5, 6, 7, 10, 14, 21, 28];
 const setDraft = (p: Partial<State['draft']>) => set((s) => ({ draft: { ...s.draft, ...p } }));
 const updatePop = (p: Partial<Pop>) => set((s) => (s.pop ? { pop: { ...s.pop, ...p } } : {}));
 /** Phones and tablets: focusing a search box there opens the on-screen keyboard, so popovers don't do it on open. */
@@ -103,6 +105,11 @@ function Content({ p, s }: { p: Pop; s: State }) {
 function MovePop({ p, s }: { p: Pop; s: State }) {
   const qa = p.mode === 'qa';
   const cur = qa ? s.draft.dueDate || s.today : p.ids!.length === 1 ? s.tasks[p.ids![0]]?.dueDate : null;
+  // How many days it lasts: for the draft, or one open task (not when moving several).
+  const one = !qa && p.ids!.length === 1 ? s.tasks[p.ids![0]] : null;
+  const days = qa ? s.draft.durationDays ?? 1 : one && one.status === 'open' ? one.durationDays ?? 1 : null;
+  const dayOpts = [...new Set([...DURATION_PRESETS, days ?? 1])].sort((a, b) => a - b);
+  const from = qa ? s.draft.dueDate || defaultDraftDate(s) : cur;
   const nextMon = addDays(weekStart(s.today), 7);
   const fri = addDays(weekStart(s.today), 4);
   const quick: [string, string][] = [
@@ -147,6 +154,22 @@ function MovePop({ p, s }: { p: Pop; s: State }) {
           })}
         </div>
       </div>
+      {days !== null && (
+        <>
+          <div className="pop-sep" />
+          <label className="dur-row" title="Overdue only after the last day">
+            <span>Lasts</span>
+            <select data-act="duration" value={days} onChange={(e) => {
+              const n = Number(e.target.value);
+              if (qa) setDraft({ durationDays: n > 1 ? n : null });
+              else setDuration(one!.id, n);
+            }}>
+              {dayOpts.map((n) => <option key={n} value={n}>{daysLabel(n)}</option>)}
+            </select>
+            {days > 1 && from && <span className="r">until {fmt(addDays(from, days - 1))}</span>}
+          </label>
+        </>
+      )}
     </>
   );
 }

@@ -106,6 +106,9 @@ export interface Task {
   assignedBy: string;
   /** YYYY-MM-DD, always set */
   dueDate: string;
+  /** How many days it runs, starting on dueDate (null: 1). It turns overdue only after the last one (shared/rules.ts).
+   *  Missing on tasks from instances that don't have durations yet. */
+  durationDays?: number | null;
   priority: Priority;
   status: 'open' | 'done';
   doneAt: string | null;
@@ -150,6 +153,8 @@ export type EventType =
   | 'priority_changed'
   /** Effort set, changed or cleared: from/to are stored values ('time:90', 'tshirt:M'; null: none). */
   | 'effort_set'
+  /** Duration changed: from/to are the number of days (null: 1 day). */
+  | 'duration_set'
   | 'project_changed'
   | 'renamed'
   | 'notes_edited'
@@ -313,6 +318,8 @@ export const PROJECT_COLORS = ['#2E90FA', '#7A5AF8', '#F79009', '#12B76A', '#06A
 export const USER_COLORS = ['#4F46E5', '#DB2777', '#0E9384', '#E8590C', '#2E90FA', '#7A5AF8', '#9E77ED', '#15B79E', '#F79009', '#D92D20'];
 export const DESCRIPTION_MAX = 600;
 export const TITLE_MAX = 300;
+/** The longest a task can run, in days. */
+export const DURATION_MAX = 90;
 export const NOTES_MAX = 10000;
 export const COMMENT_MAX = 4000;
 export const CHECK_TEXT_MAX = 300;

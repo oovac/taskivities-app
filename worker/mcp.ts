@@ -4,10 +4,10 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { McpAgent } from 'agents/mcp';
 import { z } from 'zod';
 import { diffDays, isDate } from '../shared/dates';
-import { isLate, shownOn } from '../shared/rules';
+import { isLate, lastDay, lateDays, shownOn } from '../shared/rules';
 import { describe as describeRepeat } from '../shared/repeat';
 import { EFFORT_TYPES, effortFor, effortFromInput, effortLabel, effortTotal } from '../shared/effort';
-import { COMMENT_MAX, DESCRIPTION_MAX, PRIORITIES, PROJECT_COLORS, TITLE_MAX, type Priority, type Project, type Task, type User } from '../shared/types';
+import { COMMENT_MAX, DESCRIPTION_MAX, DURATION_MAX, PRIORITIES, PROJECT_COLORS, TITLE_MAX, type Priority, type Project, type Task, type User } from '../shared/types';
 import {
   type Env, type ProjectRow, type TaskRow, type UserRow, type Viewer,
   HttpError, TASK_COLS, bad, canSeeProject, loadViewer, mapProject, mapTask, mapUser, today,
@@ -100,6 +100,11 @@ const effortArg = z.string().describe(
   'Only for projects that track effort (list_projects shows how): a time like "1h 30m" or "45m", a size like "M", or story points like "5".',
 );
 
+const durationArg = z.number().int().min(1).max(DURATION_MAX).describe(
+  'How many days the task runs, starting on due_date (default 1). It only turns overdue after the last day: ' +
+  'due 2026-11-01 with duration_days 2 is overdue from 2026-11-03.',
+);
+
 const userLabel = (dir: Directory, id: string | null) => (id ? (dir.users.get(id)?.name ?? 'Former member') : null);
 
 function describeTask(t: Task, dir: Directory, t0: string) {
@@ -113,9 +118,10 @@ function describeTask(t: Task, dir: Directory, t0: string) {
     priority: priorityName(t.priority),
     status: t.status,
     due_date: t.dueDate,
-    /** The day the app shows it on (overdue open tasks roll into today). */
+    ...(t.durationDays && t.durationDays > 1 ? { duration_days: t.durationDays, last_day: lastDay(t) } : {}),
+    /** The day the app shows it on (open tasks past their due date roll into today). */
     shown_on: shownOn(t, t0),
-    ...(isLate(t, t0) ? { days_late: diffDays(t0, t.dueDate) } : {}),
+    ...(isLate(t, t0) ? { days_late: lateDays(t, t0) } : {}),
     ...(t.status === 'done' ? { done_on: t.doneOn, done_by: userLabel(dir, t.doneBy) } : {}),
     ...(t.notes ? { notes: t.notes } : {}),
     ...(p?.effort ? { effort: effort ? effortLabel(p.effort, effort) : null } : {}),
@@ -304,6 +310,7 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
           notes: z.string().optional().describe('Optional details.'),
           repeat: repeatArg.optional(),
           effort: effortArg.optional(),
+          duration_days: durationArg.optional(),
         },
       },
       (args) =>
@@ -314,6 +321,7 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
             title: args.title, notes: args.notes, projectId: project.id, assigneeId: assignee.id,
             dueDate: args.due_date, priority: toPriority(args.priority), repeat: args.repeat ? toRepeat(args.repeat) : undefined,
             effort: args.effort !== undefined ? toEffort(project, args.effort) : undefined,
+            durationDays: args.duration_days,
           }, this.via);
           return { created: describeTask(task, dir, t0) };
         }),
@@ -324,7 +332,7 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
       {
         title: 'Update a task',
         description:
-          'Change a task: title, notes, project, due date, priority, or status (use "open" to reopen a finished task). ' +
+          'Change a task: title, notes, project, due date, duration, priority, or status (use "open" to reopen a finished task). ' +
           "Only the fields you pass change. Due dates can't move into the past, and if the project changes the assignee must be on the new one. " +
           'Use transfer_task to change who it is assigned to, and complete_task to finish it. Every change is recorded in the task history.\n\n' +
           'Repeating tasks (those with "repeats"): edits to the open copy carry over to future copies. Pass repeat to change the rule, ' +
@@ -342,6 +350,7 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
           stop_repeating: z.boolean().optional().describe("Stop repeating for good. The current copy stays as a normal task. Can't be undone."),
           skip: z.boolean().optional().describe('Repeating tasks: skip this copy. Pass on its own.'),
           effort: effortArg.optional().describe('Effort, for projects that track it (list_projects): "1h 30m", "M" or "5". Pass "" to clear it.'),
+          duration_days: durationArg.optional(),
         },
       },
       (args) =>
@@ -357,6 +366,7 @@ export class TaskivitiesMCP extends McpAgent<Env, unknown, McpProps> {
             projectId: newProject?.id,
             effort: effortProject ? toEffort(effortProject, args.effort!) : undefined,
             dueDate: args.due_date,
+            durationDays: args.duration_days,
             priority: args.priority ? toPriority(args.priority) : undefined,
             status: args.status,
             repeat: args.stop_repeating ? null : args.repeat ? toRepeat(args.repeat) : undefined,

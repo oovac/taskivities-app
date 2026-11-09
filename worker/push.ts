@@ -8,6 +8,7 @@
 import { waitUntil } from 'cloudflare:workers';
 import { Hono } from 'hono';
 import { addDays, fmt, todayIn } from '../shared/dates';
+import { lastDay } from '../shared/rules';
 import { NOTIFY_DEFAULTS, type NotifyPrefs } from '../shared/types';
 import { type AppEnv, type Env, bad, defaultTz, nowIso, uid, validTz } from './lib';
 import { type PushKeys, type PushTarget, fromB64u, sendPush, validEndpoint } from './webpush';
@@ -228,11 +229,11 @@ async function morningFor(env: Env, keys: PushKeys | null, u: { id: string; noti
   const claimed = await db.prepare('UPDATE users SET morning_sent_on = ? WHERE id = ? AND (morning_sent_on IS NULL OR morning_sent_on != ?)').bind(day, u.id, day).run();
   if (!claimed.meta.changes) return;
   const { results: list } = await db.prepare(
-    `SELECT title, due_date FROM tasks WHERE assignee_id = ? AND status = 'open' AND archived_at IS NULL AND due_date <= ?
+    `SELECT title, due_date, duration_days FROM tasks WHERE assignee_id = ? AND status = 'open' AND archived_at IS NULL AND due_date <= ?
        AND project_id IN (SELECT id FROM projects WHERE archived = 0) ORDER BY priority, due_date, created_at`,
-  ).bind(u.id, day).all<{ title: string; due_date: string }>();
+  ).bind(u.id, day).all<{ title: string; due_date: string; duration_days: number | null }>();
   if (!list.length) return;
-  const late = list.filter((t) => t.due_date < day).length;
+  const late = list.filter((t) => lastDay({ dueDate: t.due_date, durationDays: t.duration_days }) < day).length;
   const title = `Today: ${list.length} task${list.length > 1 ? 's' : ''}`;
   const body = `${late ? `${late} carried over · ` : ''}First: ${clip(list[0].title, 100)}`;
   const relays = (await db.prepare('SELECT id, user_id, url FROM push_relays WHERE user_id = ?').bind(u.id).all<RelayRow>()).results;

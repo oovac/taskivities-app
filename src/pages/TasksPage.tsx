@@ -8,7 +8,7 @@ import { copyDone, initials } from '../copyDone';
 import { PreviewCard, PreviewRow, TaskCard, TaskRow, drag, openMove } from '../components/rows';
 import { Avatar, I } from '../components/ui';
 import { BOARD_WEEKS_MAX, set, useStore, type State } from '../store';
-import { type Preview, byPrioThenOldest, displayName, firstName, inRange, lateDays, previewsFor, sortRows, weekInfo } from '../util';
+import { type Preview, byPrioThenOldest, displayName, firstName, inRange, lateDays, previewsFor, sortRows, todayOrder, weekInfo } from '../util';
 
 export function TasksPage() {
   const s = useStore();
@@ -168,8 +168,11 @@ export function Day({ s, d, k: who, pool, carried, TD, previews, ctx = 'to', sho
     );
   }
   const isT = d === s.today;
-  const list = sortRows(mine.filter((t) => shownOn(t, s.today) === d && !(isT && isLate(t, s.today))));
-  const openN = list.filter((t) => t.status === 'open').length + (isT ? carried.length : 0);
+  // Today: carried-over tasks are mixed in by priority (each still says how late it is); the bar above only sums them up.
+  const list = isT
+    ? mine.filter((t) => shownOn(t, s.today) === d).sort(todayOrder)
+    : sortRows(mine.filter((t) => shownOn(t, s.today) === d));
+  const openN = list.filter((t) => t.status === 'open').length;
   const carriedBlock = isT && carried.length > 0 && (
     <div className="carried" data-carry>
       <div className="carried-h">
@@ -177,7 +180,6 @@ export function Day({ s, d, k: who, pool, carried, TD, previews, ctx = 'to', sho
         <span className="grow"><span className="old">oldest is {Math.max(...carried.map((t) => lateDays(t, s.today)))} days late</span></span>
         <button data-act="move-all" onClick={(e) => openMove(carried.map((t) => t.id), e.currentTarget, 'bulk')}>{I.cal()} Move all</button>
       </div>
-      <div className="rows">{carried.map((t) => <TaskRow key={t.id} t={t} ctx={carriedCtx} showProject={showProject} />)}</div>
     </div>
   );
   // A coming day with nothing on it isn't shown (saves space); today keeps one dashed row, which adds a task.
@@ -204,7 +206,7 @@ export function Day({ s, d, k: who, pool, carried, TD, previews, ctx = 'to', sho
       )}
       {carriedBlock}
       {list.length + previews.length > 0
-        ? <div className="card">{list.map((t) => <TaskRow key={t.id} t={t} ctx={rowCtx} showProject={showProject} />)}{previews.map((x) => <PreviewRow key={`pv${x.task.id}${x.date}`} t={x.task} date={x.date} />)}</div>
+        ? <div className="card">{list.map((t) => <TaskRow key={t.id} t={t} ctx={isT && isLate(t, s.today) ? carriedCtx : rowCtx} showProject={showProject} />)}{previews.map((x) => <PreviewRow key={`pv${x.task.id}${x.date}`} t={x.task} date={x.date} />)}</div>
         : !carriedBlock && <div className="empty-day">{TD ? 'Nothing left for today. Nice.' : 'Nothing planned'}</div>}
     </div>
   );
@@ -331,11 +333,13 @@ export function WeekBoard({ s, w, pool, side, previews, bar, hideProject = false
           const isT = d === s.today;
           const we = dd.getDay() % 6 === 0;
           const carried = isT ? pool.filter((t) => isLate(t, s.today)).sort(byPrioThenOldest) : [];
+          // Today's column mixes carried-over cards in by priority (each keeps its late badge).
           const list = past
             ? sortRows(pool.filter((t) => t.status === 'done' && shownOn(t, s.today) === d))
-            : sortRows(pool.filter((t) => shownOn(t, s.today) === d && !(isT && isLate(t, s.today))));
+            : isT ? pool.filter((t) => shownOn(t, s.today) === d).sort(todayOrder)
+            : sortRows(pool.filter((t) => shownOn(t, s.today) === d));
           const ghosts = past ? pool.filter((t) => isLate(t, s.today) && t.dueDate === d).length : 0;
-          const open = list.filter((t) => t.status === 'open').length + carried.length;
+          const open = list.filter((t) => t.status === 'open').length;
           return (
             <div key={d} className={['col', past && 'past', isT && 'today', we && 'we'].filter(Boolean).join(' ')} data-day={d}
               {...(past ? {} : { 'data-drop': '', onDragOver, onDragLeave, onDrop: (e: DragEvent<HTMLDivElement>) => onDrop(e, d) })}>
@@ -345,7 +349,6 @@ export function WeekBoard({ s, w, pool, side, previews, bar, hideProject = false
                   <div className="col-carry" data-carry>
                     <div className="cc-h"><span>Carried · {carried.length}</span>
                       <button data-act="move-all" onClick={(e) => openMove(carried.map((t) => t.id), e.currentTarget, 'bulk')}>Move all</button></div>
-                    {carried.map((t) => <TaskCard key={t.id} t={t} side={side} hideProject={hideProject} />)}
                   </div>
                 )}
                 {list.map((t) => <TaskCard key={t.id} t={t} side={side} hideProject={hideProject} />)}

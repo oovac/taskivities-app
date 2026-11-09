@@ -4,7 +4,7 @@ import { isLate, shownOn } from '../../shared/rules';
 import type { Task } from '../../shared/types';
 import { ensureRange, exitFocus, openDrawer, toggleDone } from '../actions';
 import { useStore } from '../store';
-import { ariaFor, byPrioThenOldest, firstName, lateDays, sortRows } from '../util';
+import { ariaFor, byPrioThenOldest, firstName, lateDays, sortRows, todayOrder } from '../util';
 import { openMove } from './rows';
 import { I, PrioTag } from './ui';
 
@@ -25,7 +25,7 @@ function useClock() {
 }
 
 /**
- * Focus mode: the whole screen is my tasks for today (carried-over ones first), nothing else. Ticking a task
+ * Focus mode: the whole screen is my tasks for today (carried-over ones mixed in by priority), nothing else. Ticking a task
  * moves it down to "Done today"; Esc, ⇧F or Exit goes back to where I was.
  */
 export function FocusMode() {
@@ -40,7 +40,8 @@ export function FocusMode() {
   const mine = Object.values(s.tasks).filter((t) => t.assigneeId === me.id && !t.archivedAt);
   const carried = mine.filter((t) => isLate(t, today)).sort(byPrioThenOldest);
   const todays = sortRows(mine.filter((t) => shownOn(t, today) === today && !isLate(t, today)));
-  const open = [...carried, ...todays.filter((t) => t.status === 'open')];
+  // Carried-over tasks mixed in by priority (the oldest first among equals).
+  const open = [...carried, ...todays.filter((t) => t.status === 'open')].sort(todayOrder);
   const done = todays.filter((t) => t.status === 'done').sort((a, b) => (b.doneAt ?? '').localeCompare(a.doneAt ?? ''));
   const total = open.length + done.length;
   const left = open.filter((t) => !ticking[t.id]).length;

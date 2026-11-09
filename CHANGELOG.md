@@ -9,6 +9,23 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+### Added
+
+- **Tasks:** a task can now last several days. Choose **Lasts** in the date picker (from the task, or while adding one):
+  a task due Nov 1 that lasts 2 days isn't overdue until Nov 3. While it runs it sits in today without a "late" badge
+  and shows "Day 2 of 3"; a repeating task's next copy lasts as long. Assistants can set it too (`duration_days`).
+
+### Changed
+
+- **Today:** carried-over tasks are no longer stacked at the top. They're mixed into today's tasks by priority (the
+  oldest first among equals), each still marked "Nd late", in the Today list, the Week view, the Board's today column
+  and Focus mode. A short **Carried over** bar above the list still counts them and has **Move all**.
+
+### Fixed
+
+- **Tasks:** a long title no longer hides the little badges after it (checklist, files, comments, effort, repeats,
+  waiting on); the title is cut short instead, and hovering it shows the whole title.
+
 ## v0.11.2 (2026-11-08)
 
 ### Fixed

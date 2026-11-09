@@ -1,6 +1,6 @@
 import { addDays, fmt, rel, weekStart, MONS } from '../shared/dates';
 import { localProjects, localUsers, myProjectsEverywhere, personOn, sameSource } from './sources';
-import { isLate, onProject, shownOn } from '../shared/rules';
+import { isLate, lastDay, lateDays, onProject, shownOn } from '../shared/rules';
 import { NORMAL, PRIORITIES, type Project, type Task, type TaskLink, type User } from '../shared/types';
 import { upcoming } from '../shared/repeat';
 import type { State } from './store';
@@ -34,6 +34,9 @@ export const draftEffective = (s: State) => {
 export const sortRows = (arr: Task[]) =>
   arr.sort((a, b) => (a.status === b.status ? 0 : a.status === 'open' ? -1 : 1) || a.priority - b.priority || a.createdAt.localeCompare(b.createdAt));
 export const byPrioThenOldest = (a: Task, b: Task) => a.priority - b.priority || a.dueDate.localeCompare(b.dueDate);
+/** Today's list, carried-over tasks mixed in: open first, then by priority, then the longest-waiting (oldest due date). */
+export const todayOrder = (a: Task, b: Task) =>
+  (a.status === b.status ? 0 : a.status === 'open' ? -1 : 1) || byPrioThenOldest(a, b) || a.createdAt.localeCompare(b.createdAt);
 
 /** The days in view: a week, or on the Board as many weeks as it's set to show (starting with the week picked). */
 export const weekInfo = (s: State) => {
@@ -70,7 +73,10 @@ export function previewsWhere(s: State, keep: (t: Task) => boolean, from: string
 export const ariaFor = (t: Task, today: string) =>
   `${t.title}. ${t.priority !== NORMAL ? PRIORITIES[t.priority].name + ' priority. ' : ''}${t.status === 'done' ? 'Done. ' : ''}${
     isLate(t, today) ? lateDays(t, today) + ' days late. ' : ''}${t.status === 'done' ? '' : 'Due ' + rel(shownOn(t, today), today) + '.'}`;
-export const lateDays = (t: Task, today: string) => Math.round((new Date(today + 'T00:00').getTime() - new Date(t.dueDate + 'T00:00').getTime()) / 864e5);
+/** "2 days", "1 week" (whole weeks over a week). */
+export const daysLabel = (n: number) => (n >= 7 && n % 7 === 0 ? `${n / 7} week${n > 7 ? 's' : ''}` : `${n} day${n > 1 ? 's' : ''}`);
+/** A task's dates: "Wed, Nov 4", or "Wed, Nov 4 – Fri, Nov 6" when it lasts several days. */
+export const dueRange = (t: Pick<Task, 'dueDate' | 'durationDays'>) => (lastDay(t) === t.dueDate ? fmt(t.dueDate) : `${fmt(t.dueDate)} – ${fmt(lastDay(t))}`);
 
 export const clockTime = (iso: string | null) => {
   if (!iso) return '';
@@ -82,7 +88,7 @@ export const stamp = (iso: string, today: string) => {
   return `${day === today ? 'Today' : `${MONS[d.getMonth()]} ${d.getDate()}`} · ${clockTime(iso)}`;
 };
 
-export { fmt, rel, isLate, shownOn };
+export { fmt, rel, isLate, lastDay, lateDays, shownOn };
 
 /**
  * A task's dependencies (tasks it waits on, or tasks waiting on it), with what the app has loaded about each other

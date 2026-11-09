@@ -3,7 +3,7 @@
 import { addDays, isDate } from '../shared/dates';
 import { EFFORT_TYPES, type EffortType, effortFor, effortValue, isEffortType } from '../shared/effort';
 import { type Repeat, cleanRepeat, describe, firstDate, nextDate, sameRule } from '../shared/repeat';
-import { CHECK_ITEMS_MAX, CHECK_TEXT_MAX, COMMENT_MAX, NOTES_MAX, TITLE_MAX, type Priority, type Task } from '../shared/types';
+import { CHECK_ITEMS_MAX, CHECK_TEXT_MAX, COMMENT_MAX, DURATION_MAX, NOTES_MAX, TITLE_MAX, type Priority, type Task } from '../shared/types';
 import {
   type Env, type EventRow, type TaskRow, type Viewer,
   CURRENT_VERSION, TASK_COLS, bad, bumpVersion, canSeeProject, eventStmt, forbidden, mapTask, notFound, nowIso, today, uid,
@@ -75,6 +75,15 @@ export interface NewTask {
   repeat?: unknown;
   /** Effort, stored form ('tshirt:M'; shared/effort.ts), if the project tracks it. */
   effort?: string | null;
+  /** How many days it runs, from dueDate (1 or null: just that day). */
+  durationDays?: number | null;
+}
+
+/** A duration in days: null for 1 day (or none given), else a whole number up to DURATION_MAX. */
+function checkDuration(d: unknown): number | null {
+  if (d === null || d === undefined || d === '') return null;
+  if (typeof d !== 'number' || !Number.isInteger(d) || d < 1 || d > DURATION_MAX) throw bad(`A task can last 1 to ${DURATION_MAX} days.`);
+  return d === 1 ? null : d;
 }
 
 /** How a project tracks effort (type null: it doesn't). */
@@ -121,6 +130,7 @@ export async function createTask(env: Env, v: Viewer, b: NewTask, via: string | 
   const due = rule ? firstDate(rule, b.dueDate) : b.dueDate;
   if (rule?.until && rule.until < due) throw bad('The repeat ends before the first date.');
   const effort = b.effort != null && b.effort !== '' ? checkEffort((await projectEffort(db, b.projectId)).type, b.effort) : null;
+  const duration = checkDuration(b.durationDays);
 
   const id = uid();
   const seriesId = rule ? uid() : null;
@@ -129,9 +139,9 @@ export async function createTask(env: Env, v: Viewer, b: NewTask, via: string | 
   if (rule) stmts.push(insertSeries(db, seriesId!, rule, due, { title, notes, projectId: b.projectId, assigneeId: b.assigneeId, priority: b.priority }, v.id, now));
   stmts.push(
     db.prepare(
-      `INSERT INTO tasks (id, title, notes, project_id, assignee_id, created_by, assigned_by, due_date, priority, status, created_at, updated_at, version, series_id, effort)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ${CURRENT_VERSION}, ?, ?)`,
-    ).bind(id, title, notes, b.projectId, b.assigneeId, v.id, v.id, due, b.priority, now, now, seriesId, effort),
+      `INSERT INTO tasks (id, title, notes, project_id, assignee_id, created_by, assigned_by, due_date, priority, status, created_at, updated_at, version, series_id, effort, duration_days)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ${CURRENT_VERSION}, ?, ?, ?)`,
+    ).bind(id, title, notes, b.projectId, b.assigneeId, v.id, v.id, due, b.priority, now, now, seriesId, effort, duration),
     eventStmt(db, {
       taskId: id, actorId: v.id, via, type: 'created', at: now,
       to: JSON.stringify({ assignee: b.assigneeId, due, priority: b.priority, project: b.projectId }),
@@ -139,6 +149,7 @@ export async function createTask(env: Env, v: Viewer, b: NewTask, via: string | 
   );
   if (rule) stmts.push(eventStmt(db, { taskId: id, actorId: v.id, via, type: 'repeat_set', to: describe(rule, due), at: now }));
   if (effort) stmts.push(eventStmt(db, { taskId: id, actorId: v.id, via, type: 'effort_set', to: effort, at: now }));
+  if (duration) stmts.push(eventStmt(db, { taskId: id, actorId: v.id, via, type: 'duration_set', to: String(duration), at: now }));
   await db.batch(stmts);
   notify(env, [{ to: b.assigneeId, kind: 'assigned', actorId: v.id, via, taskId: id, isNew: true }]);
   return mapTask((await loadTask(db, id))!);
@@ -150,6 +161,8 @@ export interface Patch {
   status?: 'open' | 'done';
   /** Effort, stored form ('time:90', 'tshirt:M'; shared/effort.ts), or null to clear it. */
   effort?: string | null;
+  /** How many days it runs from its due date; 1 or null: just that day. */
+  durationDays?: number | null;
   /** Optional message attached to a transfer. */
   note?: string;
   /** Undo of your own last date move: allows putting a past due date back. */
@@ -228,6 +241,15 @@ export async function applyPatch(env: Env, v: Viewer, id: string, b: Patch, via:
     undidSkip = isUndo && last!.type === 'skipped';
     set('due_date', b.dueDate);
     ev({ type: 'date_moved', from: t.due_date, to: b.dueDate });
+  }
+  let durationNow = t.duration_days ?? null; // the next copy of a repeating task lasts as long
+  if (b.durationDays !== undefined) {
+    const d = checkDuration(b.durationDays);
+    if (d !== durationNow) {
+      set('duration_days', d);
+      ev({ type: 'duration_set', from: durationNow ? String(durationNow) : null, to: d ? String(d) : null });
+    }
+    durationNow = d;
   }
   // Effort is checked against the project the task ends up in.
   let pe: Awaited<ReturnType<typeof projectEffort>> | null = null;
@@ -334,10 +356,10 @@ export async function applyPatch(env: Env, v: Viewer, id: string, b: Patch, via:
       // Guarded so that two people finishing it at once can't create two copies.
       after.push(
         db.prepare(
-          `INSERT INTO tasks (id, title, notes, project_id, assignee_id, created_by, assigned_by, due_date, priority, status, created_at, updated_at, version, series_id)
-           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ${CURRENT_VERSION}, ?
+          `INSERT INTO tasks (id, title, notes, project_id, assignee_id, created_by, assigned_by, due_date, priority, status, created_at, updated_at, version, series_id, duration_days)
+           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ${CURRENT_VERSION}, ?, ?
            WHERE NOT EXISTS (SELECT 1 FROM tasks WHERE series_id = ? AND status = 'open')`,
-        ).bind(nextId, live.title, live.notes, live.project_id, who, v.id, v.id, next, live.priority, now, now, live.id, live.id),
+        ).bind(nextId, live.title, live.notes, live.project_id, who, v.id, v.id, next, live.priority, now, now, live.id, durationNow, live.id),
         db.prepare(
           `INSERT INTO task_events (id, task_id, actor_id, via, type, from_value, to_value, note, at)
            SELECT ?, ?, ?, ?, 'created', ?, ?, NULL, ? WHERE EXISTS (SELECT 1 FROM tasks WHERE id = ?)`,

@@ -60,6 +60,8 @@ export interface Upload {
 export interface Toast { id: number; text: string; undo?: () => void; error?: boolean; action?: { label: string; run: () => void } }
 export interface Draft {
   title: string; notes: string; open: boolean; projectId: string | null; dueDate: string | null; assigneeId: string | null; priority: Priority; repeat: Repeat | null;
+  /** How many days it lasts (null: 1). */
+  durationDays?: number | null;
   /** The project was picked in the quick-add's menu (not carried over from the last task or the page). */
   projectPicked?: boolean;
 }

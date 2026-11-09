@@ -5,12 +5,12 @@ import { attachmentBlob, isFeed, remoteTaskUrl, sourceOf } from '../sources';
 import { EFFORT_TYPES, effortFor, effortLabel, storedEffortLabel } from '../../shared/effort';
 import { addDays, fmt, rel } from '../../shared/dates';
 import { blockedUntil, expectedOn, holdingUp, openBlockers } from '../../shared/deps';
-import { isLate, shownOn } from '../../shared/rules';
+import { isLate, lastDay, shownOn } from '../../shared/rules';
 import { describe } from '../../shared/repeat';
 import { CHECK_TEXT_MAX, COMMENT_MAX, PRIORITIES, type AttachmentInfo, type ChecklistItem, type Priority, type Task, type TaskEvent, type TaskLink } from '../../shared/types';
 import { setFollowing, addChecklistItems, addComment, attachmentUrl, closeDrawer, removeAttachment, uploadFiles, attachMenu, editChecklist, editNotes, removeChecklistItem, renameChecklistItem, toggleChecklistItem, loadEvents, moveTasks, openDrawer, openPop, patchTask, setBlocker, skipTask, toggleDone } from '../actions';
 import { set, useStore, type State } from '../store';
-import { displayName, firstName, lateDays, linksOf, stamp } from '../util';
+import { daysLabel, displayName, dueRange, firstName, lateDays, linksOf, stamp } from '../util';
 import { openMove, LateBadge } from './rows';
 import { type HistoryEntry, type HistoryLine, andList, groupHistory } from '../history';
 import { Avatar, Dot, I, PrioIcon, ProjPill } from './ui';
@@ -29,6 +29,7 @@ export function Drawer() {
   if (!t) return <><div className="backdrop" onClick={() => closeDrawer()} /><aside className="drawer" tabIndex={-1}><div className="dr-body">This task is no longer available.</div></aside></>;
 
   const late = isLate(t, s.today);
+  const multi = lastDay(t) !== t.dueDate; // lasts several days
   const creator = s.users[t.createdBy];
   const p = s.projects[t.projectId];
   const eff = p?.effort ? effortFor(t.effort, p.effort) : null;
@@ -82,8 +83,8 @@ export function Drawer() {
               <Avatar user={s.users[t.assigneeId]} /> {displayName(s.users[t.assigneeId])} <span className="c">{I.chev()}</span></button></dd>
             <dt>Date</dt>
             <dd><button className="field" data-act="move" onClick={(e) => openMove([t.id], e.currentTarget)}>
-              {I.cal()} {fmt(t.status === 'done' ? t.dueDate : shownOn(t, s.today))}
-              {late && <><span style={{ color: 'var(--muted)', fontSize: 12.5 }}>· due {fmt(t.dueDate)}</span> <LateBadge t={t} today={s.today} /></>}
+              {I.cal()} {multi && !late ? dueRange(t) : fmt(t.status === 'done' ? t.dueDate : shownOn(t, s.today))}
+              {late && <><span style={{ color: 'var(--muted)', fontSize: 12.5 }}>· due {dueRange(t)}</span> <LateBadge t={t} today={s.today} /></>}
               <span className="c">{I.chev()}</span></button></dd>
             {t.series && <>
               <dt>Repeats</dt>
@@ -216,6 +217,7 @@ function EventText({ e, s }: { e: TaskEvent; s: State }) {
     case 'effort_set': return e.toValue
       ? (e.fromValue ? <>changed effort <b>{storedEffortLabel(e.fromValue)}</b> → <b>{storedEffortLabel(e.toValue)}</b></> : <>set effort to <b>{storedEffortLabel(e.toValue)}</b></>)
       : <>cleared effort (was <b>{storedEffortLabel(e.fromValue)}</b>)</>;
+    case 'duration_set': return <>set it to last <b>{daysLabel(Number(e.toValue) || 1)}</b>{e.fromValue && <> (was {daysLabel(Number(e.fromValue))})</>}</>;
     case 'priority_changed': return <>changed priority <b>{PRIORITIES[Number(e.fromValue) as Priority]?.name}</b> → <b>{PRIORITIES[Number(e.toValue) as Priority]?.name}</b></>;
     case 'project_changed': return <>moved to <b>{proj(e.toValue)}</b> from <b>{proj(e.fromValue)}</b></>;
     case 'renamed': return <>renamed to “{e.toValue}”</>;
@@ -250,6 +252,7 @@ function EventText({ e, s }: { e: TaskEvent; s: State }) {
  * (nothing moves by itself). Rules: shared/deps.ts.
  */
 function Dependencies({ t, s }: { t: Task; s: State }) {
+  const late = isLate(t, s.today);
   const by = linksOf(s, t, 'blockedBy'), bl = linksOf(s, t, 'blocks');
   const until = blockedUntil(t, by, s.today);
   const waiting = openBlockers(t, by);
@@ -269,10 +272,10 @@ function Dependencies({ t, s }: { t: Task; s: State }) {
           <ul className="deps-list">{by.map((l) => <DepItem key={l.id} l={l} t={t} s={s} side="blockedBy" />)}</ul>
           {until ? (
             <div className="deps-warn">
-              <span>{waiting.length > 1 ? 'What it waits on is' : 'It waits on a task'} due {fmt(until)}, after this one{t.dueDate < s.today ? ' (already late)' : ''}.</span>
+              <span>{waiting.length > 1 ? 'What it waits on is' : 'It waits on a task'} due {fmt(until)}, after this one{late ? ' (already late)' : ''}.</span>
               <button className="btn-ghost sm" data-act="deps-move" onClick={() => void moveTasks([t.id], until)}>Move this to {fmt(until)}</button>
             </div>
-          ) : waiting.length > 0 && t.dueDate < s.today && (
+          ) : waiting.length > 0 && late && (
             <div className="deps-warn"><span>Late, and still waiting on {waiting.length > 1 ? `${waiting.length} tasks` : 'a task'}.</span></div>
           )}
         </>
@@ -285,8 +288,8 @@ function Dependencies({ t, s }: { t: Task; s: State }) {
             <div className="deps-warn">
               <span>
                 {held.length + heldHidden > 1 ? `${held.length + heldHidden} tasks waiting on this are` : 'A task waiting on this is'} due before it
-                {t.dueDate < s.today ? ', and this one is late' : ''}.
-                {t.dueDate < s.today ? ' Finish this, or move it to when it will be done.' : heldHidden > 0 && held.length === 0 && ' Whoever has it can move it.'}
+                {late ? ', and this one is late' : ''}.
+                {late ? ' Finish this, or move it to when it will be done.' : heldHidden > 0 && held.length === 0 && ' Whoever has it can move it.'}
               </span>
               {/* This one late too: they all roll into today, so moving them changes nothing. Finish or move this first. */}
               {held.length > 0 && t.dueDate >= s.today && (
@@ -304,7 +307,9 @@ function Dependencies({ t, s }: { t: Task; s: State }) {
 
 function DepItem({ l, t, s, side }: { l: TaskLink; t: Task; s: State; side: 'blockedBy' | 'blocks' }) {
   const o = s.tasks[l.id];
-  const late = l.open && l.dueDate < s.today;
+  // A linked task only carries its due date; one that's loaded also says how many days it lasts.
+  const lk = { dueDate: l.dueDate, durationDays: o?.durationDays };
+  const late = l.open && lastDay(lk) < s.today;
   // Open and not loaded: it's in a project I'm not on (every open task I can see is loaded).
   const label = o ? o.title : l.open ? 'A task in a project you’re not on' : 'A finished task';
   // Taking a link off goes through the task that waits, which I need to be able to see.
@@ -315,7 +320,7 @@ function DepItem({ l, t, s, side }: { l: TaskLink; t: Task; s: State; side: 'blo
       {o ? <button className="dep-t" title="Open this task" onClick={() => openDrawer(l.id)}>{label}</button> : <span className="dep-t dim">{label}</span>}
       {o && <span title={displayName(s.users[o.assigneeId])}><Avatar user={s.users[o.assigneeId]} size={18} /></span>}
       <span className="dep-d">
-        {!l.open ? 'Done' : late ? <>due {fmt(l.dueDate)} <span className="late">{lateDays({ ...(o ?? t), dueDate: l.dueDate, status: 'open' }, s.today)}d late</span></> : `due ${rel(l.dueDate, s.today)}`}
+        {!l.open ? 'Done' : late ? <>due {fmt(l.dueDate)} <span className="late">{lateDays(lk, s.today)}d late</span></> : `due ${rel(l.dueDate, s.today)}`}
       </span>
       {canRemove && (
         <button className="ck-x" title={side === 'blockedBy' ? 'Stop waiting on it' : 'Stop it waiting on this'} aria-label={`Remove the dependency on ${label}`}
