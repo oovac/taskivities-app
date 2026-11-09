@@ -9,6 +9,8 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+## v0.12.0 (2026-11-09)
+
 ### Added
 
 - **Tasks:** a task can now last several days. Choose **Lasts** in the date picker (from the task, or while adding one):
