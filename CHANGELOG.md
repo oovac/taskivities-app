@@ -9,6 +9,8 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+## v0.13.0 (2026-11-09)
+
 ### Added
 
 - **Projects:** a new **Gantt** view (next to Today, Week and Board, or press V) charts a project's High-priority
