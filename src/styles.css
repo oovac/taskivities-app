@@ -1021,6 +1021,9 @@ a.att-n:hover{color:var(--accent);text-decoration:underline}
 .fx-row:hover{transform:translateY(-1px);border-color:var(--line-strong);box-shadow:var(--shadow)}
 .fx-row:focus,.fx-row:focus-visible{outline:none;border-color:var(--accent-line);box-shadow:0 0 0 4px var(--accent-soft),var(--shadow)}
 @keyframes fx-in{from{opacity:0;transform:translateY(6px)}}
+/* Added or changed by someone else just now (live sync): a soft accent glow that fades back to the card's own look. */
+.fx-row.flash,.fx-done .fx-row.flash{animation:fx-in .35s cubic-bezier(.2,.8,.2,1) both,fx-flash 2.6s ease-out}
+@keyframes fx-flash{0%,40%{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft-2),var(--shadow);background-color:var(--accent-soft)}}
 .fx-list .fx-row:nth-child(2){animation-delay:.03s}.fx-list .fx-row:nth-child(3){animation-delay:.06s}.fx-list .fx-row:nth-child(4){animation-delay:.09s}.fx-list .fx-row:nth-child(n+5){animation-delay:.12s}
 .fx-row.next{padding:22px 16px 22px 22px;border-color:var(--accent-line);background:linear-gradient(135deg,var(--accent-soft),var(--panel) 65%)}
 .fx-row.next .fx-title{font-size:19px}
@@ -1082,5 +1085,6 @@ a.att-n:hover{color:var(--accent);text-decoration:underline}
 }
 @media (prefers-reduced-motion:reduce){
   .focus,.fx-row,.fx-empty,.fx-row.ticking .fx-chk,.fx-empty.win .fx-empty-i{animation:none}
+  .fx-row.flash{animation:fx-flash 2.6s steps(1,end)}
   .fx-row,.fx-ring .fg{transition:none}
 }

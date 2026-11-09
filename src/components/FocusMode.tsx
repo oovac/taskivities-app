@@ -126,10 +126,12 @@ function FocusRow({ t, today, next, ticking, onTick }: {
   t: Task; today: string; next: boolean; ticking: boolean; onTick: (t: Task, btn: HTMLElement) => void;
 }) {
   const p = useStore((st) => st.projects[t.projectId]);
+  // Someone else just added or changed it (live sync): it glows for a moment, like rows in the normal views.
+  const flashing = useStore((st) => !!st.flash[t.id]);
   const done = t.status === 'done';
   const late = isLate(t, today);
   const ck = t.checklist.length ? t.checklist.filter((c) => c.done).length : 0;
-  const cls = ['fx-row', next && 'next', done && 'done', ticking && 'ticking'].filter(Boolean).join(' ');
+  const cls = ['fx-row', next && 'next', done && 'done', ticking && 'ticking', flashing && 'flash'].filter(Boolean).join(' ');
   return (
     <div className={cls} role="listitem" data-id={t.id} data-nav={`${done ? 'done' : 'task'}:${t.id}`} tabIndex={-1} aria-label={ariaFor(t, today)}
       style={{ '--pc': p?.color ?? 'var(--faint)' } as CSSProperties}>
