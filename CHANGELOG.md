@@ -9,6 +9,8 @@ section into the new version's; `git push --follow-tags` publishes it.
 
 ## Unreleased
 
+## v0.11.2 (2026-11-08)
+
 ### Fixed
 
 - **My day:** in focus mode, a task you open now covers the focus bar, so its Close button works again instead of
