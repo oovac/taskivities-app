@@ -3,7 +3,7 @@ import { addDays } from '../shared/dates';
 import { isAdmin } from '../shared/rules';
 import type { Priority } from '../shared/types';
 import {
-  closeConnect, closeDrawer, goHome, closeHelp, closePop, moveTasks, openDrawer, openHelp, openPop, setPage, setPriority, setView, skipTask, toast, toggleDone, closeHook, editChecklist, editNotes, pickAttachments, setFollowing } from './actions';
+  closeConnect, closeDrawer, enterFocus, exitFocus, goHome, closeHelp, closePop, moveTasks, openDrawer, openHelp, openPop, setPage, setPriority, setView, skipTask, toast, toggleDone, closeHook, editChecklist, editNotes, pickAttachments, setFollowing } from './actions';
 import { openInbox } from './inbox';
 import { openMove } from './components/rows';
 import { curNav, focusLater, focusNav, navEls, trapTab } from './focus';
@@ -16,7 +16,7 @@ const taskFromNav = () => {
   const s = S();
   if (s.drawer) return s.tasks[s.drawer];
   const k = curNav()?.dataset.nav || '';
-  return /^(task|ghost):/.test(k) ? s.tasks[k.split(':')[1]] : undefined;
+  return /^(task|ghost|done):/.test(k) ? s.tasks[k.split(':')[1]] : undefined;
 };
 
 function stepTask(dir: number) {
@@ -101,6 +101,7 @@ export function onKeyDown(e: KeyboardEvent) {
       return;
     }
     if (s.drawer) closeDrawer(true);
+    else if (s.focusMode) exitFocus();
     return;
   }
   if (editing) return;
@@ -113,6 +114,9 @@ export function onKeyDown(e: KeyboardEvent) {
 
   // ----- anywhere -----
   if (isQuestion) { e.preventDefault(); openHelp(); return; }
+  // ⇧F: focus mode (just my tasks for today) on and off. Inside it, the shortcuts that go elsewhere are off.
+  if (k === 'F' && e.shiftKey) { e.preventDefault(); if (s.focusMode) exitFocus(); else enterFocus(); return; }
+  if (s.focusMode && (k === 'g' || k === 'n' || k === 'v' || k === 'p' || k === '[' || k === ']')) return;
   if (gPending && Date.now() - gPending < 1200 && (k === 't' || k === 'p' || ((k === 'u' || k === 's') && isAdmin(s.me!)))) {
     gPending = 0;
     e.preventDefault();

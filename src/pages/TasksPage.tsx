@@ -2,7 +2,7 @@ import { useEffect, useRef, type CSSProperties, type DragEvent, type ReactNode }
 import { DOW, MONS, addDays, fmt, parseDate } from '../../shared/dates';
 import { isLate, shownOn } from '../../shared/rules';
 import type { Task } from '../../shared/types';
-import { ensureRange, moveTasks, openPop, setBoardWeeks, setView, viewPerson } from '../actions';
+import { enterFocus, ensureRange, moveTasks, openPop, setBoardWeeks, setView, viewPerson } from '../actions';
 import { QuickAdd } from '../components/QuickAdd';
 import { copyDone, initials } from '../copyDone';
 import { PreviewCard, PreviewRow, TaskCard, TaskRow, drag, openMove } from '../components/rows';
@@ -58,6 +58,11 @@ export function TasksPage() {
             title: initials(displayName(person)), span: TD ? fmt(s.today) : w.span, tasks: mine,
             from: TD ? s.today : w.ws, to: TD ? s.today : w.we, who: false, project: true,
           })} />
+          {TD && isMe && (
+            <button className="focus-btn" data-act="focus" title="Focus: just your tasks for today, nothing else  (⇧F)" onClick={enterFocus}>
+              {I.target(14)}<span>Focus</span>
+            </button>
+          )}
         </div>
       </div>
       <QuickAdd />

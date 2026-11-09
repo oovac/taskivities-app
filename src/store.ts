@@ -137,6 +137,8 @@ export interface State {
   pop: Pop | null;
   toast: Toast | null;
   help: boolean;
+  /** Focus mode: the whole screen is just my tasks for today (⇧F, or the Focus button on My day). */
+  focusMode: boolean;
   connect: boolean;
   expanded: Record<string, boolean>;
   flash: Record<string, number>;
@@ -231,6 +233,7 @@ export const useStore = create<State>()(() => ({
   pop: null,
   toast: null,
   help: false,
+  focusMode: false,
   connect: false,
   expanded: {},
   flash: {},

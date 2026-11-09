@@ -48,6 +48,7 @@ export const I = {
   arrowUp: (s = 15) => <Svg s={s}><path d="M8 13V3M3.8 7.2 8 3l4.2 4.2" /></Svg>,
   info: (s = 15) => <Svg s={s}><circle cx="8" cy="8" r="5.8" /><path d="M8 7.3v3.6M8 5.1v.1" /></Svg>,
   ban: (s = 15) => <Svg s={s}><circle cx="8" cy="8" r="5.6" /><path d="M4 4l8 8" /></Svg>,
+  target: (s = 15) => <Svg s={s}><circle cx="8" cy="8" r="6" /><circle cx="8" cy="8" r="3.2" /><circle cx="8" cy="8" r=".6" fill="currentColor" /></Svg>,
   archive: (s = 15) => <Svg s={s}><rect x="2" y="2.8" width="12" height="3.2" rx="1" /><path d="M3.2 6v6.2a1 1 0 0 0 1 1h7.6a1 1 0 0 0 1-1V6M6.5 8.6h3" /></Svg>,
 };
 

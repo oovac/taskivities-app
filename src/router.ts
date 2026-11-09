@@ -10,10 +10,11 @@
 //   /settings                      Settings (admins)
 //   ?task=<id>                     an open task, on any of these
 //   ?view=today|board  ?week=N  ?day=YYYY-MM-DD   the view (Week is the default), week offset, a project's day
+//   ?focus                         focus mode (just my tasks for today) over any of these; leaving it goes back there
 //
 // Ids from another instance (src/sources.ts) are written as <their id>@<host>, so a link works on any device that
-// connected that instance (this device's own ids for it differ). Opening a page changes the history (Back returns);
-// switching view, week or day, or stepping from one task to the next, replaces it.
+// connected that instance (this device's own ids for it differ). Opening a page, a task or focus mode changes the
+// history (Back returns); switching view, week or day, or stepping from one task to the next, replaces it.
 import { feedParts, isFeed, connByHost, nsId, connById } from './sources';
 import { S, set, useStore, type MultiSel, type State } from './store';
 
@@ -54,7 +55,8 @@ export function urlFor(s: State): string {
     if (s.page === 'projects' && s.view === 'today' && s.projDay && s.projDay !== s.today) q.set('day', s.projDay);
   }
   if (s.drawer) q.set('task', tok(s.drawer));
-  const qs = q.toString().replace(/%2C/g, ',').replace(/%40/g, '@');
+  let qs = q.toString().replace(/%2C/g, ',').replace(/%40/g, '@');
+  if (s.focusMode) qs = qs ? `${qs}&focus` : 'focus';
   return `${path}${qs ? `?${qs}` : ''}`;
 }
 
@@ -84,6 +86,7 @@ export function stateFromUrl(loc: Location | URL, first = false): Parsed {
   // No view in the URL: Week, except on first load, where this device's last choice stays.
   if (v === 'today' || v === 'board' || v === 'list' || v === 'week' || !first) st.view = v === 'today' || v === 'board' ? v : 'list';
   st.weekOffset = Number(q.get('week')) || 0;
+  st.focusMode = q.has('focus');
   const day = q.get('day');
   if (st.page === 'projects') st.projDay = day && /^\d{4}-\d{2}-\d{2}$/.test(day) && day <= s.today ? day : s.today;
 
@@ -103,8 +106,11 @@ export function stateFromUrl(loc: Location | URL, first = false): Parsed {
 
 // ---------- keeping them together ----------
 let applying = false;
-/** The part of a URL whose change is a new place to go Back from: where, and whether a task is open. */
-const placeOf = (url: string) => { const u = new URL(url, location.origin); return `${u.pathname}|${u.searchParams.has('task')}`; };
+/** The part of a URL whose change is a new place to go Back from: where, whether a task is open, and focus mode. */
+const placeOf = (url: string) => {
+  const u = new URL(url, location.origin);
+  return `${u.pathname}|${u.searchParams.has('task')}|${u.searchParams.has('focus')}`;
+};
 
 /** Applies a URL (first load, Back / Forward). Opening its task waits for `ready` (other instances loading). */
 export function applyUrl(loc: Location | URL, ready: Promise<unknown>, openTask: (id: string) => void, first = false) {

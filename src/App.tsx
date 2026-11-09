@@ -6,6 +6,7 @@ import { checkForUpdate, updateSeen } from './updates';
 import { openInbox } from './inbox';
 import { appName } from '../shared/types';
 import { Drawer } from './components/Drawer';
+import { FocusMode } from './components/FocusMode';
 import { ConnectSheet } from './components/ConnectSheet';
 import { HelpSheet } from './components/HelpSheet';
 import { WebhookSheet } from './components/WebhookSheet';
@@ -84,6 +85,7 @@ export function App() {
 
   return (
     <div className="app">
+      {s.focusMode ? <FocusMode /> : <>
       <div className="topbar">
         <button className="skip" onClick={() => focusNav(navEls().find((n) => n.tabIndex === 0) || navEls()[0])}>Skip to tasks</button>
         {/* The logo goes home (your week); admins' other pages are in the ⋯ menu next to it. People and projects are
@@ -113,6 +115,7 @@ export function App() {
           {s.page === 'settings' ? <SettingsPage /> : s.page === 'team' ? <TeamPage /> : s.page === 'projects' ? <ProjectsPage /> : <TasksPage />}
         </div>
       </div>
+      </>}
       <Drawer />
       {s.help && <HelpSheet />}
       {s.connect && <ConnectSheet />}

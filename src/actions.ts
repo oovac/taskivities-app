@@ -516,6 +516,20 @@ export function closeHelp() {
   focusLater(helpReturn);
 }
 
+let focusReturn: string | null = null;
+/** Focus mode: everything but my tasks for today goes away until I leave it (Esc, ⇧F, Exit or Back). It's ?focus in the URL. */
+export function enterFocus() {
+  if (S().focusMode) return;
+  focusReturn = activeSelector();
+  set({ focusMode: true, pop: null, help: false });
+  focusLater('.focus [data-nav]');
+}
+export function exitFocus() {
+  set({ focusMode: false, pop: null });
+  focusLater(focusReturn ?? '[data-act="focus"]');
+  focusReturn = null;
+}
+
 /** The People & projects page's tab. */
 export function setManageTab(tab: ManageTab) {
   set({ manageTab: tab });
