@@ -22,7 +22,7 @@ jobs:
       - name: Verify and commit changed lockfile
         shell: bash
         run: |
-          git diff -- package-lock.json | head -n 45
+          git diff --stat -- package-lock.json
           if ! git diff --quiet -- package-lock.json; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
