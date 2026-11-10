@@ -1,0 +1,36 @@
+name: CI — Taskivities taskv
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: taskv-ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Validate production config
+        run: |
+          node --input-type=module -e "
+            import { readFileSync } from 'node:fs';
+            const c = JSON.parse(readFileSync('wrangler.taskv.jsonc','utf8'));
+            if (c.name !== 'taskv') throw Error('Worker must be taskv');
+            if (c.d1_databases?.[0]?.database_name !== 'taskv') throw Error('Wrong D1 database');
+            if (c.kv_namespaces?.[0]?.binding !== 'OAUTH_KV') throw Error('Missing OAuth KV');
+            if (c.r2_buckets?.[0]?.bucket_name !== 'taskv-files') throw Error('Missing Taskv files bucket');
+          "
+      - run: npm run typecheck
+      - run: npx tsc -p demo/tsconfig.json --noEmit
+      - name: Build Cloudflare Worker and frontend
+        run: TASKIVITIES_WRANGLER_CONFIG=wrangler.taskv.jsonc npm run build
