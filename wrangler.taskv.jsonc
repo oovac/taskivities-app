@@ -1,0 +1,80 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "taskv",
+  "main": "worker/index.ts",
+  "account_id": "6915c40412be631dbb0044757c17149b",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "triggers": {
+    "crons": [
+      "*/30 * * * *"
+    ]
+  },
+  "assets": {
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": [
+      "/api/*",
+      "/logo.svg",
+      "/wordmark.svg",
+      "/manifest.webmanifest",
+      "/icons/*",
+      "/hooks/*",
+      "/upload/*",
+      "/auth/*",
+      "/mcp",
+      "/mcp/*",
+      "/authorize",
+      "/token",
+      "/register",
+      "/.well-known/*",
+      "/v1/*",
+      "/relay/*"
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "taskv",
+      "database_id": "e9451c8c-cbe0-4475-81e6-c0860c9d57c7",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "MCP_OBJECT",
+        "class_name": "TaskivitiesMCP"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "TaskivitiesMCP"
+      ]
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "OAUTH_KV",
+      "id": "b736540400a642e4aad107b5a0f3b20b"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "taskv-files"
+    }
+  ],
+  "vars": {
+    "TEAM_TZ": "Europe/Madrid"
+  },
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  }
+}
